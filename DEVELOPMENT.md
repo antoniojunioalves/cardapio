@@ -1,0 +1,203 @@
+# Desenvolvimento
+
+## Ambiente
+
+```bash
+nvm use              # lê o .nvmrc → Node 24
+pnpm install
+cp .env.example .env
+pnpm db:up
+pnpm dev
+```
+
+### Particularidades conhecidas deste ambiente
+
+**`node` pode não estar no PATH.** Nesta máquina o Node vem do nvm e não está disponível por
+padrão em shells não interativos. Se um comando falhar com `command not found: node`, rode
+`nvm use` antes — ou, em script:
+
+```bash
+export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use
+```
+
+**Docker no WSL 2** exige a integração habilitada em Docker Desktop → Settings → Resources →
+WSL Integration, marcando o distro.
+
+**pnpm 10 bloqueia scripts de instalação** de dependências por padrão. Os pacotes autorizados
+estão em `onlyBuiltDependencies` no `pnpm-workspace.yaml`. Hoje há só um: o `esbuild`, que
+precisa disso para o binário nativo. Acrescentar um item ali é decidir executar código de
+terceiros durante o install — trate como decisão, não como formalidade.
+
+---
+
+## Comandos
+
+| Comando          | Efeito                          |
+| ---------------- | ------------------------------- |
+| `pnpm dev`       | API e web em watch, em paralelo |
+| `pnpm verify`    | typecheck → lint → test → build |
+| `pnpm typecheck` | TypeScript em todos os pacotes  |
+| `pnpm lint`      | ESLint com informação de tipos  |
+| `pnpm test`      | Vitest em todos os pacotes      |
+| `pnpm build`     | Build de produção               |
+| `pnpm format`    | Prettier, escrevendo            |
+
+Num pacote só:
+
+```bash
+pnpm --filter @repo/api test
+pnpm --filter @repo/web dev
+```
+
+`pnpm verify` é o que precisa passar antes de considerar qualquer tarefa concluída.
+
+---
+
+## Estrutura
+
+```
+apps/api/src/
+├── config/        env validado com Zod
+├── lib/           utilidades sem dependência de framework
+├── plugins/       plugins do Fastify
+├── routes/        rotas HTTP
+├── services/      regra de negócio          (a partir da Fase 3)
+├── repositories/  acesso a dados            (a partir da Fase 3)
+└── db/            schema Drizzle, migrations (a partir da Fase 2)
+
+apps/web/src/
+├── components/    genéricos, sem regra de negócio
+├── features/      por domínio
+├── pages/         composição de rotas
+├── layouts/
+├── theme/         tokens de design
+├── services/      clientes HTTP
+├── hooks/  stores/  utils/  types/
+```
+
+---
+
+## Convenções
+
+### Nomes
+
+| Item                        | Convenção         | Exemplo                       |
+| --------------------------- | ----------------- | ----------------------------- |
+| Arquivo de componente React | PascalCase        | `ProductCard.tsx`             |
+| Demais arquivos             | kebab-case        | `tenant-theme.ts`             |
+| Diretórios                  | kebab-case        | `payment-methods/`            |
+| Colunas do banco            | snake_case        | `price_in_cents`              |
+| Campos em TypeScript        | camelCase         | `priceInCents`                |
+| Valor monetário             | sufixo da unidade | `priceInCents`, nunca `price` |
+
+Entidades têm nome genérico. O sistema atende lanchonete, pizzaria, cafeteria e food truck —
+então `Product`, e jamais `Burger`.
+
+O código é escrito em português no que é de domínio (nomes de rota visíveis, mensagens, textos
+de interface, comentários) e mantém em inglês o que é da plataforma (nomes de entidade, campos,
+tipos). Comentários explicam **por quê**, não o quê.
+
+### Componentes
+
+Antes de criar, verifique se já existe algo reutilizável.
+
+- **`components/`** — genérico, sem regra de negócio, sem importar de `features/`. É escrito para
+  poder virar biblioteca própria um dia. `Button`, `Input`, `Modal`, `Drawer`, `Badge`.
+- **`features/<nome>/components/`** — tudo que conhece regra de negócio. `ProductCard`,
+  `CheckoutSummary`, `CartDrawer`.
+
+Um componente em `components/` que importa de `features/` está no lugar errado.
+
+### Cores e espaçamentos
+
+Nunca escreva cor literal (`bg-[#0d9488]`, `color: #fff`). Use a camada semântica dos tokens:
+`bg-surface`, `text-content-muted`, `bg-primary`. Um componente com cor literal quebra o tema por
+tenant sem que ninguém perceba.
+
+Detalhes em [ARCHITECTURE.md](ARCHITECTURE.md#63-temas).
+
+### Estado no frontend
+
+| Ferramenta     | Usar para                                               |
+| -------------- | ------------------------------------------------------- |
+| TanStack Query | qualquer coisa que venha da API                         |
+| Zustand        | carrinho, preferências locais, estado de UI persistente |
+| `useState`     | estado de um componente só                              |
+
+Resposta de API **não** vai para o Zustand.
+
+### Formulários
+
+React Hook Form + Zod. O schema é a única definição: tipo e validação saem dele. Mensagens de
+erro em português e voltadas à pessoa que está preenchendo — "Informe um telefone com DDD", não
+"invalid format".
+
+---
+
+## Testes
+
+| Tipo                 | Onde              | O que cobre                                     |
+| -------------------- | ----------------- | ----------------------------------------------- |
+| Unidade              | junto do código   | cálculo de preço, regras de horário             |
+| Integração da API    | `apps/api/tests/` | rota completa via `app.inject()`                |
+| Isolamento de tenant | `apps/api/tests/` | **obrigatório** para todo recurso tenant-scoped |
+| Componente           | `apps/web/tests/` | comportamento visível, não implementação        |
+
+Regra que não se negocia: **recurso com escopo de tenant sem teste de isolamento não está
+pronto.** O teste prova que o Tenant A não lê nem altera dado do Tenant B.
+
+Nos testes de componente, busque pelo que a pessoa usuária percebe — papel, rótulo, texto — e não
+por classe CSS ou `data-testid`. Um teste que quebra ao renomear uma classe não estava testando
+comportamento.
+
+---
+
+## Antes de adicionar uma dependência
+
+1. A stack atual já resolve?
+2. Qual complexidade ela traz junto?
+3. Tem manutenção ativa?
+4. É compatível com as versões fixadas? (`npm view <pkg> peerDependencies`)
+5. Precisa rodar script de instalação? Se sim, entra em `onlyBuiltDependencies` — decisão
+   consciente.
+
+Versões são **fixadas exatas**, sem `^`. Atualização é ato deliberado, não efeito colateral de
+um install.
+
+---
+
+## Renomear o produto
+
+O nome é provisório por decisão. Ele vive em **um** lugar no código de aplicação:
+
+**[`packages/config/src/app.ts`](packages/config/src/app.ts)** — `name`, `shortName`, `slug`,
+`description`. Componentes, páginas, o `<title>` e a descrição do HTML leem daqui. Nenhum
+componente contém o nome em texto literal.
+
+Fora do código de aplicação, existem estes pontos, todos de edição pontual:
+
+| Local                           | Campo                                         |
+| ------------------------------- | --------------------------------------------- |
+| `package.json` (raiz)           | `name` — identificador interno, nunca exibido |
+| `docker-compose.yml`            | `name`, `container_name`                      |
+| `.env.example` / `.env`         | `POSTGRES_DB`, `APP_DB_USER`, `DATABASE_URL`  |
+| `docker/postgres/init/*.sh`     | apenas a mensagem de log                      |
+| `README.md` e demais documentos | título e texto                                |
+
+Os pacotes internos usam escopo `@repo/`, e não o nome do produto — justamente para que renomear
+não toque em nenhum `import`.
+
+---
+
+## Git
+
+Branch por etapa ou funcionalidade. Mensagens no imperativo, explicando o motivo quando não for
+óbvio:
+
+```
+feat(api): validar variáveis de ambiente na inicialização
+fix(web): aplicar tema do tenant antes da primeira renderização
+docs: registrar a decisão de usar TypeScript 6
+```
+
+`.env` nunca é commitado. `.claude/settings.local.json` também não — é preferência de máquina.

@@ -1,0 +1,104 @@
+# Cardápio Online
+
+SaaS multi-tenant de cardápio digital e pedidos online para estabelecimentos de alimentação.
+Cada estabelecimento é um **tenant** com seu próprio catálogo, clientes, pedidos, usuários e
+configurações. O cliente final acessa o cardápio público sem login, monta o pedido e o envia
+pelo WhatsApp do estabelecimento.
+
+> **O nome "Cardápio Online" é provisório.** Ele vive num único arquivo:
+> [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
+> checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
+
+**Status atual: Fase 1 de 15 concluída.** O monorepo está de pé, com API e frontend rodando.
+Ainda não há banco em uso, domínio, autenticação nem tenants — isso começa na Fase 2.
+Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+
+---
+
+## Stack
+
+Versões fixadas e verificadas em conjunto — a instalação resolve sem nenhum conflito de peer.
+
+| Camada    | Tecnologias                                                           |
+| --------- | --------------------------------------------------------------------- |
+| Base      | Node 24.11 · TypeScript 6.0 · pnpm 10.20 · Turborepo 2.11             |
+| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3 |
+| Frontend  | Vite 8.3 · React 19.3 · Tailwind CSS 4.3                              |
+| Qualidade | ESLint 10.11 · typescript-eslint 8.70 · Prettier 3.9 · Vitest 5.0     |
+| Infra     | Docker Compose                                                        |
+
+**TypeScript 6, e não 7:** o TypeScript 7 já é estável, mas o `typescript-eslint` declara
+`typescript >=4.8.4 <6.1.0` e não o suporta em nenhuma versão publicada. Adotá-lo hoje custaria
+o lint com informação de tipos — a rede que sustenta a qualidade do projeto. A decisão está
+registrada em [ARCHITECTURE.md](ARCHITECTURE.md#typescript-6-em-vez-de-7).
+
+Bibliotecas da stack que ainda não aparecem aqui — React Router, TanStack Query, Zustand,
+React Hook Form, Drizzle — entram no `package.json` na fase em que forem de fato usadas, para
+que as dependências declaradas correspondam ao que o código realmente importa.
+
+---
+
+## Pré-requisitos
+
+| Ferramenta | Versão | Observação                                                        |
+| ---------- | ------ | ----------------------------------------------------------------- |
+| Node.js    | 24.x   | `nvm use` lê o `.nvmrc` na raiz                                   |
+| pnpm       | ≥ 10   | `npm i -g pnpm` ou via corepack                                   |
+| Docker     | ≥ 24   | Para o PostgreSQL. No WSL 2, ative a integração no Docker Desktop |
+
+## Começando
+
+```bash
+nvm use                  # Node 24, conforme .nvmrc
+pnpm install
+cp .env.example .env     # valores padrão já funcionam em desenvolvimento
+pnpm db:up               # sobe o PostgreSQL
+pnpm dev                 # sobe API e frontend juntos
+```
+
+Depois disso:
+
+- Frontend — <http://localhost:5173>
+- API — <http://localhost:3333/health>
+
+## Comandos
+
+| Comando          | O que faz                                           |
+| ---------------- | --------------------------------------------------- |
+| `pnpm dev`       | API e web em modo watch, em paralelo                |
+| `pnpm build`     | Build de produção de todos os pacotes               |
+| `pnpm typecheck` | TypeScript em todo o monorepo                       |
+| `pnpm lint`      | ESLint com análise de tipos                         |
+| `pnpm test`      | Vitest em todos os pacotes                          |
+| `pnpm verify`    | typecheck + lint + test + build, na ordem           |
+| `pnpm format`    | Prettier, escrevendo                                |
+| `pnpm db:up`     | Sobe o PostgreSQL via Docker Compose                |
+| `pnpm db:down`   | Derruba os containers (o volume de dados permanece) |
+| `pnpm db:logs`   | Acompanha os logs do PostgreSQL                     |
+
+Para rodar num pacote só: `pnpm --filter @repo/api test`
+
+## Estrutura
+
+```
+cardapio-online/
+├── apps/
+│   ├── api/          Fastify — API HTTP
+│   └── web/          Vite + React — cardápio público e área administrativa
+├── packages/
+│   └── config/       Identidade do produto + bases de tsconfig e eslint
+├── docker/
+│   └── postgres/     Scripts de inicialização do banco
+└── docs/             Documentação de apoio e specs de design
+```
+
+## Documentação
+
+| Arquivo                            | Conteúdo                                                  |
+| ---------------------------------- | --------------------------------------------------------- |
+| [PROJECT_PLAN.md](PROJECT_PLAN.md) | Estado atual, fases, microtasks, o que já foi feito       |
+| [MVP.md](MVP.md)                   | O que está dentro e o que está explicitamente fora do MVP |
+| [ROADMAP.md](ROADMAP.md)           | Funcionalidades futuras e dívidas assumidas               |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Decisões técnicas, multi-tenancy, temas, dados            |
+| [SECURITY.md](SECURITY.md)         | Autenticação, autorização, isolamento entre tenants, LGPD |
+| [DEVELOPMENT.md](DEVELOPMENT.md)   | Convenções, padrões, estrutura de pastas, como contribuir |
