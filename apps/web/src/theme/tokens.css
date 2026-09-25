@@ -1,0 +1,139 @@
+/*
+ * TOKENS DE DESIGN — a fonte dos VALORES.
+ *
+ * Tudo aqui vira, ao mesmo tempo, uma CSS custom property e um utilitário do
+ * Tailwind. `--color-brand-600` gera `bg-brand-600`, `text-brand-600`, etc.
+ *
+ * Por que os valores moram no CSS e não no TypeScript: como são custom
+ * properties, trocar o tema de um tenant em runtime é sobrescrever a variável
+ * em `:root` — sem rebuild, sem bundle por tenant. Se os valores vivessem só
+ * no TS, cada tema exigiria recompilar a aplicação.
+ *
+ * O lado TypeScript (./colors.ts e vizinhos) expõe apenas os NOMES tipados,
+ * apontando para estas variáveis. Nenhum valor é duplicado entre os dois lados.
+ */
+
+@theme {
+  /* ---------------------------------------------------------------- *
+   * Paleta bruta                                                      *
+   * ---------------------------------------------------------------- */
+
+  /* Marca — verde-azulado. Identidade própria, deliberadamente distante
+     do vermelho dos aplicativos de delivery já existentes. */
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+  --color-brand-950: #042f2e;
+
+  /* Destaque — âmbar. Usado em preço, selo e chamada para ação secundária. */
+  --color-accent-50: #fffbeb;
+  --color-accent-100: #fef3c7;
+  --color-accent-200: #fde68a;
+  --color-accent-300: #fcd34d;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+  --color-accent-700: #b45309;
+  --color-accent-800: #92400e;
+  --color-accent-900: #78350f;
+  --color-accent-950: #451a03;
+
+  /* Neutros — texto, fundo, borda. */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #020617;
+
+  /* Estado. */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #2563eb;
+
+  /* ---------------------------------------------------------------- *
+   * Camada semântica                                                  *
+   *                                                                   *
+   * É esta camada que os componentes usam, e é ela que um tema de     *
+   * tenant sobrescreve. Um componente escrito com `bg-surface` segue  *
+   * correto quando o tenant troca a cor; escrito com `bg-white`, não. *
+   * ---------------------------------------------------------------- */
+  --color-surface: #ffffff;
+  --color-surface-muted: var(--color-neutral-50);
+  --color-surface-inverted: var(--color-neutral-900);
+
+  --color-border: var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-300);
+
+  --color-content: var(--color-neutral-900);
+  --color-content-muted: var(--color-neutral-500);
+  --color-content-inverted: #ffffff;
+
+  --color-primary: var(--color-brand-600);
+  --color-primary-hover: var(--color-brand-700);
+  --color-primary-content: #ffffff;
+
+  /* ---------------------------------------------------------------- *
+   * Tipografia                                                        *
+   * ---------------------------------------------------------------- */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-display: 2rem;
+  --text-display--line-height: 2.375rem;
+  --text-display--font-weight: 700;
+
+  --text-heading: 1.25rem;
+  --text-heading--line-height: 1.75rem;
+  --text-heading--font-weight: 600;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.125rem;
+
+  /* ---------------------------------------------------------------- *
+   * Ritmo de layout                                                   *
+   *                                                                   *
+   * Mobile-first: a margem lateral da página é um token porque ela     *
+   * muda por breakpoint e precisa ser a mesma em todas as telas.       *
+   * ---------------------------------------------------------------- */
+  --spacing-page-x: 1rem;
+  --spacing-section-y: 1.5rem;
+  --spacing-card: 1rem;
+  --spacing-stack: 0.75rem;
+
+  /* ---------------------------------------------------------------- *
+   * Raio e elevação                                                   *
+   * ---------------------------------------------------------------- */
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
+  --radius-pill: 9999px;
+
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.1);
+  --shadow-raised: 0 4px 6px -1px rgb(15 23 42 / 0.1), 0 2px 4px -2px rgb(15 23 42 / 0.1);
+  --shadow-overlay: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.1);
+}
+
+/* A partir de telas médias a página respira mais. */
+@media (min-width: 48rem) {
+  :root {
+    --spacing-page-x: 2rem;
+    --spacing-section-y: 2.5rem;
+  }
+}
