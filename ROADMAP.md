@@ -108,6 +108,8 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 - Storage externo (S3 ou equivalente), atrás do `StorageService` que já existe
 - Dockerfiles de produção para API e web
+- Armazenamento compartilhado para o rate limit (Redis) — hoje o contador vive na memória do
+  processo, o que vira um limite por instância assim que houver mais de uma
 - CI/CD
 - Backup automatizado e restauração testada
 - Métricas e tracing distribuído

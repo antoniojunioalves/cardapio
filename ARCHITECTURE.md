@@ -63,22 +63,50 @@ disciplina, que uma pessoa distraída fura. Só a camada 1 não guia ninguém a 
 tabela com coluna `tenant_id` estiver sem `ENABLE` e `FORCE ROW LEVEL SECURITY`. Assim uma
 tabela nova sem policy quebra o CI, não a produção.
 
-### 2.3 A role de conexão
+### 2.3 As roles de conexão
 
-No PostgreSQL, **superusuários e roles com `BYPASSRLS` ignoram silenciosamente toda policy**.
-Se a aplicação conectasse como `postgres`, o RLS existiria no papel e não teria efeito nenhum —
-a pior categoria de falha, porque tudo aparenta funcionar.
+Duas condições precisam valer ao mesmo tempo, e cada uma cobre uma falha diferente.
 
-A role `cardapio_app` é criada com `NOSUPERUSER` e `NOBYPASSRLS` em
-[`docker/postgres/init/01-app-role.sh`](docker/postgres/init/01-app-role.sh). Ela também será
-dona das tabelas, e por isso as policies usam `FORCE ROW LEVEL SECURITY`, que sujeita até o dono
-às regras.
+**Primeira: a role não pode ignorar policies.** No PostgreSQL, superusuários e roles com
+`BYPASSRLS` ignoram silenciosamente toda policy de RLS. Se a aplicação conectasse como
+`postgres`, o isolamento existiria no papel e não teria efeito nenhum em execução — a pior
+categoria de falha, porque tudo aparenta funcionar.
 
-Verificado neste ambiente:
+**Segunda: a role não pode desligar as policies.** Esta foi descoberta durante a Fase 2 e
+corrige o que este documento afirmava antes. O dono de uma tabela **pode remover o RLS dela**:
+
+```sql
+ALTER TABLE produtos NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE produtos DISABLE ROW LEVEL SECURITY;
+```
+
+Comprovado em execução. O `FORCE ROW LEVEL SECURITY` sujeita o dono às policies **nas
+consultas**, mas não o impede de removê-las. Portanto, se a aplicação conectasse como dona das
+tabelas, uma injeção de SQL bem colocada derrubaria o isolamento de todos os tenants de uma vez.
+
+Daí a separação em duas roles, em
+[`docker/postgres/init/`](docker/postgres/init/):
+
+| Role                | Poderes                                    | Quem usa                       |
+| ------------------- | ------------------------------------------ | ------------------------------ |
+| `cardapio_migrator` | dono do schema e das tabelas, DDL completo | apenas o comando de migrations |
+| `cardapio_app`      | `SELECT`, `INSERT`, `UPDATE`, `DELETE`     | a API servindo requisições     |
+
+Nenhuma das duas tem `SUPERUSER` ou `BYPASSRLS`. A `cardapio_app` não é dona de nada, então não
+tem como alterar nem desligar policy alguma. A conexão com DDL existe somente durante
+`pnpm db:migrate` e nunca fica disponível ao processo que atende requisições.
+
+Tabelas criadas por migrations nascem acessíveis à aplicação por `ALTER DEFAULT PRIVILEGES` —
+sem isso, cada migration precisaria lembrar de um `GRANT`, e a tentação de "resolver logo"
+concedendo privilégio demais desfaria a separação na prática.
+
+Verificado em execução, e coberto por testes que falham se alguém afrouxar isso:
 
 ```
-cardapio_app | super=false | bypassrls=false
-postgres     | super=true  | bypassrls=true    ← nunca usada pela aplicação
+cardapio_migrator | super=false | bypassrls=false | dono das tabelas
+cardapio_app      | super=false | bypassrls=false | CREATE TABLE  → permission denied
+                                                  | CREATE SCHEMA → permission denied
+postgres          | super=true  | bypassrls=true  | nunca usada pela aplicação
 ```
 
 ### 2.4 Forma da policy
@@ -101,6 +129,10 @@ Três detalhes, cada um por um motivo concreto:
   definida, em vez de lançar erro.
 - **`WITH CHECK`** além de `USING` — `USING` filtra leitura e o alvo de `UPDATE`/`DELETE`;
   `WITH CHECK` é o que impede **inserir** uma linha marcada com o `tenant_id` de outro.
+
+O `FORCE` continua sendo aplicado, mesmo com o migrator sendo o dono: ele garante que qualquer
+acesso pela conexão de migration também respeite as policies. Ele não é, porém, o que protege
+contra a remoção das policies — isso é papel da separação de roles da seção anterior.
 
 Comportamento verificado em execução real (PostgreSQL 18.6, role `cardapio_app`):
 
@@ -191,9 +223,12 @@ arredondamento será explícita e definida num módulo único de cálculo de pre
 ### 4.2 Identificadores
 
 UUIDv7 como chave primária: ordenado por tempo, o que preserva localidade de índice, sem ser
-sequencial previsível. O PostgreSQL 18 traz `uuidv7()` nativo, então provavelmente não será
-preciso adicionar dependência para isso — a decisão entre gerar no banco ou na aplicação fica
-para a Fase 3, quando houver a primeira tabela.
+sequencial previsível.
+
+**Gerado no banco**, com o `uuidv7()` nativo do PostgreSQL 18, e não na aplicação. Assim uma
+migration, um seed ou um `INSERT` manual produzem id válido sem depender de passar pelo ORM — e
+não custa dependência nenhuma. A aplicação continua livre para informar um id explícito quando
+precisar conhecê-lo antes da escrita, para logar ou emitir evento.
 
 UUIDv7 revela o instante de criação. Por isso:
 
@@ -229,6 +264,50 @@ db/            schema Drizzle e migrations
 
 Regra que sustenta o resto: **um repositório nunca é chamado sem `TenantContext`** para dados
 com escopo de tenant.
+
+### 5.1.1 Conexão e migrations
+
+Pool do `pg` com Drizzle por cima, em `src/db/`. Três detalhes que não são óbvios:
+
+- **O pool tem um handler de `error`.** Sem ele, um erro numa conexão ociosa — o banco
+  reiniciando, a rede caindo — emite um evento sem ouvinte e **derruba o processo inteiro**.
+  Verificado: com o handler, a API sobrevive à queda do PostgreSQL e volta a responder sozinha
+  quando ele retorna.
+- **`casing: 'snake_case'`** traduz `priceInCents` para `price_in_cents` automaticamente,
+  mantendo as duas convenções sem declarar o nome da coluna em cada campo.
+- **As migrations usam outra conexão**, com a role `migrator`. Ver a seção 2.3.
+
+`pnpm db:generate` compara o schema TypeScript com as migrations existentes e não toca no banco.
+`pnpm db:migrate` aplica, com a role que tem DDL.
+
+### 5.1.2 Sondas
+
+- **`/health` (liveness)** — o processo está vivo. **Não consulta o banco.** Se consultasse, uma
+  oscilação do banco faria o orquestrador matar e reiniciar processos saudáveis, justamente no
+  momento em que o sistema está frágil.
+- **`/ready` (readiness)** — dá para mandar tráfego, e para isso consulta o banco. Responde
+  **503** quando não dá, que é o sinal que tira a instância do balanceador sem reiniciá-la.
+
+A mensagem de falha traz a causa raiz (`connect ECONNREFUSED …`), e não o embrulho do ORM
+(`Failed query: select 1`) — é o que quem está depurando precisa ler.
+
+### 5.1.3 Limite de requisições
+
+Limite global em memória, com o 429 no mesmo formato de erro de todas as outras respostas. É o
+piso: login e a consulta de cliente por telefone terão limites próprios e bem mais estritos nas
+fases em que forem criados.
+
+O contador vive na memória do processo; com mais de uma instância em produção isso vira um
+limite por instância, e aí entra um armazenamento compartilhado. Registrado no ROADMAP.
+
+### 5.1.4 OpenAPI
+
+A especificação é gerada a partir dos próprios schemas Zod das rotas. Como é o mesmo schema que
+valida a requisição em execução, a documentação não tem como divergir do comportamento real —
+que é o problema crônico de OpenAPI mantido à mão.
+
+A interface em `/docs` fica desabilitada em produção. Não é uma brecha expor o mapa da API, mas
+entrega de graça o trabalho de descobrir rotas e formatos.
 
 ### 5.2 Nada que venha do frontend é confiável
 

@@ -9,7 +9,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-cardapio}
-      # Role da aplicação, criada pelo script de inicialização.
+      # Roles criadas pelos scripts de inicialização. São duas de propósito:
+      # o migrator é dono das tabelas e tem DDL; a aplicação só tem DML e por
+      # isso não consegue desligar as policies de RLS. Ver docker/postgres/init/.
+      MIGRATOR_DB_USER: ${MIGRATOR_DB_USER:-cardapio_migrator}
+      MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD:-cardapio_migrator}
       APP_DB_USER: ${APP_DB_USER:-cardapio_app}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-cardapio_app}
     ports:
