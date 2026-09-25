@@ -9,10 +9,11 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 2 de 15 concluída.** O monorepo está de pé, a API conversa com o
-PostgreSQL, tem documentação OpenAPI em `/docs`, limite de requisições e sondas de saúde que
-refletem o estado real do banco. Ainda não há tabela de domínio, autenticação nem tenants —
-isso começa na Fase 3. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 3 de 15 concluída.** O monorepo está de pé, a API conversa com o
+PostgreSQL e **o isolamento entre estabelecimentos está implementado e comprovado por testes**:
+um tenant não lê nem altera dado de outro, nem sabendo o identificador exato da linha. Ainda não
+há autenticação, catálogo nem pedidos — isso começa na Fase 4. Acompanhe em
+[PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ---
 
@@ -83,6 +84,7 @@ para o banco errado, o que é pior do que falhar na inicialização.
 | `pnpm db:logs`     | Acompanha os logs do PostgreSQL                     |
 | `pnpm db:generate` | Gera migration a partir do schema Drizzle           |
 | `pnpm db:migrate`  | Aplica as migrations no banco                       |
+| `pnpm db:seed`     | Popula dados de demonstração (idempotente)          |
 
 Para rodar num pacote só: `pnpm --filter @repo/api test`
 

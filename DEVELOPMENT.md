@@ -38,20 +38,21 @@ mudança simplesmente não acontece e o sintoma é um erro de permissão inexpli
 
 ## Comandos
 
-| Comando            | Efeito                                                          |
-| ------------------ | --------------------------------------------------------------- |
-| `pnpm dev`         | API e web em watch, em paralelo                                 |
-| `pnpm verify`      | typecheck → lint → test → build                                 |
-| `pnpm typecheck`   | TypeScript em todos os pacotes                                  |
-| `pnpm lint`        | ESLint com informação de tipos                                  |
-| `pnpm test`        | Vitest em todos os pacotes — **exige `pnpm db:up`**             |
-| `pnpm build`       | Build de produção                                               |
-| `pnpm format`      | Prettier, escrevendo                                            |
-| `pnpm db:up`       | Sobe o PostgreSQL                                               |
-| `pnpm db:down`     | Derruba os containers, preservando o volume                     |
-| `pnpm db:reset`    | Apaga o volume e recria — necessário ao alterar scripts de init |
-| `pnpm db:generate` | Gera migration a partir do schema; não toca no banco            |
-| `pnpm db:migrate`  | Aplica as migrations, com a role que tem DDL                    |
+| Comando            | Efeito                                                           |
+| ------------------ | ---------------------------------------------------------------- |
+| `pnpm dev`         | API e web em watch, em paralelo                                  |
+| `pnpm verify`      | typecheck → lint → test → build                                  |
+| `pnpm typecheck`   | TypeScript em todos os pacotes                                   |
+| `pnpm lint`        | ESLint com informação de tipos                                   |
+| `pnpm test`        | Vitest em todos os pacotes — **exige `pnpm db:up`**              |
+| `pnpm build`       | Build de produção                                                |
+| `pnpm format`      | Prettier, escrevendo                                             |
+| `pnpm db:up`       | Sobe o PostgreSQL                                                |
+| `pnpm db:down`     | Derruba os containers, preservando o volume                      |
+| `pnpm db:reset`    | Apaga o volume e recria — necessário ao alterar scripts de init  |
+| `pnpm db:generate` | Gera migration a partir do schema; não toca no banco             |
+| `pnpm db:migrate`  | Aplica as migrations, com a role que tem DDL                     |
+| `pnpm db:seed`     | Dois estabelecimentos e dois planos de demonstração; idempotente |
 
 Num pacote só:
 
@@ -72,9 +73,9 @@ apps/api/src/
 ├── lib/           utilidades sem dependência de framework
 ├── plugins/       plugins do Fastify
 ├── routes/        rotas HTTP
-├── services/      regra de negócio          (a partir da Fase 3)
-├── repositories/  acesso a dados            (a partir da Fase 3)
-└── db/            schema Drizzle, migrations (a partir da Fase 2)
+├── tenant/        TenantContext, withTenant, resolução de tenant
+├── db/            schema Drizzle, migrations, seed
+└── services/      regra de negócio          (a partir da Fase 4)
 
 apps/web/src/
 ├── components/    genéricos, sem regra de negócio
@@ -165,6 +166,30 @@ isso a mock de módulo.
 
 Regra que não se negocia: **recurso com escopo de tenant sem teste de isolamento não está
 pronto.** O teste prova que o Tenant A não lê nem altera dado do Tenant B.
+
+### Criando uma tabela nova
+
+Decida primeiro se ela é da plataforma ou de um estabelecimento — o teste-guarda obriga a essa
+escolha e falha se ela ficar implícita.
+
+**De estabelecimento** (a maioria):
+
+1. Coluna `tenantId` com referência a `tenants`.
+2. `.enableRLS()` e uma `pgPolicy('tenant_isolation', …)` com `using` **e** `withCheck`, usando
+   `currentTenantId` de `schema/shared.ts`.
+3. `ALTER TABLE ... FORCE ROW LEVEL SECURITY` numa migration escrita à mão — o Drizzle não gera
+   o `FORCE`. Há uma migration dedicada a isso: `0001_force_row_level_security.sql`.
+4. Testes de isolamento do recurso.
+
+**Da plataforma:** declare a tabela em `TABELAS_GLOBAIS`, em `tests/rls-guard.test.ts`, com o
+motivo. Sem isso o teste falha — de propósito.
+
+### Acessando dados de um tenant
+
+Sempre por `withTenant(context, tx => …)`. O client `db` cru só serve para dados globais e para
+o registro de tenants; usá-lo com dado de estabelecimento devolve zero linhas, porque o RLS não
+encontra contexto. O sintoma é "sumiu tudo", não um vazamento — falha fechada, mas confusa se
+você não souber a causa.
 
 Nos testes de componente, busque pelo que a pessoa usuária percebe — papel, rótulo, texto — e não
 por classe CSS ou `data-testid`. Um teste que quebra ao renomear uma classe não estava testando
