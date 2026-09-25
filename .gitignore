@@ -1,0 +1,34 @@
+# Dependências
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Cache de ferramentas
+.turbo/
+.vite/
+coverage/
+*.log
+
+# Ambiente — NUNCA commitar segredos reais
+.env
+.env.*
+!.env.example
+
+# Uploads locais (StorageService / LocalStorageProvider, Fase 6)
+uploads/
+storage/
+
+# Editor / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code — preferências pessoais da máquina
+.claude/settings.local.json

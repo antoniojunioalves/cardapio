@@ -1,0 +1,10 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# O pnpm 10 não executa scripts de instalação de dependências por padrão.
+# Só os pacotes listados aqui podem rodar — cada entrada é uma decisão
+# consciente de executar código de terceiros durante o install.
+# O esbuild precisa disso para baixar o binário nativo da plataforma.
+onlyBuiltDependencies:
+  - esbuild
