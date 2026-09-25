@@ -9,9 +9,10 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 1 de 15 concluída.** O monorepo está de pé, com API e frontend rodando.
-Ainda não há banco em uso, domínio, autenticação nem tenants — isso começa na Fase 2.
-Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 2 de 15 concluída.** O monorepo está de pé, a API conversa com o
+PostgreSQL, tem documentação OpenAPI em `/docs`, limite de requisições e sondas de saúde que
+refletem o estado real do banco. Ainda não há tabela de domínio, autenticação nem tenants —
+isso começa na Fase 3. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ---
 
@@ -60,23 +61,34 @@ Depois disso:
 
 - Frontend — <http://localhost:5173>
 - API — <http://localhost:3333/health>
+- Documentação da API — <http://localhost:3333/docs>
+
+O `.env` é obrigatório: a API não sobe sem `DATABASE_URL`. Um valor padrão apontaria em silêncio
+para o banco errado, o que é pior do que falhar na inicialização.
 
 ## Comandos
 
-| Comando          | O que faz                                           |
-| ---------------- | --------------------------------------------------- |
-| `pnpm dev`       | API e web em modo watch, em paralelo                |
-| `pnpm build`     | Build de produção de todos os pacotes               |
-| `pnpm typecheck` | TypeScript em todo o monorepo                       |
-| `pnpm lint`      | ESLint com análise de tipos                         |
-| `pnpm test`      | Vitest em todos os pacotes                          |
-| `pnpm verify`    | typecheck + lint + test + build, na ordem           |
-| `pnpm format`    | Prettier, escrevendo                                |
-| `pnpm db:up`     | Sobe o PostgreSQL via Docker Compose                |
-| `pnpm db:down`   | Derruba os containers (o volume de dados permanece) |
-| `pnpm db:logs`   | Acompanha os logs do PostgreSQL                     |
+| Comando            | O que faz                                           |
+| ------------------ | --------------------------------------------------- |
+| `pnpm dev`         | API e web em modo watch, em paralelo                |
+| `pnpm build`       | Build de produção de todos os pacotes               |
+| `pnpm typecheck`   | TypeScript em todo o monorepo                       |
+| `pnpm lint`        | ESLint com análise de tipos                         |
+| `pnpm test`        | Vitest em todos os pacotes — **exige `pnpm db:up`** |
+| `pnpm verify`      | typecheck + lint + test + build, na ordem           |
+| `pnpm format`      | Prettier, escrevendo                                |
+| `pnpm db:up`       | Sobe o PostgreSQL via Docker Compose                |
+| `pnpm db:down`     | Derruba os containers (o volume de dados permanece) |
+| `pnpm db:reset`    | Apaga o volume e recria do zero                     |
+| `pnpm db:logs`     | Acompanha os logs do PostgreSQL                     |
+| `pnpm db:generate` | Gera migration a partir do schema Drizzle           |
+| `pnpm db:migrate`  | Aplica as migrations no banco                       |
 
 Para rodar num pacote só: `pnpm --filter @repo/api test`
+
+Os testes da API rodam contra um PostgreSQL real, no banco `cardapio_test` — separado do de
+desenvolvimento. É proposital: as policies de isolamento entre tenants não podem ser
+comprovadas com mock.
 
 ## Estrutura
 

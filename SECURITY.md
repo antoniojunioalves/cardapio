@@ -30,9 +30,14 @@ valem como norma do projeto:
    da URL resolvido no servidor (área pública).
 2. **A aplicação conecta ao banco com role sem `SUPERUSER` e sem `BYPASSRLS`.** Sem isso, toda
    policy de RLS é ignorada em silêncio e o isolamento existe apenas no papel.
-3. **Toda tabela com `tenant_id` tem RLS habilitado e forçado.** Um teste-guarda consulta o
+3. **A aplicação não é dona das tabelas e não tem DDL.** O dono de uma tabela pode remover o RLS
+   dela com `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` — comprovado em teste. Se a API
+   conectasse como dona, uma injeção de SQL derrubaria o isolamento de todos os tenants de uma
+   vez. Por isso são duas roles: `cardapio_migrator` (dona, DDL, usada só em migrations) e
+   `cardapio_app` (somente DML). **Já em vigor**, com testes que falham se alguém afrouxar.
+4. **Toda tabela com `tenant_id` tem RLS habilitado e forçado.** Um teste-guarda consulta o
    catálogo do PostgreSQL e falha o CI se alguma tabela escapar.
-4. **Repositório de dado com escopo de tenant só é acessível via `withTenant(ctx, …)`.**
+5. **Repositório de dado com escopo de tenant só é acessível via `withTenant(ctx, …)`.**
 
 ### Proteção contra IDOR
 
@@ -134,12 +139,16 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
 
 ## 8. Cabeçalhos, CORS e limites
 
-| Item             | Estado                                                                     |
-| ---------------- | -------------------------------------------------------------------------- |
-| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard) |
-| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                           |
-| Rate limiting    | Fase 2, com limite específico para login e para consulta por telefone      |
-| HTTPS            | Responsabilidade do ambiente de deploy                                     |
+| Item             | Estado                                                                                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)                            |
+| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                                                      |
+| Rate limiting    | **Ativo** — limite global; limites estritos para login e consulta por telefone entram com essas rotas |
+| Documentação     | **Ativo** — `/docs` desabilitado em produção                                                          |
+| HTTPS            | Responsabilidade do ambiente de deploy                                                                |
+
+O limite global conta na memória do processo. Com mais de uma instância em produção isso vira um
+limite por instância; um armazenamento compartilhado entra junto do deploy (ROADMAP).
 
 ---
 

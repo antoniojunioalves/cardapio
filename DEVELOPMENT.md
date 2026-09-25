@@ -28,19 +28,30 @@ estão em `onlyBuiltDependencies` no `pnpm-workspace.yaml`. Hoje há só um: o `
 precisa disso para o binário nativo. Acrescentar um item ali é decidir executar código de
 terceiros durante o install — trate como decisão, não como formalidade.
 
+**Os scripts de inicialização do PostgreSQL rodam uma vez só**, quando o volume está vazio.
+Depois de alterar qualquer arquivo em `docker/postgres/init/`, use `pnpm db:reset` — sem isso a
+mudança simplesmente não acontece e o sintoma é um erro de permissão inexplicável.
+
+**A suíte de testes precisa do banco de pé.** Rode `pnpm db:up` antes de `pnpm test`.
+
 ---
 
 ## Comandos
 
-| Comando          | Efeito                          |
-| ---------------- | ------------------------------- |
-| `pnpm dev`       | API e web em watch, em paralelo |
-| `pnpm verify`    | typecheck → lint → test → build |
-| `pnpm typecheck` | TypeScript em todos os pacotes  |
-| `pnpm lint`      | ESLint com informação de tipos  |
-| `pnpm test`      | Vitest em todos os pacotes      |
-| `pnpm build`     | Build de produção               |
-| `pnpm format`    | Prettier, escrevendo            |
+| Comando            | Efeito                                                          |
+| ------------------ | --------------------------------------------------------------- |
+| `pnpm dev`         | API e web em watch, em paralelo                                 |
+| `pnpm verify`      | typecheck → lint → test → build                                 |
+| `pnpm typecheck`   | TypeScript em todos os pacotes                                  |
+| `pnpm lint`        | ESLint com informação de tipos                                  |
+| `pnpm test`        | Vitest em todos os pacotes — **exige `pnpm db:up`**             |
+| `pnpm build`       | Build de produção                                               |
+| `pnpm format`      | Prettier, escrevendo                                            |
+| `pnpm db:up`       | Sobe o PostgreSQL                                               |
+| `pnpm db:down`     | Derruba os containers, preservando o volume                     |
+| `pnpm db:reset`    | Apaga o volume e recria — necessário ao alterar scripts de init |
+| `pnpm db:generate` | Gera migration a partir do schema; não toca no banco            |
+| `pnpm db:migrate`  | Aplica as migrations, com a role que tem DDL                    |
 
 Num pacote só:
 
@@ -142,6 +153,15 @@ erro em português e voltadas à pessoa que está preenchendo — "Informe um te
 | Integração da API    | `apps/api/tests/` | rota completa via `app.inject()`                |
 | Isolamento de tenant | `apps/api/tests/` | **obrigatório** para todo recurso tenant-scoped |
 | Componente           | `apps/web/tests/` | comportamento visível, não implementação        |
+
+**Os testes da API rodam contra um PostgreSQL de verdade**, no banco `cardapio_test`, separado
+do de desenvolvimento. Não é preguiça de mockar: as policies de RLS só podem ser comprovadas
+pelo próprio banco, e um mock provaria apenas que concorda com quem o escreveu. Pré-requisito:
+`pnpm db:up`.
+
+Para exercitar um caminho de falha sem depender de derrubar serviço, `buildApp()` aceita
+injeção — por exemplo `buildApp({ checkDatabase: … })` para testar o 503 de `/ready`. Prefira
+isso a mock de módulo.
 
 Regra que não se negocia: **recurso com escopo de tenant sem teste de isolamento não está
 pronto.** O teste prova que o Tenant A não lê nem altera dado do Tenant B.
