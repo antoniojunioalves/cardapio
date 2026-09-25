@@ -1,0 +1,31 @@
+name: cardapio-online
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: cardapio-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cardapio}
+      # Role da aplicação, criada pelo script de inicialização.
+      APP_DB_USER: ${APP_DB_USER:-cardapio_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-cardapio_app}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # O PostgreSQL 18 usa PGDATA=/var/lib/postgresql/18/docker, e não mais
+      # /var/lib/postgresql/data. Montamos o diretório pai para que o volume
+      # continue correto independentemente da versão.
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cardapio}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres-data:
