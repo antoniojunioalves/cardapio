@@ -1,30 +1,92 @@
 import { app as product } from '@repo/config'
 import type { FastifyInstance } from 'fastify'
+import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import { z } from 'zod'
 
 import { env } from '../config/env.js'
+import type { DatabaseCheck } from '../db/index.js'
+
+const databaseCheckSchema = z.object({
+  status: z.enum(['ok', 'error']),
+  latencyMs: z.number(),
+  message: z.string().optional(),
+})
+
+const healthSchema = z.object({
+  status: z.literal('ok'),
+  name: z.string(),
+  environment: z.string(),
+  uptimeSeconds: z.number().int(),
+  timestamp: z.string(),
+})
+
+const readySchema = z.object({
+  status: z.enum(['ready', 'unavailable']),
+  checks: z.object({ database: databaseCheckSchema }),
+  timestamp: z.string(),
+})
+
+export interface HealthRoutesOptions {
+  /**
+   * Injetável para que o caminho de falha possa ser testado de verdade, sem
+   * mock de módulo e sem derrubar o pool que os outros testes compartilham.
+   */
+  checkDatabase: () => Promise<DatabaseCheck>
+}
 
 /**
- * Sondas de saúde. Ficam fora do prefixo versionado (`/api/v1`) de propósito:
- * orquestradores e balanceadores esperam encontrá-las na raiz, e elas não
- * fazem parte do contrato público da API.
+ * Sondas de infraestrutura. Ficam fora do prefixo `/api/v1` de propósito:
+ * orquestradores esperam encontrá-las na raiz, e elas não fazem parte do
+ * contrato público da API.
  *
- * - `/health`  → o processo está de pé e respondendo (liveness).
- * - `/ready`   → o processo consegue atender tráfego (readiness).
+ * A distinção entre as duas é o que importa:
+ *
+ * - `/health` (liveness) responde se o processo está vivo. **Não** consulta o
+ *   banco. Se consultasse, uma oscilação do banco faria o orquestrador matar e
+ *   reiniciar processos saudáveis — justamente quando o sistema está frágil.
+ * - `/ready` (readiness) responde se dá para mandar tráfego, e para isso
+ *   consulta o banco. Devolve **503** quando não dá, que é o sinal que tira a
+ *   instância do balanceador sem reiniciá-la.
  */
-export function healthRoutes(instance: FastifyInstance): void {
-  instance.get('/health', () => ({
-    status: 'ok' as const,
-    name: product.name,
-    environment: env.NODE_ENV,
-    uptimeSeconds: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-  }))
+export function healthRoutes(instance: FastifyInstance, options: HealthRoutesOptions): void {
+  const typed = instance.withTypeProvider<ZodTypeProvider>()
 
-  instance.get('/ready', () => ({
-    status: 'ready' as const,
-    // Ainda vazio: não há dependência externa nesta fase. A verificação do
-    // PostgreSQL entra aqui na Fase 2, junto com o Drizzle.
-    checks: {},
-    timestamp: new Date().toISOString(),
-  }))
+  typed.get(
+    '/health',
+    {
+      schema: {
+        tags: ['Infraestrutura'],
+        summary: 'Liveness — o processo está de pé',
+        response: { 200: healthSchema },
+      },
+    },
+    () => ({
+      status: 'ok' as const,
+      name: product.name,
+      environment: env.NODE_ENV,
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    }),
+  )
+
+  typed.get(
+    '/ready',
+    {
+      schema: {
+        tags: ['Infraestrutura'],
+        summary: 'Readiness — dá para atender tráfego',
+        response: { 200: readySchema, 503: readySchema },
+      },
+    },
+    async (_request, reply) => {
+      const database = await options.checkDatabase()
+      const ready = database.status === 'ok'
+
+      return reply.status(ready ? 200 : 503).send({
+        status: ready ? ('ready' as const) : ('unavailable' as const),
+        checks: { database },
+        timestamp: new Date().toISOString(),
+      })
+    },
+  )
 }

@@ -56,7 +56,12 @@ export function registerErrorHandler(app: FastifyInstance): void {
         .send(body('VALIDATION_ERROR', 'Dados inválidos.', requestId, error.validation))
     }
 
-    const statusCode = error.statusCode ?? 500
+    // Ordem de preferência: o status que o próprio erro carrega; senão, o que
+    // o Fastify ou um plugin já definiu na resposta antes de lançar; senão,
+    // 500. Sem o segundo caso, um plugin que sinaliza a falha pela resposta em
+    // vez de pelo erro — o rate limit faz exatamente isso — viraria 500.
+    const statusFromReply = reply.statusCode >= 400 ? reply.statusCode : undefined
+    const statusCode = error.statusCode ?? statusFromReply ?? 500
 
     if (statusCode < 500) {
       return reply
