@@ -29,7 +29,15 @@ export async function registerOpenApi(instance: FastifyInstance): Promise<void> 
       servers: [
         { url: `http://localhost:${String(env.API_PORT)}`, description: 'Desenvolvimento' },
       ],
-      tags: [{ name: 'Infraestrutura', description: 'Sondas de saúde e prontidão' }],
+      tags: [
+        { name: 'Infraestrutura', description: 'Sondas de saúde e prontidão' },
+        { name: 'Autenticação', description: 'Sessão de usuários administrativos' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        },
+      },
     },
     transform: jsonSchemaTransform,
   })
