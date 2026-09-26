@@ -15,6 +15,20 @@
       "when": 1790362907069,
       "tag": "0001_force_row_level_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790391485101,
+      "tag": "0002_cloudy_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790391504650,
+      "tag": "0003_force_rls_auth",
+      "breakpoints": true
     }
   ]
 }
