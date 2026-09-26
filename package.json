@@ -22,6 +22,7 @@
     "db:reset": "docker compose down -v && docker compose up -d postgres",
     "db:generate": "pnpm --filter @repo/api db:generate",
     "db:migrate": "pnpm --filter @repo/api db:migrate",
+    "db:seed": "pnpm --filter @repo/api db:seed",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {

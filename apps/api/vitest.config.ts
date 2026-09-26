@@ -11,6 +11,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Migra o banco de testes uma vez, antes de tudo.
+    globalSetup: ['./tests/global-setup.ts'],
     env: {
       DATABASE_URL:
         process.env.TEST_DATABASE_URL ??
@@ -21,6 +23,10 @@ export default defineConfig({
     },
     // O pool de conexões é um singleton do módulo; rodar arquivos de teste em
     // processos separados evita que fechar o pool num afete os outros.
+    //
+    // O Vitest sugere `isolate: false` para ganhar alguns centésimos. Não dá:
+    // sem isolamento os módulos são compartilhados entre arquivos, e o
+    // `closeDatabase()` do primeiro deixaria os seguintes sem pool.
     fileParallelism: false,
   },
 })

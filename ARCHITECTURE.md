@@ -180,7 +180,42 @@ Requisição
 Um `tenantId` que chegue no corpo, na query string ou num header é **ignorado**. Rota do tipo
 `GET /api/v1/products?tenantId=123` não existe no projeto.
 
-### 2.7 Caminho para isolamento físico, se um dia for preciso
+### 2.7 Como um TenantContext nasce
+
+Não existe construtor genérico. Há duas funções, e cada uma nomeia uma origem legítima:
+
+```ts
+tenantContextFromUser(tenantId) // área administrativa: do vínculo do usuário no banco
+tenantContextFromPublicSlug(tenantId) // área pública: do tenantSlug da URL, já resolvido
+```
+
+A ausência de um `tenantContextFrom(qualquerCoisa)` é o ponto. Para usar um `tenantId` vindo do
+corpo da requisição seria preciso inventar uma terceira função e batizá-la de algo como
+`tenantContextFromRequestBody` — o que torna o problema visível em qualquer revisão de código.
+Errar por acidente fica mais difícil do que errar por decisão.
+
+### 2.8 A tabela `tenants` não tem RLS, e isso é deliberado
+
+Ela é o registro que traduz um `slug` num tenant, e essa tradução acontece **antes** de existir
+contexto — é ela que o estabelece. Uma policy `id = current_tenant` tornaria o cardápio público
+irresolvível: seria preciso já saber o tenant para poder descobri-lo.
+
+O que ocupa o lugar do RLS aqui é o formato do repositório: ele expõe `findTenantBySlug` e
+`findTenantById`, e nada que se pareça com `findTenants(criteria)`. Uma consulta genérica sobre
+o registro seria justamente o buraco que o RLS fecha nas outras tabelas.
+
+Decorre daí uma guarda de projeto: **nada sensível entra em `tenants`**. Dados de cobrança,
+documento do responsável e afins vão para `tenant_settings` (Fase 5), que é tenant-scoped e
+protegida. Se um dia parecer conveniente adicionar uma coluna sensível aqui, a resposta certa é
+criá-la lá.
+
+O teste-guarda cobre os dois lados dessa decisão: toda tabela com `tenant_id` precisa de RLS
+habilitado, forçado e com policy; e toda tabela **sem** `tenant_id` precisa estar declarada
+numa lista de tabelas globais, com o motivo. Assim, criar uma tabela nova obriga a escolher
+explicitamente entre "é da plataforma" e "é de estabelecimento" — a segunda pergunta é a que um
+teste baseado só em `tenant_id` jamais conseguiria fazer.
+
+### 2.9 Caminho para isolamento físico, se um dia for preciso
 
 O `TenantContext` é a costura que mantém essa porta aberta. Migrar um tenant de plano CUSTOM
 para banco dedicado muda **onde a conexão é obtida** — dentro de `withTenant` — e não toca em

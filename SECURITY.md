@@ -1,8 +1,9 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 1**. Já existem headers de segurança, CORS restrito, validação de ambiente
-e formato de erro que não vaza detalhe interno. Autenticação, RBAC e isolamento entre tenants
-são das Fases 3 e 4. Cada seção abaixo diz o que já vale e o que ainda não.
+Estado atual: **Fase 3**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
+banco separadas, testes que o comprovam), headers de segurança, CORS restrito, limite de
+requisições, validação de ambiente e formato de erro que não vaza detalhe interno. Autenticação,
+RBAC e auditoria são da Fase 4. Cada seção abaixo diz o que já vale e o que ainda não.
 
 ---
 
@@ -45,11 +46,31 @@ Identificador é UUID, não sequencial — mas isso é obstáculo, não controle
 é o RLS: mesmo que alguém descubra o UUID de um produto de outro tenant, a consulta devolve zero
 linhas.
 
-### Testes obrigatórios (Fase 3)
+### Testes de isolamento — **em vigor**
 
-Para cada recurso com escopo de tenant — produtos, pedidos, clientes, usuários, configurações —
-um teste prova que o Tenant A **não** consegue ler nem alterar o dado do Tenant B. Recurso novo
-sem esse teste não é considerado pronto.
+Rodam contra PostgreSQL real e provam, para a primeira tabela tenant-scoped:
+
+| O que é provado                                            | Resultado              |
+| ---------------------------------------------------------- | ---------------------- |
+| `SELECT` sem `WHERE` dentro de um contexto                 | só as linhas do tenant |
+| Consulta fora de `withTenant`                              | zero linhas            |
+| Tenant A faz `UPDATE` mirando linha de B                   | nenhuma alterada       |
+| Tenant A faz `UPDATE` sabendo o **id exato** da linha de B | nenhuma alterada       |
+| Tenant A faz `DELETE` na linha de B                        | nenhuma apagada        |
+| Tenant A faz `INSERT` marcado com o tenant de B            | recusado               |
+| Escrita fora de contexto                                   | recusada               |
+| Contexto após o fim da transação                           | não sobrevive          |
+| Contextos em sequência e **concorrentes**                  | não se misturam        |
+| Contexto após rollback                                     | limpo                  |
+
+O caso do "id exato" é o que fecha o IDOR: conhecer o identificador não ajuda, porque quem nega
+é o banco e não a obscuridade do id.
+
+O caso concorrente existe porque em produção as requisições disputam o mesmo pool — é ali que um
+vazamento de contexto entre conexões apareceria, e não numa sequência tranquila de chamadas.
+
+Para cada recurso tenant-scoped novo — produtos, pedidos, clientes, usuários, configurações — os
+mesmos testes se repetem. Recurso sem eles não é considerado pronto.
 
 ---
 
