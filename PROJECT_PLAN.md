@@ -1,23 +1,23 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-09-25
-**Fase atual:** 3 de 15 — concluída, aguardando validação
-**Próxima:** Fase 4 — autenticação administrativa, RBAC e auditoria
+**Atualizado em:** 2026-09-26
+**Fase atual:** 4 de 15 — concluída, aguardando validação
+**Próxima:** Fase 5 — tenant e configurações do estabelecimento
 
 ---
 
 ## Estado atual
 
-**O isolamento entre estabelecimentos está implementado e comprovado.** Um tenant não lê nem
-altera dado de outro — nem sabendo o identificador exato da linha, nem esquecendo o `WHERE`, nem
-em requisições concorrentes. As tabelas de tenant, planos e assinaturas existem, com migrations
-aplicadas, e há um seed de demonstração.
+**A API já autentica.** Um usuário administrativo entra com e-mail e senha, recebe um token de
+acesso e um refresh rotativo, e as rotas protegidas conferem permissão depois de estabelecer o
+contexto de tenant. Toda entrada fica registrada numa auditoria que nem o próprio estabelecimento
+consegue reescrever.
 
-Sob isso: monorepo com API e frontend, PostgreSQL com duas roles de poderes distintos,
-documentação OpenAPI em `/docs`, limite de requisições e sondas que refletem o estado real do
-banco.
+Sob isso, o isolamento entre estabelecimentos comprovado por testes — agora estendido aos dados
+mais sensíveis do sistema: usuários, papéis, sessões e o próprio log de auditoria.
 
-**Ainda não existe:** autenticação, usuários, catálogo, carrinho, pedidos.
+**Ainda não existe:** configurações do estabelecimento, catálogo, carrinho, pedidos, e nenhuma
+tela administrativa no frontend.
 
 ---
 
@@ -30,7 +30,7 @@ banco.
 | 2   | Base do backend: Drizzle, migrations, `/ready`, rate limiting, OpenAPI                                              | ✅ Concluída |
 | 3   | Multi-tenancy: modelo, `TenantContext`, RLS, testes de isolamento, tabelas de plano                                 | ✅ Concluída |
 | 4   | Autenticação administrativa, RBAC e `audit_logs` — _auditoria subiu da 15_                                          | ⬜ Próxima   |
-| 5   | Tenant e configurações: estabelecimento, horários, entrega, pedido mínimo, pagamentos — _absorveu a antiga fase 13_ | ⬜           |
+| 5   | Tenant e configurações: estabelecimento, horários, entrega, pedido mínimo, pagamentos — _absorveu a antiga fase 13_ | ⬜ Próxima   |
 | 6   | Storage de imagens: `StorageService` + provider local — _subiu da 14_                                               | ⬜           |
 | 7   | Catálogo: categorias, produtos, grupos de opções, adicionais, combos                                                | ⬜           |
 | 8   | Cardápio público                                                                                                    | ⬜           |
@@ -49,60 +49,79 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 3 — concluída
+## Fase 4 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                            | Status |
-| --- | ----------------------------------------------------------------- | ------ |
-| 1   | Schema: `tenants`, `plans`, `plan_features`, `subscriptions`      | ✅     |
-| 2   | Primeira migration gerada, com RLS e policy                       | ✅     |
-| 3   | Migration escrita à mão para o `FORCE ROW LEVEL SECURITY`         | ✅     |
-| 4   | `TenantContext` com construtores que nomeiam a origem             | ✅     |
-| 5   | `withTenant()` — transação com `set_config` local                 | ✅     |
-| 6   | Repositório de resolução: `findTenantBySlug`, `findTenantById`    | ✅     |
-| 7   | Teste-guarda de RLS varrendo o catálogo do PostgreSQL             | ✅     |
-| 8   | Testes de isolamento entre tenants                                | ✅     |
-| 9   | Seed de demonstração, idempotente                                 | ✅     |
-| 10  | Migração automática do banco de testes no `globalSetup` do Vitest | ✅     |
-| 11  | Documentação, verificação e commits                               | ✅     |
+| #   | Tarefa                                                                       | Status |
+| --- | ---------------------------------------------------------------------------- | ------ |
+| 1   | Schema: `users`, `refresh_tokens`, `user_roles`, `audit_logs` (com RLS)      | ✅     |
+| 2   | Schema global: `roles`, `permissions`, `role_permissions`, `platform_admins` | ✅     |
+| 3   | Migrations, incluindo o `FORCE` escrito à mão                                | ✅     |
+| 4   | Hash de senha com argon2id e equalização de tempo                            | ✅     |
+| 5   | Token de acesso JWT e refresh opaco com rotação                              | ✅     |
+| 6   | Serviço de sessão: login, refresh com detecção de reuso, logout              | ✅     |
+| 7   | `requireAuth()` — autenticação e autorização como cadeia única               | ✅     |
+| 8   | Rotas `/api/v1/auth/{login,refresh,logout,me}` com OpenAPI                   | ✅     |
+| 9   | `recordAudit()` na mesma transação da alteração                              | ✅     |
+| 10  | Seed de papéis, permissões e usuários de demonstração                        | ✅     |
+| 11  | Testes: credenciais, rotas, isolamento das novas tabelas                     | ✅     |
+| 12  | Documentação, verificação e commits                                          | ✅     |
+
+### O bug que o teste pegou
+
+A revogação em massa da detecção de reuso acontecia **dentro** da transação, e o `throw` que
+sinalizava o problema causava rollback — desfazendo em silêncio a revogação e o registro de
+auditoria recém-escritos. A defesa contra token roubado se anulava, e o sintoma era o teste de
+reuso encontrar as outras sessões ainda válidas.
+
+A detecção virou um valor de retorno: a transação confirma, e só depois o erro é lançado. Vale
+como regra geral — **nada que precise persistir pode ser seguido de um `throw` dentro do
+`withTenant`.**
 
 ### Decisões desta fase
 
-**A tabela `tenants` não tem RLS.** Ela é o registro que traduz slug em tenant, e essa tradução
-antecede o contexto — é ela que o estabelece. Uma policy `id = current_tenant` tornaria o
-cardápio público irresolvível. O que ocupa o lugar do RLS é o formato do repositório: consultas
-estreitas e nomeadas, sem listagem genérica. Consequência registrada: nada sensível entra nessa
-tabela; vai para `tenant_settings` na Fase 5.
+**Super Admin em tabela separada.** Em `users` ele precisaria de `tenant_id` nulo, e a policy
+compara `tenant_id = current_tenant` — que com NULL nunca casa. A linha ficaria invisível até
+para ela mesma.
 
-**O teste-guarda cobre os dois lados.** Verificar "toda tabela com `tenant_id` tem RLS" não
-consegue enxergar uma tabela que _deveria_ ter `tenant_id` e não tem. Por isso o guarda também
-exige que toda tabela **sem** `tenant_id` esteja declarada como global, com motivo. Criar tabela
-nova passa a obrigar uma escolha explícita.
+**Refresh token não é JWT.** Ele já precisa de consulta ao banco para checar revogação, então a
+assinatura não compraria nada e traria junto a superfície de verificação de JWT. É um valor
+aleatório opaco, guardado só como hash.
 
-**`limitValue` nulo significa ilimitado**, e não zero — zero é um limite válido ("este plano não
-permite nenhum") e precisava de representação distinta.
+**`audit_logs` é append-only pela estrutura**, não por convenção: só tem policies de select e
+insert, e o RLS nega o resto.
 
-**O código do plano é `varchar`, não enum.** Criar FREE, STARTER, ADVANCED, PREMIUM ou CUSTOM
-vira um INSERT, e não uma migration.
+**O usuário é recarregado a cada requisição** em vez de confiar só no token. Custa uma consulta
+indexada; compra que desativar alguém valha na hora.
 
 ### Verificação executada
 
-| Verificação                                               | Resultado                                  |
-| --------------------------------------------------------- | ------------------------------------------ |
-| `pnpm typecheck` / `lint` / `build`                       | 4 / 4 / 3 tarefas, zero erro               |
-| `pnpm test`                                               | **48 testes** (44 API + 4 web)             |
-| `pnpm db:migrate`                                         | 4 tabelas; `subscriptions` com RLS forçado |
-| `pnpm db:seed` duas vezes                                 | idempotente, sem duplicar                  |
-| App tentando `ALTER TABLE ... DISABLE ROW LEVEL SECURITY` | `must be owner of table`                   |
-| Conferência manual no psql como a role da aplicação       | isolamento confirmado                      |
+| Verificação                               | Resultado                                 |
+| ----------------------------------------- | ----------------------------------------- |
+| `pnpm typecheck` / `lint` / `build`       | zero erro                                 |
+| `pnpm test`                               | **91 testes** (87 API + 4 web)            |
+| Guarda de RLS ao criar as tabelas novas   | acusou as 4 globais e exigiu declaração   |
+| Login, `/me`, refresh e detecção de reuso | conferidos com `curl` no servidor rodando |
+| Token `alg: none`                         | recusado                                  |
+| Alterar e apagar linha de auditoria       | zero linhas afetadas                      |
 
-O lint pegou um descarte de `error.cause` no setup de testes (regra `preserve-caught-error`) e o
-typecheck pegou um tipo sem index signature que os testes não veriam — ambos corrigidos.
+---
+
+## Fase 5 — próxima
+
+Escopo pretendido: configurações do estabelecimento, horários de funcionamento com múltiplos
+intervalos, taxa de entrega fixa ou por região, retirada no local, pedido mínimo e formas de
+pagamento habilitáveis — tudo tenant-scoped, com RLS e auditoria, e as primeiras rotas
+administrativas de verdade usando `requireAuth`.
 
 ---
 
 ## Fases anteriores
+
+**Fase 3** entregou o modelo multi-tenant, o `TenantContext`, o `withTenant` e o teste-guarda de
+RLS. Descobriu-se ali que a policy precisa de `nullif` — sem ele um contexto vazio faz `''::uuid`
+lançar erro em vez de devolver zero linhas.
 
 **Fase 2** entregou Drizzle, migrations, `/ready` com verificação real e 503, rate limiting e
 OpenAPI. Durante ela descobriu-se que o dono de uma tabela consegue remover o RLS dela, o que
@@ -110,20 +129,6 @@ levou à separação em duas roles de banco (`cardapio_migrator` com DDL, `carda
 DML) e à correção do ARCHITECTURE.md.
 
 **Fase 1** entregou o monorepo, o tooling e o PostgreSQL no Docker Compose.
-
----
-
-## Fase 4 — próxima
-
-Escopo pretendido:
-
-- Tabelas `users`, `roles`, `permissions`, `user_roles` — tenant-scoped, com RLS
-- Hash de senha, JWT de acesso curto e refresh token
-- Middleware de autenticação que produz o `TenantContext` a partir do usuário
-- Autorização por permissão, verificada **depois** do contexto de tenant
-- `audit_logs` e o helper de registro, usados daqui em diante por todas as fases
-- Conceito de Super Admin, com a estrutura mínima
-- Testes de isolamento para usuários e de autorização por papel
 
 ---
 
@@ -139,6 +144,12 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | `TenantContext` sem construtor genérico             | Não há como criar contexto a partir de dado do cliente            |
 | `tenants` sem RLS, com repositório estreito         | A resolução do slug antecede o contexto                           |
 | Guarda exige declarar tabelas globais               | Pega a tabela que deveria ter `tenant_id` e não tem               |
+| Super Admin em tabela própria                       | Com `tenant_id` nulo a policy nunca casaria — linha invisível     |
+| Refresh token opaco, não JWT                        | Já consulta o banco para revogação; assinatura não compra nada    |
+| `audit_logs` sem policy de update nem delete        | Append-only pela estrutura, não por convenção                     |
+| Usuário recarregado a cada requisição               | Desativar alguém passa a valer na hora                            |
+| `requireAuth()` devolve a cadeia pronta             | Ordem errada entre autenticar e autorizar falharia em silêncio    |
+| argon2id com parâmetros explícitos                  | Um padrão invisível nunca é revisitado                            |
 | UUIDv7 gerado no banco (`uuidv7()` do PG 18)        | Vale para seed e INSERT manual, sem dependência                   |
 | Testes contra PostgreSQL real                       | RLS não se prova com mock                                         |
 | `/health` não consulta o banco                      | Senão uma oscilação do banco reinicia processos saudáveis         |
