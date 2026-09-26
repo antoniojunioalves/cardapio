@@ -18,3 +18,19 @@ export class AppError extends Error {
     this.details = details
   }
 }
+
+/** 401 — não sabemos quem é, ou a credencial não confere. */
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Credenciais inválidas.', details?: unknown) {
+    super(message, 401, 'UNAUTHORIZED', details)
+    this.name = 'UnauthorizedError'
+  }
+}
+
+/** 403 — sabemos quem é, e essa pessoa não pode fazer isto. */
+export class ForbiddenError extends AppError {
+  constructor(message = 'Você não tem permissão para esta ação.', details?: unknown) {
+    super(message, 403, 'FORBIDDEN', details)
+    this.name = 'ForbiddenError'
+  }
+}
