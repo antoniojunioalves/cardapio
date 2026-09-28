@@ -15,6 +15,8 @@ import {
   substituirHorarios,
 } from '../settings/service.js'
 import { paraMinutos } from '../settings/opening-hours.js'
+import { apresentarConfiguracoes } from '../settings/presenter.js'
+import { storage } from '../storage/index.js'
 
 /** `HH:MM` ou `HH:MM:SS`. */
 const HORA = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/
@@ -27,7 +29,7 @@ const minutos = z.coerce
   .max(24 * 60)
 const textoOpcional = (max: number) => z.string().trim().max(max).nullable().optional()
 
-const configuracoesSchema = z.object({
+export const configuracoesSchema = z.object({
   id: z.uuid(),
   tenantId: z.uuid(),
   description: z.string().nullable(),
@@ -245,7 +247,8 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       },
       preHandler: requireAuth(LER),
     },
-    async (request) => obterConfiguracoes(tenantContextOf(request)),
+    async (request) =>
+      apresentarConfiguracoes(await obterConfiguracoes(tenantContextOf(request)), storage),
   )
 
   typed.patch(
@@ -261,7 +264,14 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       preHandler: requireAuth(ESCREVER),
     },
     async (request) =>
-      atualizarConfiguracoes(tenantContextOf(request), currentUser(request).id, request.body),
+      apresentarConfiguracoes(
+        await atualizarConfiguracoes(
+          tenantContextOf(request),
+          currentUser(request).id,
+          request.body,
+        ),
+        storage,
+      ),
   )
 
   typed.get(

@@ -34,9 +34,13 @@ export const tenantSettings = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
 
     description: text(),
-    /** Preenchidos na Fase 6, quando existir upload. */
-    logoUrl: varchar({ length: 512 }),
-    coverUrl: varchar({ length: 512 }),
+    /**
+     * Chaves no storage, e não URLs. A URL pública é calculada na leitura:
+     * gravá-la aqui a congelaria no provider e no domínio de hoje, e trocar o
+     * disco local por S3 exigiria reescrever todas as linhas.
+     */
+    logoKey: varchar({ length: 255 }),
+    coverKey: varchar({ length: 255 }),
 
     /** Número que recebe o pedido. Só dígitos, com DDI e DDD: 5511999999999. */
     whatsappPhone: varchar({ length: 20 }),
