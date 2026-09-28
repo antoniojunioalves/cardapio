@@ -13,6 +13,7 @@ import { registerOpenApi } from './plugins/openapi.js'
 import { registerRateLimit } from './plugins/rate-limit.js'
 import { registerUploads } from './plugins/uploads.js'
 import { adminCatalogRoutes } from './routes/admin-catalog.js'
+import { adminCustomizationRoutes } from './routes/admin-customization.js'
 import { adminImageRoutes } from './routes/admin-images.js'
 import { adminSettingsRoutes } from './routes/admin-settings.js'
 import { authRoutes } from './routes/auth.js'
@@ -72,6 +73,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(adminSettingsRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminImageRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCatalogRoutes, { prefix: '/api/v1/admin' })
+  await instance.register(adminCustomizationRoutes, { prefix: '/api/v1/admin' })
 
   return instance
 }

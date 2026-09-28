@@ -72,6 +72,7 @@ const produtoSchema = z.object({
   id: z.uuid(),
   tenantId: z.uuid(),
   categoryId: z.uuid(),
+  type: z.enum(['SIMPLE', 'COMBO']),
   name: z.string(),
   description: z.string().nullable(),
   priceInCents: z.number(),
@@ -84,6 +85,8 @@ const produtoSchema = z.object({
 
 const novoProduto = z.object({
   categoryId: z.uuid(),
+  /** Definido na criação e imutável depois. */
+  type: z.enum(['SIMPLE', 'COMBO']).optional(),
   name: texto(120),
   description: textoOpcional(2000),
   priceInCents: preco,
@@ -91,7 +94,10 @@ const novoProduto = z.object({
   sortOrder: ordem.optional(),
 })
 
+// Sem `type`: ele é imutável, e um PATCH que o trouxesse seria recusado.
 const patchDeProduto = novoProduto
+  .omit({ type: true })
+  .strict()
   .partial()
   .refine(pelomenosUmCampo, { message: 'informe ao menos um campo para alterar' })
 
