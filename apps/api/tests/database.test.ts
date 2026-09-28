@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 
 import { env } from '../src/config/env.js'
 import { checkDatabaseConnection, closeDatabase, db } from '../src/db/index.js'
+import { DRIZZLE_CONFIG } from '../src/db/drizzle-config.js'
 
 /**
  * Testes contra o PostgreSQL de verdade, no banco `cardapio_test`.
@@ -98,7 +99,7 @@ describe('separação de privilégios entre as roles', () => {
 
   it('a role de migration consegue criar e remover tabela', async () => {
     const pool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL, max: 1 })
-    const migrationDb = drizzle(pool)
+    const migrationDb = drizzle(pool, DRIZZLE_CONFIG)
 
     try {
       await migrationDb.execute(sql`create table permitida (id int)`)

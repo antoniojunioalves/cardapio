@@ -25,6 +25,8 @@ const TABELAS_GLOBAIS: Record<string, string> = {
   role_permissions: 'liga papel a permissão; ambos globais',
   platform_admins:
     'super admin não pertence a tenant nenhum — com tenant_id nulo a policy nunca casaria e a linha ficaria invisível até para ela mesma',
+  payment_methods:
+    'catálogo de formas de pagamento da plataforma; o que cada estabelecimento aceita fica em tenant_payment_methods',
 }
 
 interface TabelaInfo {
