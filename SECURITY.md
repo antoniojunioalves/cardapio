@@ -1,6 +1,6 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 7a**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 7b**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id e JWT, RBAC por permissão,
 auditoria append-only, headers de segurança, CORS restrito, limites de requisição e validação de
 ambiente. As rotas administrativas de configuração já exigem permissão e registram auditoria. Cada seção abaixo diz o que já vale e o que ainda não.
