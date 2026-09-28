@@ -77,6 +77,7 @@ apps/api/src/
 ├── auth/          senha, tokens, sessão, middleware de rota
 ├── audit/         registro de ações administrativas
 ├── settings/      configurações, horários, entrega — domínio + repositório + serviço
+├── storage/       StorageService, provider local, detecção de tipo de imagem
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
@@ -238,6 +239,16 @@ O módulo de domínio separado é o que permite cobrir casos de borda em milisse
 **Toda instância do Drizzle usa `DRIZZLE_CONFIG`.** Criar uma sem ele emite `"sortOrder"` em vez
 de `sort_order`, e o erro que aparece — `column "sortOrder" does not exist` — parece problema de
 migration, não de configuração do cliente.
+
+### Guardando uma imagem
+
+Nunca grave URL nem caminho no banco — grave a **chave** devolvida por `novaChaveDeImagem`, e
+converta para URL na resposta com `urlDaImagem`. Nunca use o nome enviado pelo cliente para
+montar a chave. `src/settings/images.ts` é o modelo a seguir, inclusive na ordem das operações:
+grava o arquivo novo, atualiza o banco, e só depois do commit apaga o antigo.
+
+Em desenvolvimento os arquivos ficam em `apps/api/uploads/`, fora do git. Nos testes, num
+diretório temporário do sistema.
 
 ### Acessando dados de um tenant
 
