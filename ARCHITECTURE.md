@@ -215,7 +215,39 @@ numa lista de tabelas globais, com o motivo. Assim, criar uma tabela nova obriga
 explicitamente entre "é da plataforma" e "é de estabelecimento" — a segunda pergunta é a que um
 teste baseado só em `tenant_id` jamais conseguiria fazer.
 
-### 2.9 Caminho para isolamento físico, se um dia for preciso
+### 2.9 Chaves estrangeiras compostas: o RLS não protege referências
+
+**A checagem de chave estrangeira do PostgreSQL roda por fora do RLS.** Descoberto e comprovado
+na Fase 7a: o Tenant A não enxerga a categoria do Tenant B — o `SELECT` devolve zero linhas —,
+mas uma FK simples `category_id → categories(id)` aceita que A crie um produto apontando para
+ela, bastando saber o UUID.
+
+O RLS protege o que se lê e o que se grava. Não protege **para onde uma referência aponta**.
+
+A correção é a FK incluir o tenant dos dois lados:
+
+```sql
+FOREIGN KEY (tenant_id, category_id) REFERENCES categories (tenant_id, id)
+```
+
+com `UNIQUE (tenant_id, id)` na tabela referenciada. Aí as duas camadas se completam: apontar
+para a categoria de B mantendo o próprio tenant é barrado pela FK, e fingir ser B é barrado pelo
+`WITH CHECK` do RLS.
+
+A mesma falha existia em três FKs das Fases 3 e 4 (`user_roles`, `refresh_tokens` e
+`audit_logs` apontando para `users`). Não era explorável — em todos os caminhos o id vinha do
+servidor —, mas era o formato exato de um IDOR esperando a rota "atribuir papel ao usuário".
+Foram corrigidas na mesma fase.
+
+A FK de `audit_logs` usa `ON DELETE SET NULL (actor_user_id)`, anulando só o ator. O `SET NULL`
+comum numa FK composta anularia também o `tenant_id`, que é obrigatório, e a remoção de um
+usuário falharia. O Drizzle não expressa essa forma, então ela está numa migration escrita à mão.
+
+**O teste-guarda passou a ter três verificações:** RLS em toda tabela com `tenant_id`, declaração
+de toda tabela sem `tenant_id`, e `tenant_id` dos dois lados em toda FK entre tabelas
+tenant-scoped.
+
+### 2.10 Caminho para isolamento físico, se um dia for preciso
 
 O `TenantContext` é a costura que mantém essa porta aberta. Migrar um tenant de plano CUSTOM
 para banco dedicado muda **onde a conexão é obtida** — dentro de `withTenant` — e não toca em
@@ -552,7 +584,63 @@ que substitui a semana de um estabelecimento e confirma que a do outro continua 
 
 ---
 
-## 8. Frontend
+## 8. Catálogo
+
+### 8.1 Categorias
+
+Nome único **sem diferenciar maiúsculas**, por índice em `lower(name)`: "Bebidas" e "bebidas"
+lado a lado no cardápio é erro de digitação, não duas categorias. A unicidade é por
+estabelecimento — dois estabelecimentos podem ter "Bebidas".
+
+`isActive` esconde a categoria inteira do cardápio público. É diferente da disponibilidade de um
+produto, que diz "acabou por hoje".
+
+Excluir uma categoria **com produtos** é recusado com 409 e a contagem, em vez de levá-los junto:
+apagar uma categoria não pode tirar trinta produtos do cardápio em silêncio. A FK com `RESTRICT`
+é a segunda barreira, para o dia em que a verificação da aplicação for removida.
+
+A reordenação exige a **lista completa** de categorias. Uma lista parcial deixaria as ausentes
+intercaladas com a ordem antiga de um jeito que ninguém pediu. A mesma regra recusa um id de
+outro estabelecimento, sem precisar de verificação específica: ele não pertence ao conjunto.
+As posições são gravadas de dez em dez, deixando espaço para inserir no meio.
+
+### 8.2 Produtos
+
+Preço em centavos inteiros, com teto de R$ 100.000,00 na validação. O teto não é regra de
+negócio: é a trava contra um zero a mais digitado sem querer, que colocaria um lanche a
+R$ 2.590,00 no cardápio público. Um valor com casas decimais é recusado — o campo é em centavos,
+e aceitar `25.9` esconderia o erro de quem achou que era em reais.
+
+`isAvailable` é o controle de estoque do MVP. Estoque com quantidade e baixa automática estão no
+ROADMAP.
+
+O preço gravado no produto é o **atual**. Nenhum pedido o lê depois de criado: na Fase 11 ele é
+copiado para o item do pedido.
+
+Por isso a exclusão de produto pode ser física: pedidos não dependem dele.
+
+### 8.3 Auditoria de preço e disponibilidade
+
+Além do registro geral de alteração, **troca de preço** e **troca de disponibilidade** geram
+registros próprios (`product.price_changed`, `product.availability_changed`), com o antes e o
+depois. O histórico de preço de um produto passa a ser uma consulta por ação, e não uma
+garimpagem em JSON.
+
+### 8.4 Um id de outro estabelecimento responde 404, não 403
+
+O RLS torna a linha invisível, e o serviço responde "não encontrado". Um 403 confirmaria que o id
+existe — informação útil para quem está tentando adivinhar ids de outro estabelecimento.
+
+### 8.5 A troca de imagem vive num lugar só
+
+Logo, capa, categoria e produto usam `trocarImagem`, em `src/storage/replace.ts`. A sequência —
+grava o novo, commita, só então apaga o antigo — é sutil demais para existir em quatro cópias.
+Com ela extraída, uma tentativa de imagem para um produto inexistente também não deixa arquivo
+órfão: o novo é apagado quando a transação falha, e há teste que conta os arquivos.
+
+---
+
+## 9. Frontend
 
 ### 6.1 Divisão de estado
 
@@ -606,7 +694,7 @@ Não há editor de temas, apenas a arquitetura que torna um possível sem tocar 
 
 ---
 
-## 9. Storage de imagens
+## 10. Storage de imagens
 
 ### 9.1 Chaves, não caminhos nem URLs
 
@@ -668,7 +756,7 @@ As imagens são servidas em `/uploads/` com dois cabeçalhos diferentes do resto
 
 Com S3, as imagens seriam servidas pelo bucket ou por uma CDN, e este caminho deixaria de existir.
 
-## 10. Tempo real
+## 11. Tempo real
 
 WebSocket para entregar pedidos novos ao painel administrativo. Polling não é a solução
 principal: num painel de cozinha o atraso é percebido na hora.
@@ -678,7 +766,7 @@ evento de outro tenant. Fase 13.
 
 ---
 
-## 11. Planos e limites
+## 12. Planos e limites
 
 Modelo genérico desde o início: `plans`, `plan_features`, `subscriptions`. Nada limita o sistema
 a dois planos — FREE, STARTER, ADVANCED, PREMIUM e CUSTOM cabem sem migration de estrutura.
@@ -692,7 +780,7 @@ pela plataforma.
 
 ---
 
-## 12. Decisões registradas
+## 13. Decisões registradas
 
 ### TypeScript 6 em vez de 7
 

@@ -1,6 +1,6 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 6**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 7a**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id e JWT, RBAC por permissão,
 auditoria append-only, headers de segurança, CORS restrito, limites de requisição e validação de
 ambiente. As rotas administrativas de configuração já exigem permissão e registram auditoria. Cada seção abaixo diz o que já vale e o que ainda não.
@@ -39,6 +39,11 @@ valem como norma do projeto:
 4. **Toda tabela com `tenant_id` tem RLS habilitado e forçado.** Um teste-guarda consulta o
    catálogo do PostgreSQL e falha o CI se alguma tabela escapar.
 5. **Repositório de dado com escopo de tenant só é acessível via `withTenant(ctx, …)`.**
+6. **Toda chave estrangeira entre tabelas tenant-scoped inclui o `tenant_id` dos dois lados.** A
+   checagem de FK do PostgreSQL roda por fora do RLS: com uma FK simples, o Tenant A cria um
+   produto dentro da categoria do Tenant B sabendo só o UUID, mesmo sem conseguir enxergá-la.
+   Comprovado em execução na Fase 7a; a FK composta fecha o caminho, e o teste-guarda falha se
+   alguma FK nova não a usar.
 
 ### Proteção contra IDOR
 
@@ -62,6 +67,9 @@ Rodam contra PostgreSQL real e provam, para a primeira tabela tenant-scoped:
 | Contexto após o fim da transação                           | não sobrevive          |
 | Contextos em sequência e **concorrentes**                  | não se misturam        |
 | Contexto após rollback                                     | limpo                  |
+
+| Tenant A cria um produto dentro de uma categoria de B | recusado pela FK composta |
+| Tenant A atribui papel a um usuário de B | recusado pela FK composta |
 
 O caso do "id exato" é o que fecha o IDOR: conhecer o identificador não ajuda, porque quem nega
 é o banco e não a obscuridade do id.

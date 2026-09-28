@@ -1,21 +1,22 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-28
-**Fase atual:** 6 de 15 — concluída, aguardando validação
-**Próxima:** Fase 7 — catálogo
+**Fase atual:** 7a — concluída, aguardando validação
+**Próxima:** Fase 7b — opções, adicionais e combos
 
 ---
 
 ## Estado atual
 
-**Já dá para enviar o logo e a capa do estabelecimento.** O arquivo é validado pelo conteúdo — um
-HTML ou SVG disfarçado de `.png` é recusado —, gravado num storage atrás de uma interface
-trocável, e servido com os cabeçalhos certos para o frontend usar de outra origem.
+**O estabelecimento já tem cardápio.** Categorias e produtos com imagem, preço em centavos,
+disponibilidade e ordem, administrados por rotas com permissão e auditoria. Troca de preço e de
+disponibilidade geram registros próprios, com o antes e o depois.
 
-Sob isso: configurações do estabelecimento com horários e entrega, autenticação com RBAC, e o
-isolamento entre estabelecimentos comprovado em todas as 10 tabelas tenant-scoped.
+Nesta fase apareceu uma falha de isolamento que o RLS não cobria — a checagem de chave
+estrangeira roda por fora dele — e ela foi corrigida no catálogo e em três tabelas antigas.
 
-**Ainda não existe:** catálogo, carrinho, pedidos, e nenhuma tela administrativa no frontend.
+**Ainda não existe:** opções, adicionais, combos, cardápio público, carrinho, pedidos, e
+nenhuma tela administrativa no frontend.
 
 ---
 
@@ -47,66 +48,82 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 6 — concluída
+## Fase 7a — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                  | Status |
-| --- | ----------------------------------------------------------------------- | ------ |
-| 1   | Interface `StorageService` e `LocalStorageProvider`                     | ✅     |
-| 2   | Detecção do tipo de imagem pelos bytes, recusando SVG                   | ✅     |
-| 3   | Chaves montadas pelo servidor; formato fixo e conferência contra a raiz | ✅     |
-| 4   | Colunas `logo_key`/`cover_key` no lugar de `logo_url`/`cover_url`       | ✅     |
-| 5   | Upload com limite aplicado durante o recebimento                        | ✅     |
-| 6   | Troca e remoção de logo e capa, com auditoria                           | ✅     |
-| 7   | Entrega em `/uploads/` com CORP `cross-origin` e cache imutável         | ✅     |
-| 8   | Testes: 19 de storage, 20 de rota                                       | ✅     |
-| 9   | Documentação, verificação e commits                                     | ✅     |
+| #   | Tarefa                                                                          | Status |
+| --- | ------------------------------------------------------------------------------- | ------ |
+| 1   | Comprovar que a checagem de FK roda por fora do RLS                             | ✅     |
+| 2   | **Correção:** FKs compostas em `user_roles`, `refresh_tokens` e `audit_logs`    | ✅     |
+| 3   | Teste-guarda de FK entre tabelas tenant-scoped — escrito antes da correção      | ✅     |
+| 4   | Schema `categories` e `products`, com FK composta desde o início                | ✅     |
+| 5   | `trocarImagem` extraído: uma implementação para logo, capa, categoria e produto | ✅     |
+| 6   | Serviço com 404, 409 e auditoria específica de preço e disponibilidade          | ✅     |
+| 7   | 15 rotas administrativas, incluindo imagem e reordenação                        | ✅     |
+| 8   | Seed com cardápio de demonstração, com um item esgotado                         | ✅     |
+| 9   | Testes: 28 de rota, 14 de isolamento, 4 de referência entre tenants             | ✅     |
+| 10  | Documentação, verificação, commits e clone limpo                                | ✅     |
+
+### A descoberta da fase
+
+**A checagem de chave estrangeira do PostgreSQL roda por fora do RLS.** O Tenant A não enxergava
+a categoria do Tenant B, mas uma FK simples aceitava que ele criasse um produto apontando para
+ela. O RLS protege o que se lê e o que se grava; não protege para onde uma referência aponta.
+
+A correção é a FK composta, `(tenant_id, category_id) → categories(tenant_id, id)`. Ao procurar
+o mesmo padrão no que já existia, o catálogo do PostgreSQL mostrou três FKs com a mesma falha,
+das Fases 3 e 4. Não eram exploráveis — o id vinha sempre do servidor —, mas eram o formato exato
+de um IDOR. Corrigidas em commit separado, `fix(db)`, para revisão à parte.
+
+Dois detalhes vieram junto. O `drizzle-kit` gerou a migration com as FKs **antes** da restrição
+única que elas referenciam, e ela teve de ser reordenada à mão. E a FK da auditoria precisou de
+`ON DELETE SET NULL (actor_user_id)`, que o Drizzle não expressa: o `SET NULL` comum anularia
+também o `tenant_id` e a remoção de um usuário falharia.
 
 ### Decisões desta fase
 
-**O banco guarda a chave, não a URL.** A URL é calculada na leitura; gravá-la congelaria o
-provider e o domínio de hoje em todas as linhas.
+**Excluir categoria com produtos é recusado**, com a contagem na mensagem, em vez de levá-los
+junto. A FK com `RESTRICT` é a segunda barreira.
 
-**O tipo vem dos bytes.** Extensão e `Content-Type` são escolhidos por quem envia.
+**Reordenação exige a lista completa.** Uma parcial deixaria as ausentes intercaladas; e a mesma
+regra recusa id de outro estabelecimento.
 
-**Na troca de imagem, o arquivo antigo só é apagado depois do commit.** Antes, um rollback
-deixaria o banco apontando para um arquivo inexistente.
+**Preço com casas decimais é recusado.** O campo é em centavos; aceitar `25.9` esconderia o erro
+de quem achou que era em reais. Teto de R$ 100 mil contra um zero a mais.
 
-**`Cross-Origin-Resource-Policy: cross-origin` só em `/uploads/`.** O resto da API continua
-`same-origin`. Sem essa exceção, o `<img>` do frontend quebraria em silêncio.
+**Nome de categoria único sem diferenciar maiúsculas**, por índice em `lower(name)`.
 
-**Troca de coluna em dois passos.** Adicionar e remover na mesma geração faz o `drizzle-kit`
-perguntar interativamente se é renomeação, o que trava num terminal sem interação. As colunas
-antigas nunca tinham sido preenchidas, então removê-las não perdeu dado.
-
-**Upload de imagem de produto fica para a Fase 7**, junto com o produto. Um endpoint genérico de
-upload agora seria especulativo, e geraria arquivos sem dono.
+**Id de outro estabelecimento responde 404**, nunca 403 — o 403 confirmaria que o id existe.
 
 ### Verificação executada
 
-| Verificação                           | Resultado                                           |
-| ------------------------------------- | --------------------------------------------------- |
-| `pnpm typecheck` / `lint` / `build`   | zero erro                                           |
-| `pnpm test`                           | **200 testes** (196 API + 4 web)                    |
-| PNG real enviado e baixado com `curl` | conteúdo idêntico, `image/png`, CORP e cache certos |
-| SVG com extensão `.png`               | recusado com 415                                    |
-| Arquivo acima de 5 MB                 | recusado com 413                                    |
-| Troca de imagem                       | a anterior sai do disco                             |
-| `/uploads/../../package.json`         | não entregue                                        |
+| Verificação                           | Resultado                                 |
+| ------------------------------------- | ----------------------------------------- |
+| `pnpm typecheck` / `lint` / `build`   | zero erro                                 |
+| `pnpm test`                           | **247 testes** (243 API + 4 web)          |
+| Guarda de FK antes da correção        | acusou exatamente as três FKs             |
+| INSERT direto de A com categoria de B | recusado pela FK composta                 |
+| Imagem para produto inexistente       | 404, e nenhum arquivo sobra no disco      |
+| Troca de preço ao vivo                | `{"de": 2590, "para": 2790}` na auditoria |
+| Excluir categoria com 3 produtos      | 409, "A categoria tem 3 produto(s)"       |
 
 ---
 
-## Fase 7 — próxima
+## Fase 7b — próxima
 
-Escopo pretendido: categorias, produtos com imagem, grupos de opções com mínimo e máximo,
-adicionais com preço e combos — tudo tenant-scoped, com RLS, auditoria e testes de isolamento.
-É a maior fase de domínio até aqui, e deve ser dividida em duas: categorias e produtos
-primeiro; opções, adicionais e combos depois.
+Grupos de opções com mínimo, máximo e obrigatoriedade; opções com alteração de preço;
+adicionais; remoções ("sem cebola"); e combos compostos de produtos. Todos com FK composta desde o
+início, e com o cuidado de que um combo não aponte para produto de outro estabelecimento.
 
 ---
 
 ## Fases anteriores
+
+**Fase 6** entregou o storage de imagens atrás de uma interface trocável, com o tipo detectado
+pelos bytes e SVG recusado. A regra `storage/` no `.gitignore` ignorava o próprio código-fonte,
+e foi percebida só porque o diretório não apareceu no `git status`; desde então cada fase fecha
+com um clone limpo.
 
 **Fase 5** entregou as configurações do estabelecimento: horários com travessia de meia-noite,
 entrega fixa ou por região, pedido mínimo e formas de pagamento. O bug daquela fase gerou o

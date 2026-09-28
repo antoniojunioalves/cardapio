@@ -9,10 +9,10 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 6 de 15 concluída.** Além do isolamento entre estabelecimentos, da
-autenticação administrativa e das configurações do estabelecimento, já existe **upload de
-imagens** — logo e capa — com validação pelo conteúdo do arquivo e storage trocável. Ainda não
-há catálogo nem pedidos — isso começa na Fase 7. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 7a concluída.** Além do isolamento entre estabelecimentos, da
+autenticação, das configurações e do upload de imagens, já existe o **catálogo**: categorias e
+produtos com imagem, preço, disponibilidade e ordem. Opções, adicionais e combos vêm na Fase 7b;
+carrinho e pedidos, depois. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

@@ -77,7 +77,8 @@ apps/api/src/
 ├── auth/          senha, tokens, sessão, middleware de rota
 ├── audit/         registro de ações administrativas
 ├── settings/      configurações, horários, entrega — domínio + repositório + serviço
-├── storage/       StorageService, provider local, detecção de tipo de imagem
+├── storage/       StorageService, provider local, detecção de tipo, troca de imagem
+├── catalog/       categorias e produtos — repositório, serviço, apresentação
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
@@ -180,9 +181,25 @@ escolha e falha se ela ficar implícita.
 1. Coluna `tenantId` com referência a `tenants`.
 2. `.enableRLS()` e uma `pgPolicy('tenant_isolation', …)` com `using` **e** `withCheck`, usando
    `currentTenantId` de `schema/shared.ts`.
-3. `ALTER TABLE ... FORCE ROW LEVEL SECURITY` numa migration escrita à mão — o Drizzle não gera
+3. **Toda referência a outra tabela tenant-scoped é FK composta**, com o `tenant_id` dos dois
+   lados, e `unique(tenantId, id)` na tabela referenciada:
+
+   ```ts
+   foreignKey({
+     name: 'products_categoria_mesmo_tenant',
+     columns: [table.tenantId, table.categoryId],
+     foreignColumns: [categories.tenantId, categories.id],
+   })
+   ```
+
+   A checagem de FK roda por fora do RLS; uma FK simples aceitaria referência a linha de outro
+   estabelecimento. Confira o SQL gerado: o `drizzle-kit` já emitiu a FK antes da restrição
+   única que ela referencia, e a migration falharia.
+
+4. `ALTER TABLE ... FORCE ROW LEVEL SECURITY` numa migration escrita à mão — o Drizzle não gera
    o `FORCE`. Há uma migration dedicada a isso: `0001_force_row_level_security.sql`.
-4. Testes de isolamento do recurso.
+5. Testes de isolamento do recurso, incluindo tentar referenciar uma linha de outro
+   estabelecimento.
 
 **Da plataforma:** declare a tabela em `TABELAS_GLOBAIS`, em `tests/rls-guard.test.ts`, com o
 motivo. Sem isso o teste falha — de propósito.
