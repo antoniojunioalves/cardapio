@@ -76,8 +76,8 @@ apps/api/src/
 ├── tenant/        TenantContext, withTenant, resolução de tenant
 ├── auth/          senha, tokens, sessão, middleware de rota
 ├── audit/         registro de ações administrativas
-├── db/            schema Drizzle, migrations, seed
-└── services/      regra de negócio          (a partir da Fase 5)
+├── settings/      configurações, horários, entrega — domínio + repositório + serviço
+└── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
 ├── components/    genéricos, sem regra de negócio
@@ -221,6 +221,23 @@ await withTenant(context, async (tx) => {
   })
 })
 ```
+
+### Organizando uma feature de backend
+
+A partir da Fase 5 cada domínio ganha uma pasta com três papéis distintos, e vale seguir:
+
+| Arquivo           | Responsabilidade                                                      |
+| ----------------- | --------------------------------------------------------------------- |
+| Módulo de domínio | Regra pura, sem banco nem framework — recebe dados, devolve resultado |
+| `repository.ts`   | Acesso a dados; recebe a transação, nunca abre a sua                  |
+| `service.ts`      | Abre a transação, compõe o repositório e grava a auditoria            |
+
+O módulo de domínio separado é o que permite cobrir casos de borda em milissegundos.
+`opening-hours.ts` tem 22 testes que não tocam no banco.
+
+**Toda instância do Drizzle usa `DRIZZLE_CONFIG`.** Criar uma sem ele emite `"sortOrder"` em vez
+de `sort_order`, e o erro que aparece — `column "sortOrder" does not exist` — parece problema de
+migration, não de configuração do cliente.
 
 ### Acessando dados de um tenant
 

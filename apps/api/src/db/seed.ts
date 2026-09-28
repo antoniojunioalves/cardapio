@@ -6,14 +6,21 @@ import { tenantContextFromUser } from '../tenant/context.js'
 import { withTenant } from '../tenant/with-tenant.js'
 import { closeDatabase, db } from './index.js'
 import {
+  businessHours,
+  deliveryRegions,
+  deliverySettings,
+  paymentMethods,
   planFeatures,
   plans,
   roles,
   subscriptions,
+  tenantPaymentMethods,
+  tenantSettings,
   tenants,
   userRoles,
   users,
 } from './schema/index.js'
+import { seedPaymentMethods } from './seed-payment-methods.js'
 import { seedRbac } from './seed-rbac.js'
 
 /**
@@ -58,18 +65,51 @@ const PLANOS = [
 /** Senha única de desenvolvimento. Nunca existe fora do seed. */
 const SENHA_DEMO = 'cardapio123'
 
+/** Terça a domingo, das 18:00 às 02:00 — atravessando a meia-noite. */
+const NOITE_ATRAVESSANDO_MEIA_NOITE = [2, 3, 4, 5, 6, 0].map((dia) => ({
+  dia,
+  abre: '18:00',
+  fecha: '02:00',
+}))
+
+/** Almoço e jantar, de segunda a sábado: dois intervalos no mesmo dia. */
+const ALMOCO_E_JANTAR = [1, 2, 3, 4, 5, 6].flatMap((dia) => [
+  { dia, abre: '11:00', fecha: '14:30' },
+  { dia, abre: '18:00', fecha: '23:00' },
+])
+
 const ESTABELECIMENTOS = [
   {
     slug: 'lanchonete-do-ze',
     name: 'Lanchonete do Zé',
     plano: 'FREE',
     dono: { nome: 'Zé Proprietário', email: 'ze@exemplo.com' },
+    descricao: 'Hambúrgueres artesanais e porções. Da terça ao domingo, até tarde.',
+    whatsapp: '5511999990001',
+    pedidoMinimoEmCentavos: 2000,
+    modoDeTaxa: 'FIXED' as const,
+    taxaFixaEmCentavos: 500,
+    horarios: NOITE_ATRAVESSANDO_MEIA_NOITE,
+    regioes: [] as { nome: string; taxaEmCentavos: number }[],
+    pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD'],
   },
   {
     slug: 'pizzaria-da-esquina',
     name: 'Pizzaria da Esquina',
     plano: 'PREMIUM',
     dono: { nome: 'Ana Proprietária', email: 'ana@exemplo.com' },
+    descricao: 'Pizzas de forno a lenha. Almoço e jantar, de segunda a sábado.',
+    whatsapp: '5511999990002',
+    pedidoMinimoEmCentavos: 3500,
+    modoDeTaxa: 'BY_REGION' as const,
+    taxaFixaEmCentavos: 0,
+    horarios: ALMOCO_E_JANTAR,
+    regioes: [
+      { nome: 'Centro', taxaEmCentavos: 500 },
+      { nome: 'Jardim das Flores', taxaEmCentavos: 700 },
+      { nome: 'Vila Nova', taxaEmCentavos: 1000 },
+    ],
+    pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'MEAL_VOUCHER_VR'],
   },
 ] as const
 
@@ -105,6 +145,91 @@ async function semearPlanos(): Promise<Map<string, string>> {
   }
 
   return idsPorCodigo
+}
+
+type Estabelecimento = (typeof ESTABELECIMENTOS)[number]
+
+/**
+ * Configurações de demonstração.
+ *
+ * A Lanchonete do Zé abre à noite e atravessa a meia-noite — 18:00 às 02:00 —
+ * porque é o caso real que mais quebra implementação de horário, e ter isso no
+ * seed permite conferir à mão que o cálculo de aberto/fechado acerta.
+ */
+async function semearConfiguracoes(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  estabelecimento: Estabelecimento,
+): Promise<void> {
+  await tx
+    .insert(tenantSettings)
+    .values({
+      tenantId,
+      description: estabelecimento.descricao,
+      whatsappPhone: estabelecimento.whatsapp,
+      minimumOrderInCents: estabelecimento.pedidoMinimoEmCentavos,
+      prepTimeMinMinutes: 20,
+      prepTimeMaxMinutes: 40,
+    })
+    .onConflictDoNothing({ target: tenantSettings.tenantId })
+
+  await tx
+    .insert(deliverySettings)
+    .values({
+      tenantId,
+      deliveryEnabled: true,
+      pickupEnabled: true,
+      feeMode: estabelecimento.modoDeTaxa,
+      fixedFeeInCents: estabelecimento.taxaFixaEmCentavos,
+      estimatedMinMinutes: 30,
+      estimatedMaxMinutes: 60,
+    })
+    .onConflictDoNothing({ target: deliverySettings.tenantId })
+
+  const jaTemHorario = await tx.select({ id: businessHours.id }).from(businessHours).limit(1)
+  if (jaTemHorario.length === 0) {
+    await tx.insert(businessHours).values(
+      estabelecimento.horarios.map((h) => ({
+        tenantId,
+        dayOfWeek: h.dia,
+        opensAt: h.abre,
+        closesAt: h.fecha,
+      })),
+    )
+  }
+
+  if (estabelecimento.regioes.length > 0) {
+    const jaTemRegiao = await tx.select({ id: deliveryRegions.id }).from(deliveryRegions).limit(1)
+    if (jaTemRegiao.length === 0) {
+      await tx.insert(deliveryRegions).values(
+        estabelecimento.regioes.map((r, indice) => ({
+          tenantId,
+          name: r.nome,
+          feeInCents: r.taxaEmCentavos,
+          sortOrder: indice * 10,
+        })),
+      )
+    }
+  }
+
+  for (const [indice, code] of estabelecimento.pagamentos.entries()) {
+    const [forma] = await tx
+      .select({ id: paymentMethods.id })
+      .from(paymentMethods)
+      .where(eq(paymentMethods.code, code))
+      .limit(1)
+    if (!forma) throw new Error(`forma de pagamento ${code} não encontrada`)
+
+    await tx
+      .insert(tenantPaymentMethods)
+      .values({
+        tenantId,
+        paymentMethodId: forma.id,
+        isEnabled: true,
+        sortOrder: indice * 10,
+      })
+      .onConflictDoNothing()
+  }
 }
 
 async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promise<void> {
@@ -160,6 +285,8 @@ async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promis
         .insert(userRoles)
         .values({ tenantId: tenant.id, userId: usuario.id, roleId: papelDono.id })
         .onConflictDoNothing()
+
+      await semearConfiguracoes(tx, tenant.id, estabelecimento)
     })
 
     infraLogger.info(
@@ -175,6 +302,7 @@ async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promis
 
 try {
   await seedRbac()
+  await seedPaymentMethods()
   const idsDosPlanos = await semearPlanos()
   await semearEstabelecimentos(idsDosPlanos)
   infraLogger.info({ senha: SENHA_DEMO }, 'seed concluído — todos os usuários usam esta senha')

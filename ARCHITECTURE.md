@@ -481,7 +481,78 @@ perdida. Ou as duas acontecem, ou nenhuma.
 
 ---
 
-## 7. Frontend
+## 7. Configurações do estabelecimento
+
+### 7.1 Onde cada coisa mora
+
+`tenants` é o registro público, lido **sem** contexto de tenant para resolver o slug. Tudo que
+não deve ser público vai para `tenant_settings`, que é tenant-scoped e protegida por RLS —
+endereço, telefone de contato, regras comerciais. Foi a guarda registrada na Fase 3, agora
+cumprida.
+
+### 7.2 Horário de funcionamento
+
+Um intervalo por linha, várias linhas por dia. Modelar como um par abre/fecha em colunas da
+tabela do tenant tornaria impossível o caso comum de abrir no almoço, fechar à tarde e reabrir à
+noite.
+
+**Um intervalo pode atravessar a meia-noite.** Quando o fechamento é menor que a abertura, ele
+termina no dia seguinte: 18:00–02:00 é o horário real de boa parte das lanchonetes. Isso faz um
+turno valer em dois dias do calendário, e é o caso que quebra implementação ingênua de horário.
+
+`closesAt = opensAt` é proibido por restrição no banco: seria ambíguo entre "vinte e quatro
+horas" e "intervalo vazio", e sem resolver essa ambiguidade a regra de travessia deixa de ser
+decidível. Funcionamento ininterrupto se escreve 00:00–23:59; suporte a 24 horas de verdade está
+no ROADMAP.
+
+O cálculo usa `Intl` com o fuso do tenant, e não aritmética de offset: offset não é constante —
+horário de verão muda, e fusos mudam por decisão política. Perguntar ao runtime continua correto
+depois que a regra do país muda.
+
+A **pausa manual** (`isAcceptingOrders`) vence qualquer horário cadastrado. Existe porque a
+realidade acontece: acabou o gás, a cozinha lotou. Sem ela, a saída seria editar o horário e
+lembrar de desfazer depois.
+
+O módulo não conhece banco nem framework — recebe intervalos, fuso e instante, devolve o status.
+É o que permite cobri-lo com dezenas de casos de borda em milissegundos.
+
+### 7.3 Entrega
+
+Taxa fixa ou por região. Cálculo por distância depende de geocoding e está no ROADMAP; não
+assumir que todo estabelecimento tem a mesma regra é o ponto do modo configurável.
+
+As regiões continuam guardadas quando o modo é fixo — alternar entre os dois não pode apagar um
+cadastro que o lojista levou uma tarde montando. Região **inativa é tratada como inexistente**:
+desativar precisa impedir pedidos novos, e não apenas sumir da lista, senão um cliente com a
+página aberta continuaria conseguindo escolhê-la.
+
+Configuração e regiões são salvas numa transação só. Separadas, haveria um instante com modo já
+em `BY_REGION` e nenhuma região cadastrada, visível para quem consultasse o cardápio.
+
+### 7.4 Formas de pagamento
+
+Catálogo global mais uma tabela de junção tenant-scoped, o mesmo desenho de `roles`/`user_roles`.
+Global porque "Pix" significa o mesmo em todo estabelecimento, e duplicá-lo por tenant só criaria
+grafias divergentes. Acrescentar uma bandeira é um INSERT, não uma migration.
+
+Nenhuma vem habilitada: quem escolhe o que aceita é o lojista. Uma lista que já viesse toda
+ligada acabaria com estabelecimento aceitando vale-refeição sem ter máquina. Desabilitar preserva
+a linha, para não perder a ordenação quando voltar a habilitar.
+
+**Nenhum pagamento é processado.** No MVP o cliente declara como vai pagar ao receber.
+
+### 7.5 Substituição em vez de CRUD
+
+Horários e regiões são salvos por substituição do conjunto inteiro, não por operação em cada
+item. É assim que essas telas são editadas de verdade: abre-se a grade, mexe-se em várias linhas,
+salva-se uma vez. Um PATCH por item exigiria da interface um controle de ids sem benefício.
+
+O `DELETE` da substituição não leva filtro de tenant — quem limita o alcance é o RLS. Há um teste
+que substitui a semana de um estabelecimento e confirma que a do outro continua intacta.
+
+---
+
+## 8. Frontend
 
 ### 6.1 Divisão de estado
 
@@ -535,7 +606,7 @@ Não há editor de temas, apenas a arquitetura que torna um possível sem tocar 
 
 ---
 
-## 8. Storage de imagens
+## 9. Storage de imagens
 
 Interface `StorageService` com `LocalStorageProvider` no MVP. O domínio nunca fala com o sistema
 de arquivos diretamente, de modo que um provider S3 entre depois sem alterar nada além da
@@ -543,7 +614,7 @@ composição. Fase 6.
 
 ---
 
-## 9. Tempo real
+## 10. Tempo real
 
 WebSocket para entregar pedidos novos ao painel administrativo. Polling não é a solução
 principal: num painel de cozinha o atraso é percebido na hora.
@@ -553,7 +624,7 @@ evento de outro tenant. Fase 13.
 
 ---
 
-## 10. Planos e limites
+## 11. Planos e limites
 
 Modelo genérico desde o início: `plans`, `plan_features`, `subscriptions`. Nada limita o sistema
 a dois planos — FREE, STARTER, ADVANCED, PREMIUM e CUSTOM cabem sem migration de estrutura.
@@ -567,7 +638,7 @@ pela plataforma.
 
 ---
 
-## 11. Decisões registradas
+## 12. Decisões registradas
 
 ### TypeScript 6 em vez de 7
 

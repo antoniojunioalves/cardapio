@@ -4,6 +4,10 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
 
+import { FORMAS_DE_PAGAMENTO } from '../src/db/catalogs.js'
+import { DRIZZLE_CONFIG } from '../src/db/drizzle-config.js'
+import { paymentMethods } from '../src/db/schema/index.js'
+
 /**
  * Aplica as migrations no banco de testes antes de qualquer teste rodar.
  *
@@ -19,9 +23,18 @@ export default async function setup(): Promise<void> {
   const pool = new Pool({ connectionString: MIGRATION_URL, max: 1, connectionTimeoutMillis: 5000 })
 
   try {
-    await migrate(drizzle(pool), {
-      migrationsFolder: path.resolve(import.meta.dirname, '../drizzle'),
-    })
+    const db = drizzle(pool, DRIZZLE_CONFIG)
+
+    await migrate(db, { migrationsFolder: path.resolve(import.meta.dirname, '../drizzle') })
+
+    // Catálogos da plataforma. Em produção são semeados no deploy; aqui, para
+    // que os testes rodem contra um banco parecido com o real em vez de um
+    // vazio que só eles conhecem.
+    for (const forma of FORMAS_DE_PAGAMENTO) {
+      await db.insert(paymentMethods).values(forma).onConflictDoNothing({
+        target: paymentMethods.code,
+      })
+    }
   } catch (error) {
     const motivo = error instanceof Error ? (error.cause ?? error) : error
     throw new Error(

@@ -18,9 +18,12 @@
  * Ver `tests/rls-guard.test.ts`.
  */
 export * from './audit.js'
+export * from './delivery.js'
+export * from './payments.js'
 export * from './plans.js'
 export * from './platform.js'
 export * from './rbac.js'
+export * from './settings.js'
 export * from './shared.js'
 export * from './tenants.js'
 export * from './users.js'

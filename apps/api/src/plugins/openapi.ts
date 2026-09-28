@@ -32,6 +32,10 @@ export async function registerOpenApi(instance: FastifyInstance): Promise<void> 
       tags: [
         { name: 'Infraestrutura', description: 'Sondas de saúde e prontidão' },
         { name: 'Autenticação', description: 'Sessão de usuários administrativos' },
+        {
+          name: 'Configurações',
+          description: 'Estabelecimento, horários, entrega e formas de pagamento',
+        },
       ],
       components: {
         securitySchemes: {

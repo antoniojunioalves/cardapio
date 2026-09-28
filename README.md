@@ -9,10 +9,11 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 4 de 15 concluída.** O isolamento entre estabelecimentos está implementado
-e comprovado por testes, e já existe **autenticação administrativa** com argon2id, JWT, refresh
-rotativo, RBAC por permissão e auditoria append-only. Ainda não há catálogo nem pedidos — isso
-começa na Fase 5. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 5 de 15 concluída.** Além do isolamento entre estabelecimentos e da
+autenticação administrativa, já dá para **configurar o estabelecimento**: horários de
+funcionamento (inclusive atravessando a meia-noite), taxa de entrega fixa ou por região,
+retirada no local, pedido mínimo e formas de pagamento. Ainda não há catálogo nem pedidos —
+isso começa na Fase 6. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

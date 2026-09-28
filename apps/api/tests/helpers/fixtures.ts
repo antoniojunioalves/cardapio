@@ -36,12 +36,26 @@ function sufixo(): string {
  * linhas e passariam ou falhariam conforme a ordem de execução.
  */
 export async function criarTenantComUsuario(
-  opcoes: { permissoes?: readonly string[]; ativo?: boolean; senha?: string } = {},
+  opcoes: {
+    permissoes?: readonly string[]
+    /**
+     * Usa os códigos de permissão exatamente como informados, em vez de
+     * sufixá-los. Necessário para testar rotas reais, que conferem
+     * `settings:read` e não `settings:read#abc123`.
+     *
+     * Permissões reais são globais e compartilhadas entre os testes, então
+     * são criadas com `onConflictDoNothing` e **não** removidas na limpeza.
+     */
+    permissoesReais?: boolean
+    ativo?: boolean
+    senha?: string
+  } = {},
 ): Promise<TenantDeTeste> {
   const id = sufixo()
-  const codigosDePermissao = (opcoes.permissoes ?? ['products:read']).map(
-    (codigo) => `${codigo}#${id}`,
-  )
+  const solicitadas = opcoes.permissoes ?? ['products:read']
+  const codigosDePermissao = opcoes.permissoesReais
+    ? [...solicitadas]
+    : solicitadas.map((codigo) => `${codigo}#${id}`)
 
   const [tenant] = await db
     .insert(tenants)
@@ -57,11 +71,20 @@ export async function criarTenantComUsuario(
 
   const permissionIds: string[] = []
   for (const code of codigosDePermissao) {
-    const [permissao] = await db.insert(permissions).values({ code }).returning({
-      id: permissions.id,
+    await db.insert(permissions).values({ code }).onConflictDoNothing({
+      target: permissions.code,
     })
-    if (!permissao) throw new Error('falha ao criar permissão de teste')
-    permissionIds.push(permissao.id)
+
+    const [permissao] = await db
+      .select({ id: permissions.id })
+      .from(permissions)
+      .where(eq(permissions.code, code))
+      .limit(1)
+    if (!permissao) throw new Error(`falha ao criar a permissão ${code}`)
+
+    // Só as sufixadas são removidas depois; as reais são catálogo compartilhado.
+    if (!opcoes.permissoesReais) permissionIds.push(permissao.id)
+
     await db.insert(rolePermissions).values({ roleId: papel.id, permissionId: permissao.id })
   }
 

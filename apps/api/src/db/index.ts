@@ -4,6 +4,7 @@ import { Pool } from 'pg'
 
 import { env } from '../config/env.js'
 import { infraLogger } from '../lib/logger.js'
+import { DRIZZLE_CONFIG } from './drizzle-config.js'
 import * as schema from './schema/index.js'
 
 export const pool = new Pool({
@@ -19,13 +20,14 @@ pool.on('error', (error: Error) => {
 })
 
 /**
- * `casing: 'snake_case'` traduz automaticamente `priceInCents` no TypeScript
- * para `price_in_cents` no banco, mantendo as duas convenções sem precisar
- * declarar o nome da coluna em cada campo.
+ * O `casing` de `DRIZZLE_CONFIG` traduz automaticamente `priceInCents` no
+ * TypeScript para `price_in_cents` no banco, mantendo as duas convenções sem
+ * precisar declarar o nome da coluna em cada campo. Toda instância do Drizzle
+ * no projeto usa a mesma configuração — ver `drizzle-config.ts`.
  */
 export const db: NodePgDatabase<typeof schema> = drizzle(pool, {
   schema,
-  casing: 'snake_case',
+  ...DRIZZLE_CONFIG,
 })
 
 export interface DatabaseCheck {

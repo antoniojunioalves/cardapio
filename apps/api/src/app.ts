@@ -11,6 +11,7 @@ import { loggerOptions } from './lib/logger.js'
 import { registerErrorHandler } from './plugins/error-handler.js'
 import { registerOpenApi } from './plugins/openapi.js'
 import { registerRateLimit } from './plugins/rate-limit.js'
+import { adminSettingsRoutes } from './routes/admin-settings.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
 
@@ -63,6 +64,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Rotas de domínio ficam sob o prefixo versionado. As sondas acima não: são
   // infraestrutura, não contrato público.
   await instance.register(authRoutes, { prefix: '/api/v1/auth' })
+  await instance.register(adminSettingsRoutes, { prefix: '/api/v1/admin' })
 
   return instance
 }
