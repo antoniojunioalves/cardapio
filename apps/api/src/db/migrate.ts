@@ -7,6 +7,7 @@ import { Pool } from 'pg'
 
 import { env } from '../config/env.js'
 import { infraLogger } from '../lib/logger.js'
+import { DRIZZLE_CONFIG } from './drizzle-config.js'
 
 /**
  * Aplica as migrations com a role `migrator`, e não com a da aplicação.
@@ -41,7 +42,7 @@ async function main(): Promise<void> {
 
   try {
     infraLogger.info({ migrationsFolder }, 'aplicando migrations')
-    await migrate(drizzle(pool), { migrationsFolder })
+    await migrate(drizzle(pool, DRIZZLE_CONFIG), { migrationsFolder })
     infraLogger.info('migrations aplicadas')
   } finally {
     await pool.end()
