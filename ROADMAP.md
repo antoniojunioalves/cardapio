@@ -40,6 +40,10 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Login com Apple
 - Recuperação de conta mais robusta
 - Autenticação em dois fatores para usuários administrativos
+- Bloqueio temporário de conta após N tentativas falhas — hoje há apenas o limite por IP
+- Histórico de senhas, para impedir reuso da anterior
+- Papéis personalizados por estabelecimento — hoje OWNER, ADMIN e STAFF são globais
+- Painel da plataforma para o Super Admin — hoje existe só a estrutura de dados
 
 ## Endereço e entrega
 

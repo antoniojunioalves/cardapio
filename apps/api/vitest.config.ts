@@ -20,6 +20,9 @@ export default defineConfig({
       MIGRATION_DATABASE_URL:
         process.env.TEST_MIGRATION_DATABASE_URL ??
         'postgresql://cardapio_migrator:cardapio_migrator@localhost:5432/cardapio_test',
+      // Segredo fixo e exclusivo dos testes: eles precisam de tokens
+      // reproduzíveis, e o valor jamais sai daqui.
+      JWT_SECRET: 'segredo-exclusivo-da-suite-de-testes-nao-usar-em-lugar-nenhum',
     },
     // O pool de conexões é um singleton do módulo; rodar arquivos de teste em
     // processos separados evita que fechar o pool num afete os outros.

@@ -9,11 +9,17 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 3 de 15 concluída.** O monorepo está de pé, a API conversa com o
-PostgreSQL e **o isolamento entre estabelecimentos está implementado e comprovado por testes**:
-um tenant não lê nem altera dado de outro, nem sabendo o identificador exato da linha. Ainda não
-há autenticação, catálogo nem pedidos — isso começa na Fase 4. Acompanhe em
-[PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 4 de 15 concluída.** O isolamento entre estabelecimentos está implementado
+e comprovado por testes, e já existe **autenticação administrativa** com argon2id, JWT, refresh
+rotativo, RBAC por permissão e auditoria append-only. Ainda não há catálogo nem pedidos — isso
+começa na Fase 5. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+
+Depois de `pnpm db:seed`, dá para entrar com:
+
+| Estabelecimento       | E-mail            | Senha         |
+| --------------------- | ----------------- | ------------- |
+| `lanchonete-do-ze`    | `ze@exemplo.com`  | `cardapio123` |
+| `pizzaria-da-esquina` | `ana@exemplo.com` | `cardapio123` |
 
 ---
 

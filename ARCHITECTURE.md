@@ -374,7 +374,114 @@ público. Rotas de domínio ficam sob `/api/v1`.
 
 ---
 
-## 6. Frontend
+## 6. Autenticação e autorização
+
+### 6.1 Senhas
+
+argon2id, com os parâmetros mínimos recomendados pela OWASP escritos de forma explícita no
+código — 19 MiB de memória, 2 iterações, paralelismo 1. Um padrão invisível nunca é revisitado
+quando o hardware barato fica mais rápido.
+
+O formato do argon2 carrega algoritmo, parâmetros e salt na própria string, então elevar o custo
+no futuro não exige migração de dados: senhas antigas continuam sendo verificadas com os
+parâmetros com que foram criadas.
+
+Quando o e-mail não existe, o login **gasta o mesmo tempo** de uma verificação real. Sem isso,
+responder na hora para e-mail inexistente e demorar ~15 ms para e-mail existente transforma o
+endpoint num oráculo de quais endereços estão cadastrados.
+
+### 6.2 Tokens
+
+|           | Forma                 | Vida    | Onde é verificado            |
+| --------- | --------------------- | ------- | ---------------------------- |
+| Acesso    | JWT HS256             | 15 min  | Assinatura, sem ida ao banco |
+| Renovação | Valor aleatório opaco | 30 dias | Hash SHA-256 contra o banco  |
+
+**O refresh token não é um JWT, e é uma escolha.** Ele já precisa de consulta ao banco para
+saber se foi revogado — então a assinatura não compraria nada que a consulta não dê, e traria
+junto toda a superfície de verificação de JWT. No banco fica só o hash; um vazamento da tabela
+não entrega sessão nenhuma.
+
+O verificador do token de acesso **fixa a lista de algoritmos aceitos**. Sem isso, um token
+declarando `alg: none` — ou trocando HMAC por RSA — seria aceito pela biblioteca. Há um teste
+que apresenta exatamente esse token e exige a recusa.
+
+O refresh token leva o tenant como prefixo (`{tenantId}.{aleatório}`). É uma **dica de
+roteamento, não uma credencial**: sem ela seria impossível encontrar a linha, já que a tabela é
+protegida por RLS e o contexto viria justamente do token. Trocar o prefixo muda o token inteiro
+e o hash procurado deixa de existir — a dica só estreita a busca, nunca a alarga.
+
+### 6.3 Rotação e detecção de roubo
+
+Cada renovação revoga o token apresentado e emite outro. Isso encurta a vida de um token
+roubado e, mais importante, torna o roubo **detectável**: se um token já rotacionado reaparecer,
+ou o legítimo ou o ladrão está usando uma cópia, e não há como saber qual. A resposta é revogar
+todas as sessões do usuário.
+
+Um detalhe que só apareceu em teste: a revogação em massa **não pode** lançar o erro de dentro
+da transação. `withTenant` é uma transação, e a exceção causaria rollback — desfazendo em
+silêncio a revogação e o registro de auditoria que acabaram de ser escritos. A defesa se
+anularia. A detecção vira um valor de retorno, a transação confirma, e só então o erro é
+lançado.
+
+### 6.4 Papéis e permissões
+
+Papéis e permissões são **globais**: OWNER, ADMIN e STAFF significam o mesmo em todo
+estabelecimento, e duplicá-los por tenant só criaria oportunidade de divergirem. O vínculo entre
+usuário e papel é que é tenant-scoped.
+
+O vínculo tem `tenant_id` próprio, e não apenas o do usuário. Sem a coluna, a tabela ficaria
+fora do alcance do RLS e dependeria de um JOIN correto para não vazar; com ela, a policy protege
+a linha diretamente.
+
+Permissões seguem `recurso:acao` (`products:create`). Formato previsível é o que permite
+conferir permissão comparando strings, sem tabela de tradução no meio.
+
+### 6.5 A cadeia de proteção de uma rota
+
+`requireAuth()` é a única forma exportada de proteger uma rota, e devolve a cadeia pronta:
+
+```ts
+app.get('/produtos', { preHandler: requireAuth('products:read') }, handler)
+```
+
+Autenticar e autorizar em duas peças separadas permitiria montá-las na ordem errada, e
+`[authorize('x'), authenticate]` falharia em silêncio — `authorize` não encontraria usuário e o
+erro pareceria de sessão, não de configuração. Devolvendo a cadeia pronta, a ordem deixa de ser
+uma decisão de quem usa.
+
+A autenticação **consulta o banco a cada requisição** em vez de confiar apenas no conteúdo do
+token. O custo é uma consulta indexada; o que se compra é que desativar um usuário valha
+imediatamente, e não só quando o token dele expirar. Num sistema onde funcionário é desligado,
+quinze minutos de acesso extra é tempo demais. Se virar gargalo, a resposta é um cache curto,
+não confiar no token.
+
+### 6.6 Super Admin
+
+Tabela separada de `users`, e não um campo booleano nela. Um super admin não pertence a
+estabelecimento nenhum, então em `users` precisaria de `tenant_id` nulo — e a policy compara
+`tenant_id = current_tenant`, que com NULL nunca casa. A linha ficaria invisível para todo
+mundo, inclusive para ela mesma: um usuário incapaz de se autenticar.
+
+De quebra, fica impossível um usuário de tenant virar super admin por um UPDATE descuidado numa
+coluna booleana.
+
+### 6.7 Auditoria
+
+`audit_logs` é **append-only pela própria estrutura**: só existem policies de `select` e
+`insert`, e o RLS nega o que nenhuma policy autoriza. Alterar ou apagar uma linha pela aplicação
+afeta zero linhas. Um log que a aplicação pode reescrever não serve para auditar a aplicação.
+
+`actorUserId` é anulável com `ON DELETE SET NULL`: remover um usuário não pode apagar o rastro
+do que ele fez — some o vínculo, fica o registro.
+
+O registro acontece na **mesma transação** da alteração que descreve. Em transação separada, um
+rollback deixaria registro de algo que não aconteceu, ou a operação seria salva e a auditoria
+perdida. Ou as duas acontecem, ou nenhuma.
+
+---
+
+## 7. Frontend
 
 ### 6.1 Divisão de estado
 
@@ -428,7 +535,7 @@ Não há editor de temas, apenas a arquitetura que torna um possível sem tocar 
 
 ---
 
-## 7. Storage de imagens
+## 8. Storage de imagens
 
 Interface `StorageService` com `LocalStorageProvider` no MVP. O domínio nunca fala com o sistema
 de arquivos diretamente, de modo que um provider S3 entre depois sem alterar nada além da
@@ -436,7 +543,7 @@ composição. Fase 6.
 
 ---
 
-## 8. Tempo real
+## 9. Tempo real
 
 WebSocket para entregar pedidos novos ao painel administrativo. Polling não é a solução
 principal: num painel de cozinha o atraso é percebido na hora.
@@ -446,7 +553,7 @@ evento de outro tenant. Fase 13.
 
 ---
 
-## 9. Planos e limites
+## 10. Planos e limites
 
 Modelo genérico desde o início: `plans`, `plan_features`, `subscriptions`. Nada limita o sistema
 a dois planos — FREE, STARTER, ADVANCED, PREMIUM e CUSTOM cabem sem migration de estrutura.
@@ -460,7 +567,7 @@ pela plataforma.
 
 ---
 
-## 10. Decisões registradas
+## 11. Decisões registradas
 
 ### TypeScript 6 em vez de 7
 

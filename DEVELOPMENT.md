@@ -74,8 +74,10 @@ apps/api/src/
 ├── plugins/       plugins do Fastify
 ├── routes/        rotas HTTP
 ├── tenant/        TenantContext, withTenant, resolução de tenant
+├── auth/          senha, tokens, sessão, middleware de rota
+├── audit/         registro de ações administrativas
 ├── db/            schema Drizzle, migrations, seed
-└── services/      regra de negócio          (a partir da Fase 4)
+└── services/      regra de negócio          (a partir da Fase 5)
 
 apps/web/src/
 ├── components/    genéricos, sem regra de negócio
@@ -183,6 +185,42 @@ escolha e falha se ela ficar implícita.
 
 **Da plataforma:** declare a tabela em `TABELAS_GLOBAIS`, em `tests/rls-guard.test.ts`, com o
 motivo. Sem isso o teste falha — de propósito.
+
+### Protegendo uma rota
+
+Use sempre `requireAuth()`, que devolve a cadeia pronta:
+
+```ts
+app.get('/produtos', { preHandler: requireAuth('products:read') }, handler)
+app.get('/perfil', { preHandler: requireAuth() }, handler) // só autenticação
+```
+
+Não existe `authenticate` nem `authorize` exportados separadamente, de propósito: montá-los na
+ordem errada falharia em silêncio, com o erro parecendo de sessão e não de configuração.
+
+Dentro do handler, `currentUser(request)` e `tenantContextOf(request)` devolvem os valores já
+com tipo garantido.
+
+Permissão nova: acrescente em `PERMISSOES` no `src/db/seed-rbac.ts` e atribua aos papéis que
+devem tê-la.
+
+### Registrando auditoria
+
+Toda ação administrativa que altera dado registra. `recordAudit` recebe a transação em curso —
+nunca abre a sua própria — para que a auditoria e a alteração vivam ou morram juntas:
+
+```ts
+await withTenant(context, async (tx) => {
+  await tx.update(products).set({ priceInCents }).where(eq(products.id, id))
+  await recordAudit(tx, context, {
+    action: 'product.price_changed',
+    entityType: 'product',
+    entityId: id,
+    actorUserId: usuario.id,
+    metadata: { de: anterior, para: priceInCents },
+  })
+})
+```
 
 ### Acessando dados de um tenant
 

@@ -11,6 +11,7 @@ import { loggerOptions } from './lib/logger.js'
 import { registerErrorHandler } from './plugins/error-handler.js'
 import { registerOpenApi } from './plugins/openapi.js'
 import { registerRateLimit } from './plugins/rate-limit.js'
+import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
 
 export interface BuildAppOptions {
@@ -58,6 +59,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(healthRoutes, {
     checkDatabase: options.checkDatabase ?? checkDatabaseConnection,
   })
+
+  // Rotas de domínio ficam sob o prefixo versionado. As sondas acima não: são
+  // infraestrutura, não contrato público.
+  await instance.register(authRoutes, { prefix: '/api/v1/auth' })
 
   return instance
 }

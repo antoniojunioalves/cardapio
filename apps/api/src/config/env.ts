@@ -43,6 +43,20 @@ const envSchema = z.object({
   /** Quanto esperar por uma conexão antes de desistir. Mantém `/ready` responsivo. */
   DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
+  /**
+   * Segredo que assina os tokens de acesso. Sem valor padrão, e com tamanho
+   * mínimo: um segredo curto ou previsível é o mesmo que não ter assinatura —
+   * qualquer pessoa forja um token de qualquer usuário de qualquer tenant.
+   *
+   * É um só porque o refresh token não é assinado: ele é um valor opaco,
+   * verificado contra o banco. Ver `src/auth/tokens.ts`.
+   */
+  JWT_SECRET: z.string().min(32, 'precisa de ao menos 32 caracteres'),
+
+  /** Curto de propósito: é a janela em que um token roubado ainda funciona. */
+  JWT_ACCESS_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().min(1).default('1 minute'),
 })

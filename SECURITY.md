@@ -1,9 +1,9 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 3**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
-banco separadas, testes que o comprovam), headers de segurança, CORS restrito, limite de
-requisições, validação de ambiente e formato de erro que não vaza detalhe interno. Autenticação,
-RBAC e auditoria são da Fase 4. Cada seção abaixo diz o que já vale e o que ainda não.
+Estado atual: **Fase 4**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
+banco separadas, testes que o comprovam), autenticação com argon2id e JWT, RBAC por permissão,
+auditoria append-only, headers de segurança, CORS restrito, limites de requisição e validação de
+ambiente. Cada seção abaixo diz o que já vale e o que ainda não.
 
 ---
 
@@ -76,12 +76,24 @@ mesmos testes se repetem. Recurso sem eles não é considerado pronto.
 
 ## 3. Autenticação
 
-### Usuários administrativos — Fase 4
+### Usuários administrativos — **em vigor**
 
-- Senha com hash usando algoritmo de derivação lento e com salt (argon2id ou bcrypt; a escolha
-  fica registrada aqui quando for feita).
-- JWT de acesso curto, com refresh token.
-- Segredos exclusivamente por variável de ambiente. Nunca no código, nunca no repositório.
+- **argon2id** com os parâmetros mínimos da OWASP (19 MiB, 2 iterações, paralelismo 1),
+  explícitos no código. O salt é aleatório por senha e vai embutido no hash.
+- **Token de acesso** JWT HS256 de 15 minutos; **refresh token** opaco de 30 dias, guardado
+  apenas como hash SHA-256.
+- **Rotação de refresh com detecção de reuso:** reapresentar um token já rotacionado revoga
+  todas as sessões do usuário.
+- **Lista de algoritmos fixa** na verificação do JWT — fecha a família de ataques de confusão de
+  algoritmo, inclusive `alg: none`. Há um teste que apresenta esse token e exige a recusa.
+- **Tempo de resposta equalizado** para e-mail inexistente, para o login não virar oráculo de
+  quais endereços estão cadastrados.
+- **Limite dedicado de 5 tentativas por minuto** no login, bem abaixo do limite global.
+- Segredos exclusivamente por variável de ambiente, com mínimo de 32 caracteres validado na
+  inicialização. Nunca no código, nunca no repositório.
+
+O que **não** está implementado: 2FA, bloqueio de conta após N falhas e histórico de senhas.
+Estão no ROADMAP.
 
 ### Clientes finais — Fase 10
 
@@ -90,14 +102,18 @@ senha. OTP, WhatsApp, Google e Apple estão no ROADMAP.
 
 ---
 
-## 4. Autorização (RBAC) — Fase 4
+## 4. Autorização (RBAC) — **em vigor**
 
-Papéis iniciais `OWNER`, `ADMIN`, `STAFF`, sobre um modelo de permissões granulares
-(`products:create`, `orders:update`, `settings:update`) — de modo que papel novo ou permissão
-avulsa não exija mudança de estrutura.
+Papéis `OWNER`, `ADMIN` e `STAFF` sobre um catálogo de permissões granulares no formato
+`recurso:acao`. Papel novo ou permissão avulsa é um INSERT, não uma migração de estrutura.
 
 A autorização é sempre verificada **depois** do `TenantContext`: a pergunta é "este usuário pode
-fazer isto **neste tenant**", nunca só "este usuário pode fazer isto".
+fazer isto **neste tenant**", nunca só "este usuário pode fazer isto". Isso não depende de
+disciplina — `requireAuth('permissao')` devolve a cadeia pronta, na ordem certa, e é a única
+forma exportada de proteger uma rota.
+
+O usuário é **recarregado do banco a cada requisição**, então desativar alguém tem efeito
+imediato em vez de esperar o token expirar.
 
 ---
 
@@ -185,9 +201,17 @@ limite por instância; um armazenamento compartilhado entra junto do deploy (ROA
 
 ## 10. Auditoria
 
-`audit_logs` registra quem fez o quê, em qual tenant, sobre qual entidade e quando. Entra na
-Fase 4, junto com a primeira ação administrativa, e cada fase seguinte registra as suas — em vez
-de deixar auditoria para o fim, quando o custo de instrumentar tudo já é alto.
+`audit_logs` registra quem fez o quê, em qual tenant, sobre qual entidade e quando. **Em vigor
+desde a Fase 4**, já registrando entradas no sistema e detecções de reuso de token; cada fase
+seguinte registra as suas.
+
+A tabela é **append-only pela própria estrutura**: só existem policies de `select` e `insert`, e
+o RLS nega o que nenhuma policy autoriza. Nem a aplicação, nem o próprio estabelecimento
+consegue alterar ou apagar uma linha — há testes que tentam as duas coisas e exigem zero linhas
+afetadas. Um log que a aplicação pode reescrever não serve para auditá-la.
+
+O registro acontece na mesma transação da alteração que descreve: ou as duas acontecem, ou
+nenhuma.
 
 Eventos que exigem registro: alteração de preço, mudança de disponibilidade, cancelamento de
 pedido, alteração de configuração, criação e remoção de usuário, mudança de permissão e acesso a
