@@ -57,6 +57,22 @@ const envSchema = z.object({
   JWT_ACCESS_TTL_MINUTES: z.coerce.number().int().positive().default(15),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
 
+  /**
+   * Onde as imagens ficam. Só `local` existe no MVP; um provider S3 entra
+   * trocando este valor, sem mexer em nenhuma regra de negócio.
+   */
+  STORAGE_DRIVER: z.enum(['local']).default('local'),
+  /** Diretório do provider local. Relativo ao diretório da API. */
+  STORAGE_LOCAL_PATH: z.string().min(1).default('./uploads'),
+  /** Endereço público pelo qual o navegador busca as imagens. */
+  STORAGE_PUBLIC_URL: z.url().default('http://localhost:3333/uploads'),
+  /** Teto por arquivo. Foto de celular sem compressão passa de 5 MB fácil. */
+  UPLOAD_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5 * 1024 * 1024),
+
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().min(1).default('1 minute'),
 })

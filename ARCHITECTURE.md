@@ -608,11 +608,65 @@ Não há editor de temas, apenas a arquitetura que torna um possível sem tocar 
 
 ## 9. Storage de imagens
 
-Interface `StorageService` com `LocalStorageProvider` no MVP. O domínio nunca fala com o sistema
-de arquivos diretamente, de modo que um provider S3 entre depois sem alterar nada além da
-composição. Fase 6.
+### 9.1 Chaves, não caminhos nem URLs
 
----
+O domínio só conhece **chaves** — `tenants/{tenantId}/logo/{uuid}.png` — por meio da interface
+`StorageService`. O MVP tem o `LocalStorageProvider`, que grava em disco; um provider S3 entra
+escrevendo outra implementação, sem tocar em regra de negócio.
+
+O banco guarda a chave, e a **URL pública é calculada na leitura**. Gravar a URL congelaria no
+banco o provider e o domínio de hoje, e trocar o disco local por S3 exigiria reescrever todas as
+linhas.
+
+O nome do arquivo enviado não participa da chave. Acento, espaço, `../` e nomes repetidos deixam
+de ser problema porque nunca chegam ao disco. O prefixo do tenant separa os arquivos de cada
+estabelecimento, o que facilita apagar tudo de um e, no S3, aplicar política por prefixo.
+
+### 9.2 O tipo vem do conteúdo
+
+O tipo da imagem é detectado pelos **primeiros bytes** do arquivo. Extensão e `Content-Type` do
+upload são ignorados, porque quem envia escolhe os dois: um HTML renomeado para `foto.png`
+passaria por qualquer checagem baseada neles e seria servido a partir do nosso domínio.
+
+Só JPEG, PNG e WebP são aceitos. **SVG é recusado** por ser XML capaz de carregar `<script>`:
+servido pelo nosso domínio, viraria XSS armazenado.
+
+O limite de tamanho é aplicado **enquanto o arquivo chega**, e não depois: um envio de 2 GB é
+interrompido no primeiro byte acima do teto, sem ocupar a memória.
+
+### 9.3 Defesa contra path traversal, em duas camadas
+
+As chaves são sempre montadas pelo servidor, então nenhuma deveria conter `../`. Mesmo assim:
+
+1. Toda chave passa por um formato fixo — segmentos com letras, dígitos, hífen e sublinhado, e
+   um ponto só na extensão — antes de qualquer provider tocá-la.
+2. O provider local resolve o caminho absoluto e confere que ele continua dentro do diretório
+   raiz.
+
+A segunda camada existe para o dia em que alguém afrouxar a primeira.
+
+### 9.4 Ordem das operações na troca de imagem
+
+1. Grava o arquivo novo. Se falhar, nada mudou.
+2. Aponta o banco para ele, na mesma transação da auditoria. Se a transação falhar, o arquivo
+   novo é apagado.
+3. **Só depois do commit** apaga o antigo.
+
+Apagar o antigo antes deixaria, num rollback, o banco apontando para um arquivo inexistente — um
+logo quebrado no cardápio público. Se o passo 3 falhar, sobra um arquivo sem referência, que é a
+falha mais barata possível: ocupa disco e não quebra nada visível.
+
+### 9.5 Entrega
+
+As imagens são servidas em `/uploads/` com dois cabeçalhos diferentes do resto da API:
+
+- **`Cross-Origin-Resource-Policy: cross-origin`.** O helmet define `same-origin` em tudo, o
+  que é certo para a API mas bloquearia as imagens: o frontend roda em outra origem, e o
+  navegador recusaria o `<img>` em silêncio — aparece só como imagem quebrada, sem erro na tela.
+- **`Cache-Control: immutable`.** Cada envio gera uma chave nova, então o conteúdo de uma URL
+  nunca muda e pode ficar em cache para sempre.
+
+Com S3, as imagens seriam servidas pelo bucket ou por uma CDN, e este caminho deixaria de existir.
 
 ## 10. Tempo real
 

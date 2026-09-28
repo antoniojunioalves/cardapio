@@ -11,6 +11,8 @@ import { loggerOptions } from './lib/logger.js'
 import { registerErrorHandler } from './plugins/error-handler.js'
 import { registerOpenApi } from './plugins/openapi.js'
 import { registerRateLimit } from './plugins/rate-limit.js'
+import { registerUploads } from './plugins/uploads.js'
+import { adminImageRoutes } from './routes/admin-images.js'
 import { adminSettingsRoutes } from './routes/admin-settings.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
@@ -57,6 +59,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   registerErrorHandler(instance)
 
+  await registerUploads(instance)
+
   await instance.register(healthRoutes, {
     checkDatabase: options.checkDatabase ?? checkDatabaseConnection,
   })
@@ -65,6 +69,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // infraestrutura, não contrato público.
   await instance.register(authRoutes, { prefix: '/api/v1/auth' })
   await instance.register(adminSettingsRoutes, { prefix: '/api/v1/admin' })
+  await instance.register(adminImageRoutes, { prefix: '/api/v1/admin' })
 
   return instance
 }

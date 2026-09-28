@@ -19,9 +19,11 @@ coverage/
 .env.*
 !.env.example
 
-# Uploads locais (StorageService / LocalStorageProvider, Fase 6)
-uploads/
-storage/
+# Arquivos enviados, guardados pelo LocalStorageProvider.
+# Ancorado no caminho de propósito: uma regra solta como `storage/` casaria
+# também com `apps/api/src/storage/`, que é código-fonte — e o build quebraria
+# só num clone novo, nunca na máquina de quem escreveu.
+/apps/api/uploads/
 
 # Editor / SO
 .DS_Store

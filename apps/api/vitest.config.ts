@@ -1,3 +1,6 @@
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+
 import { defineConfig } from 'vitest/config'
 
 /**
@@ -23,6 +26,9 @@ export default defineConfig({
       // Segredo fixo e exclusivo dos testes: eles precisam de tokens
       // reproduzíveis, e o valor jamais sai daqui.
       JWT_SECRET: 'segredo-exclusivo-da-suite-de-testes-nao-usar-em-lugar-nenhum',
+      // Uploads dos testes vão para o diretório temporário do sistema, nunca
+      // para o storage de desenvolvimento.
+      STORAGE_LOCAL_PATH: path.join(tmpdir(), 'cardapio-test-uploads'),
     },
     // O pool de conexões é um singleton do módulo; rodar arquivos de teste em
     // processos separados evita que fechar o pool num afete os outros.

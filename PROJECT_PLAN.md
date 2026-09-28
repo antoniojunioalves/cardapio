@@ -1,20 +1,19 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-28
-**Fase atual:** 5 de 15 — concluída, aguardando validação
-**Próxima:** Fase 6 — storage de imagens
+**Fase atual:** 6 de 15 — concluída, aguardando validação
+**Próxima:** Fase 7 — catálogo
 
 ---
 
 ## Estado atual
 
-**O estabelecimento já é configurável.** Horários de funcionamento com vários intervalos por dia
-e travessia de meia-noite, taxa de entrega fixa ou por região, retirada no local, pedido mínimo
-e formas de pagamento — tudo por rotas administrativas que exigem permissão e registram
-auditoria. A API responde se o estabelecimento está aberto **agora**, no fuso dele.
+**Já dá para enviar o logo e a capa do estabelecimento.** O arquivo é validado pelo conteúdo — um
+HTML ou SVG disfarçado de `.png` é recusado —, gravado num storage atrás de uma interface
+trocável, e servido com os cabeçalhos certos para o frontend usar de outra origem.
 
-Sob isso: autenticação com argon2id e JWT, RBAC por permissão, e o isolamento entre
-estabelecimentos comprovado por testes em todas as 10 tabelas tenant-scoped.
+Sob isso: configurações do estabelecimento com horários e entrega, autenticação com RBAC, e o
+isolamento entre estabelecimentos comprovado em todas as 10 tabelas tenant-scoped.
 
 **Ainda não existe:** catálogo, carrinho, pedidos, e nenhuma tela administrativa no frontend.
 
@@ -48,72 +47,71 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 5 — concluída
+## Fase 6 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                                         | Status |
-| --- | -------------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Schema: `tenant_settings`, `business_hours`, `delivery_settings`, `delivery_regions`, `tenant_payment_methods` | ✅     |
-| 2   | Catálogo global `payment_methods`, no padrão de `roles`/`user_roles`                                           | ✅     |
-| 3   | Migrations, incluindo o `FORCE` escrito à mão                                                                  | ✅     |
-| 4   | Domínio de horários: fuso do tenant e travessia de meia-noite                                                  | ✅     |
-| 5   | Domínio de entrega: taxa fixa, por região, retirada e pedido mínimo                                            | ✅     |
-| 6   | Repositório e serviço, com auditoria na mesma transação                                                        | ✅     |
-| 7   | Nove rotas administrativas com `requireAuth` e OpenAPI                                                         | ✅     |
-| 8   | Seed com horários, regiões e pagamentos de demonstração                                                        | ✅     |
-| 9   | Testes: 22 de horários, 12 de entrega, 26 de rota, 10 de isolamento                                            | ✅     |
-| 10  | Documentação, verificação e commits                                                                            | ✅     |
-
-### O bug que o teste pegou
-
-O `globalSetup` dos testes criava a sua própria instância do Drizzle sem o `casing`, e o insert
-saiu com `"sortOrder"` em vez de `sort_order`. O erro — `column "sortOrder" does not exist` —
-parece problema de migration, não de configuração do cliente.
-
-Virou `DRIZZLE_CONFIG`, um módulo sem dependência nenhuma que as quatro instâncias do projeto
-compartilham. É o tipo de erro que se repete até a configuração ter um lugar só.
+| #   | Tarefa                                                                  | Status |
+| --- | ----------------------------------------------------------------------- | ------ |
+| 1   | Interface `StorageService` e `LocalStorageProvider`                     | ✅     |
+| 2   | Detecção do tipo de imagem pelos bytes, recusando SVG                   | ✅     |
+| 3   | Chaves montadas pelo servidor; formato fixo e conferência contra a raiz | ✅     |
+| 4   | Colunas `logo_key`/`cover_key` no lugar de `logo_url`/`cover_url`       | ✅     |
+| 5   | Upload com limite aplicado durante o recebimento                        | ✅     |
+| 6   | Troca e remoção de logo e capa, com auditoria                           | ✅     |
+| 7   | Entrega em `/uploads/` com CORP `cross-origin` e cache imutável         | ✅     |
+| 8   | Testes: 19 de storage, 20 de rota                                       | ✅     |
+| 9   | Documentação, verificação e commits                                     | ✅     |
 
 ### Decisões desta fase
 
-**Substituição em vez de CRUD** para horários e regiões: é assim que essas telas são editadas de
-verdade — abre-se a grade, mexe-se em várias linhas, salva-se uma vez.
+**O banco guarda a chave, não a URL.** A URL é calculada na leitura; gravá-la congelaria o
+provider e o domínio de hoje em todas as linhas.
 
-**`closesAt = opensAt` é proibido no banco.** Seria ambíguo entre "vinte e quatro horas" e
-"intervalo vazio", e sem resolver isso a regra de travessia de meia-noite deixa de ser decidível.
+**O tipo vem dos bytes.** Extensão e `Content-Type` são escolhidos por quem envia.
 
-**Região inativa é tratada como inexistente** no cálculo de taxa. Desativar precisa impedir
-pedido novo, e não só sumir da lista.
+**Na troca de imagem, o arquivo antigo só é apagado depois do commit.** Antes, um rollback
+deixaria o banco apontando para um arquivo inexistente.
 
-**Configuração de entrega e regiões salvam juntas**, numa transação. Separadas, haveria um
-instante com modo `BY_REGION` e nenhuma região — visível para quem consultasse o cardápio.
+**`Cross-Origin-Resource-Policy: cross-origin` só em `/uploads/`.** O resto da API continua
+`same-origin`. Sem essa exceção, o `<img>` do frontend quebraria em silêncio.
 
-**O domínio não conhece banco nem framework.** `opening-hours.ts` recebe intervalos, fuso e
-instante; por isso tem 22 testes que rodam em milissegundos.
+**Troca de coluna em dois passos.** Adicionar e remover na mesma geração faz o `drizzle-kit`
+perguntar interativamente se é renomeação, o que trava num terminal sem interação. As colunas
+antigas nunca tinham sido preenchidas, então removê-las não perdeu dado.
+
+**Upload de imagem de produto fica para a Fase 7**, junto com o produto. Um endpoint genérico de
+upload agora seria especulativo, e geraria arquivos sem dono.
 
 ### Verificação executada
 
-| Verificação                                     | Resultado                            |
-| ----------------------------------------------- | ------------------------------------ |
-| `pnpm typecheck` / `lint` / `build`             | zero erro                            |
-| `pnpm test`                                     | **161 testes** (157 API + 4 web)     |
-| Guarda de RLS sobre as 5 tabelas novas          | todas com RLS habilitado e forçado   |
-| Horário atravessando a meia-noite               | aberto às 01:00 do dia seguinte      |
-| Mesmo instante em São Paulo e Manaus            | resultados diferentes, como deve ser |
-| `GET /admin/status` com o seed                  | fechado, próxima abertura em 1 dia   |
-| Pausa manual                                    | vence o horário cadastrado           |
-| Horários sobrepostos / entrega sem região ativa | recusados com 400                    |
+| Verificação                           | Resultado                                           |
+| ------------------------------------- | --------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build`   | zero erro                                           |
+| `pnpm test`                           | **200 testes** (196 API + 4 web)                    |
+| PNG real enviado e baixado com `curl` | conteúdo idêntico, `image/png`, CORP e cache certos |
+| SVG com extensão `.png`               | recusado com 415                                    |
+| Arquivo acima de 5 MB                 | recusado com 413                                    |
+| Troca de imagem                       | a anterior sai do disco                             |
+| `/uploads/../../package.json`         | não entregue                                        |
 
 ---
 
-## Fase 6 — próxima
+## Fase 7 — próxima
 
-Escopo pretendido: `StorageService` com provider local, upload de imagens com validação de tipo
-e tamanho, e a preparação para um provider S3 sem que o domínio conheça o sistema de arquivos.
+Escopo pretendido: categorias, produtos com imagem, grupos de opções com mínimo e máximo,
+adicionais com preço e combos — tudo tenant-scoped, com RLS, auditoria e testes de isolamento.
+É a maior fase de domínio até aqui, e deve ser dividida em duas: categorias e produtos
+primeiro; opções, adicionais e combos depois.
 
 ---
 
 ## Fases anteriores
+
+**Fase 5** entregou as configurações do estabelecimento: horários com travessia de meia-noite,
+entrega fixa ou por região, pedido mínimo e formas de pagamento. O bug daquela fase gerou o
+`DRIZZLE_CONFIG`: uma instância do Drizzle sem `casing` emite `"sortOrder"` em vez de
+`sort_order`, com um erro que parece de migration.
 
 **Fase 4** entregou autenticação com argon2id e JWT, refresh rotativo com detecção de reuso,
 RBAC por permissão e auditoria append-only. O bug daquela fase virou regra: nada que precise
@@ -155,6 +153,9 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | Região inativa conta como inexistente               | Desativar precisa impedir pedido, não só esconder                  |
 | Domínio separado de banco e framework               | Casos de borda cobertos em milissegundos                           |
 | `DRIZZLE_CONFIG` compartilhado                      | Instância sem `casing` falha de um jeito que parece outro problema |
+| Banco guarda chave de storage, não URL              | Trocar de provider não exige reescrever linhas                     |
+| Tipo de imagem detectado pelos bytes                | Extensão e `Content-Type` são escolhidos por quem envia            |
+| Arquivo antigo apagado só depois do commit          | Rollback não deixa referência para arquivo inexistente             |
 | UUIDv7 gerado no banco (`uuidv7()` do PG 18)        | Vale para seed e INSERT manual, sem dependência                    |
 | Testes contra PostgreSQL real                       | RLS não se prova com mock                                          |
 | `/health` não consulta o banco                      | Senão uma oscilação do banco reinicia processos saudáveis          |

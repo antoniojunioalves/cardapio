@@ -103,6 +103,7 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Subdomínio por tenant — `tenant.dominio.com`
 - Domínio próprio do tenant
 - Editor visual de temas _(a arquitetura já existe; falta a interface)_
+- Horário de funcionamento 24 horas sem interrupção — hoje se escreve 00:00–23:59
 - Isolamento físico opcional para tenants de plano CUSTOM — banco dedicado, trocando apenas a
   obtenção de conexão dentro de `withTenant`
 - Multi-unidade e franquias
@@ -111,6 +112,12 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 ## Infraestrutura
 
 - Storage externo (S3 ou equivalente), atrás do `StorageService` que já existe
+- **Processamento de imagem no upload:** remover metadados EXIF (podem conter a localização GPS
+  de onde a foto foi tirada), redimensionar e converter para WebP. Hoje uma foto de celular de
+  5 MB é entregue inteira ao cliente no 4G
+- Limpeza periódica de arquivos órfãos — sobram quando a remoção do arquivo antigo falha depois
+  do commit
+- Cota de armazenamento por plano
 - Dockerfiles de produção para API e web
 - Armazenamento compartilhado para o rate limit (Redis) — hoje o contador vive na memória do
   processo, o que vira um limite por instância assim que houver mais de uma

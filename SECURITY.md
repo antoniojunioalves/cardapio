@@ -1,6 +1,6 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 5**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 6**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id e JWT, RBAC por permissão,
 auditoria append-only, headers de segurança, CORS restrito, limites de requisição e validação de
 ambiente. As rotas administrativas de configuração já exigem permissão e registram auditoria. Cada seção abaixo diz o que já vale e o que ainda não.
@@ -189,7 +189,24 @@ limite por instância; um armazenamento compartilhado entra junto do deploy (ROA
 
 ---
 
-## 9. Segredos
+## 9. Upload de arquivos — **em vigor**
+
+| Risco                                    | Defesa                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| Arquivo malicioso com extensão de imagem | Tipo detectado pelos bytes; extensão e `Content-Type` ignorados                   |
+| SVG com script (XSS armazenado)          | SVG recusado                                                                      |
+| Path traversal pelo nome do arquivo      | Nome enviado não é usado; chave com formato fixo; caminho conferido contra a raiz |
+| Upload gigante esgotando memória         | Limite aplicado durante o recebimento                                             |
+| Sobrescrever a imagem de outra entidade  | Chave com UUID novo a cada envio; escrita falha se o arquivo já existir           |
+| Listagem do diretório                    | Desabilitada; arquivos ocultos recusados                                          |
+| Upload por quem só pode ler              | Exige `settings:update`                                                           |
+
+**Não implementado, e relevante:** os metadados EXIF **não são removidos**. Uma foto tirada no
+celular pode carregar a localização GPS de onde foi feita — num logo, é pouco provável; em foto
+de produto tirada em casa, é possível. Remover exige reprocessar a imagem, o que entra junto com
+o redimensionamento (ROADMAP).
+
+## 10. Segredos
 
 - `.env` está no `.gitignore` e **jamais** é commitado.
 - `.env.example` documenta as chaves com valores de desenvolvimento, nunca reais.
@@ -199,7 +216,7 @@ limite por instância; um armazenamento compartilhado entra junto do deploy (ROA
 
 ---
 
-## 10. Auditoria
+## 11. Auditoria
 
 `audit_logs` registra quem fez o quê, em qual tenant, sobre qual entidade e quando. **Em vigor
 desde a Fase 4**, já registrando entradas no sistema e detecções de reuso de token; cada fase
