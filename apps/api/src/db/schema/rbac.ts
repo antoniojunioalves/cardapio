@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  foreignKey,
   index,
   integer,
   pgPolicy,
@@ -73,9 +74,7 @@ export const userRoles = pgTable(
     tenantId: uuid()
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
-    userId: uuid()
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid().notNull(),
     roleId: uuid()
       .notNull()
       .references(() => roles.id, { onDelete: 'restrict' }),
@@ -83,6 +82,13 @@ export const userRoles = pgTable(
   },
   (table) => [
     unique('user_roles_user_role').on(table.userId, table.roleId),
+    // Composta: sem o tenant_id na FK, o dono do Tenant A conseguiria atribuir
+    // um papel a um usuário do Tenant B — a checagem de FK não passa pelo RLS.
+    foreignKey({
+      name: 'user_roles_user_mesmo_tenant',
+      columns: [table.tenantId, table.userId],
+      foreignColumns: [users.tenantId, users.id],
+    }).onDelete('cascade'),
     index('user_roles_tenant_idx').on(table.tenantId),
     pgPolicy('tenant_isolation', {
       as: 'permissive',

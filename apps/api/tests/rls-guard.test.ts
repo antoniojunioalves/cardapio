@@ -113,3 +113,68 @@ describe('guarda de Row-Level Security', () => {
     ).toEqual([])
   })
 })
+
+interface ChaveEstrangeira {
+  [coluna: string]: unknown
+  tabela: string
+  referencia: string
+  colunas: string[]
+  colunas_referenciadas: string[]
+}
+
+/**
+ * A checagem de chave estrangeira do PostgreSQL roda por fora do RLS.
+ *
+ * Comprovado em execução: o Tenant A não enxerga a categoria do Tenant B, mas
+ * uma FK simples `category_id → categories(id)` aceita que A crie um produto
+ * apontando para ela, bastando saber o UUID. O RLS protege o que se lê e o
+ * que se grava; não protege para onde uma referência aponta.
+ *
+ * A correção é a FK incluir o tenant dos dois lados —
+ * `(tenant_id, category_id) → categories(tenant_id, id)` — e aí o banco exige
+ * que filho e pai sejam do mesmo estabelecimento.
+ */
+describe('guarda de referências entre tenants', () => {
+  it('toda FK entre tabelas tenant-scoped inclui o tenant_id dos dois lados', async () => {
+    const resultado = await db.execute<ChaveEstrangeira>(sql`
+      WITH tenant_scoped AS (
+        SELECT c.oid FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r'
+          AND EXISTS (
+            SELECT 1 FROM pg_attribute a
+            WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
+              AND a.attnum > 0 AND NOT a.attisdropped
+          )
+      )
+      SELECT
+        con.conrelid::regclass::text  AS tabela,
+        con.confrelid::regclass::text AS referencia,
+        ARRAY(
+          SELECT a.attname::text FROM unnest(con.conkey) k
+          JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k
+        ) AS colunas,
+        ARRAY(
+          SELECT a.attname::text FROM unnest(con.confkey) k
+          JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = k
+        ) AS colunas_referenciadas
+      FROM pg_constraint con
+      WHERE con.contype = 'f'
+        AND con.conrelid  IN (SELECT oid FROM tenant_scoped)
+        AND con.confrelid IN (SELECT oid FROM tenant_scoped)
+        AND con.confrelid <> (SELECT oid FROM pg_class WHERE relname = 'tenants')
+      ORDER BY 1, 2
+    `)
+
+    const vulneraveis = resultado.rows.filter(
+      (fk) => !fk.colunas.includes('tenant_id') || !fk.colunas_referenciadas.includes('tenant_id'),
+    )
+
+    expect(
+      vulneraveis.map((fk) => `${fk.tabela}(${fk.colunas.join(', ')}) → ${fk.referencia}`),
+      `Estas chaves estrangeiras permitem apontar para uma linha de outro estabelecimento:\n\n` +
+        `Use uma FK composta: foreignKey({ columns: [t.tenantId, t.xxxId], ` +
+        `foreignColumns: [alvo.tenantId, alvo.id] }), com unique(tenantId, id) no alvo.`,
+    ).toEqual([])
+  })
+})
