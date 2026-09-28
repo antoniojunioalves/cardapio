@@ -71,6 +71,20 @@
       "when": 1790620780785,
       "tag": "0009_fk_auditoria_mesmo_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790620879347,
+      "tag": "0010_catalogo",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790620884688,
+      "tag": "0011_force_rls_catalogo",
+      "breakpoints": true
     }
   ]
 }
