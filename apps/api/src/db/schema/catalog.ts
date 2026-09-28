@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  pgEnum,
   pgPolicy,
   pgTable,
   text,
@@ -59,6 +60,20 @@ export const categories = pgTable(
 ).enableRLS()
 
 /**
+ * `SIMPLE` é um produto comum. `COMBO` é um produto composto de outros, listados
+ * em `combo_items`.
+ *
+ * Combo como tipo de produto, e não como tabela à parte, porque no cardápio ele
+ * se comporta exatamente como um produto: tem categoria, preço, imagem,
+ * disponibilidade e ordem, e entra no carrinho do mesmo jeito. Uma tabela
+ * `combos` separada duplicaria tudo isso e obrigaria o carrinho e o pedido a
+ * tratar dois tipos de item.
+ *
+ * O tipo é definido na criação e não muda depois.
+ */
+export const productType = pgEnum('product_type', ['SIMPLE', 'COMBO'])
+
+/**
  * Produtos do cardápio.
  *
  * O nome é genérico de propósito — `Product`, e não `Burger` —, porque o
@@ -79,6 +94,7 @@ export const products = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
     categoryId: uuid().notNull(),
+    type: productType().notNull().default('SIMPLE'),
 
     name: varchar({ length: 120 }).notNull(),
     description: text(),
