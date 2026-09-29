@@ -1,22 +1,20 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-28
-**Fase atual:** 7a — concluída, aguardando validação
-**Próxima:** Fase 7b — opções, adicionais e combos
+**Fase atual:** 7b — concluída, aguardando validação
+**Próxima:** Fase 8 — cardápio público
 
 ---
 
 ## Estado atual
 
-**O estabelecimento já tem cardápio.** Categorias e produtos com imagem, preço em centavos,
-disponibilidade e ordem, administrados por rotas com permissão e auditoria. Troca de preço e de
-disponibilidade geram registros próprios, com o antes e o depois.
+**O catálogo está completo na API.** Categorias, produtos com imagem, grupos de opção — tamanho,
+adicionais, remoções — reutilizáveis entre produtos, e combos com cálculo de quanto os itens
+custariam separados. Tudo com permissão, auditoria e isolamento comprovado, inclusive nas
+referências entre tabelas.
 
-Nesta fase apareceu uma falha de isolamento que o RLS não cobria — a checagem de chave
-estrangeira roda por fora dele — e ela foi corrigida no catálogo e em três tabelas antigas.
-
-**Ainda não existe:** opções, adicionais, combos, cardápio público, carrinho, pedidos, e
-nenhuma tela administrativa no frontend.
+**Ainda não existe:** cardápio público, carrinho, pedidos, e nenhuma tela no frontend. A Fase 8 é
+a primeira em que o cliente final verá alguma coisa.
 
 ---
 
@@ -48,77 +46,71 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 7a — concluída
+## Fase 7b — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                          | Status |
-| --- | ------------------------------------------------------------------------------- | ------ |
-| 1   | Comprovar que a checagem de FK roda por fora do RLS                             | ✅     |
-| 2   | **Correção:** FKs compostas em `user_roles`, `refresh_tokens` e `audit_logs`    | ✅     |
-| 3   | Teste-guarda de FK entre tabelas tenant-scoped — escrito antes da correção      | ✅     |
-| 4   | Schema `categories` e `products`, com FK composta desde o início                | ✅     |
-| 5   | `trocarImagem` extraído: uma implementação para logo, capa, categoria e produto | ✅     |
-| 6   | Serviço com 404, 409 e auditoria específica de preço e disponibilidade          | ✅     |
-| 7   | 15 rotas administrativas, incluindo imagem e reordenação                        | ✅     |
-| 8   | Seed com cardápio de demonstração, com um item esgotado                         | ✅     |
-| 9   | Testes: 28 de rota, 14 de isolamento, 4 de referência entre tenants             | ✅     |
-| 10  | Documentação, verificação, commits e clone limpo                                | ✅     |
+| #   | Tarefa                                                                              | Status |
+| --- | ----------------------------------------------------------------------------------- | ------ |
+| 1   | Tipo de produto `SIMPLE`/`COMBO`, imutável                                          | ✅     |
+| 2   | `option_groups`, `options`, `product_option_groups`, `combo_items`, com FK composta | ✅     |
+| 3   | Regra pura de coerência do grupo: mínimo não pode exceder as opções                 | ✅     |
+| 4   | Edição de grupo com opções: altera, cria e remove numa transação                    | ✅     |
+| 5   | Ligação ordenada de grupos a produtos                                               | ✅     |
+| 6   | Composição de combo, com preço avulso e disponibilidade dos componentes             | ✅     |
+| 7   | Exclusões recusadas: grupo em uso e produto que é componente                        | ✅     |
+| 8   | Nove rotas sob a tag Personalização                                                 | ✅     |
+| 9   | Seed com adicionais, remoções, tamanho, borda e um combo                            | ✅     |
+| 10  | Testes: 7 de domínio, 21 de rota, 11 de isolamento                                  | ✅     |
 
-### A descoberta da fase
+### Duas divergências do escopo original, deliberadas
 
-**A checagem de chave estrangeira do PostgreSQL roda por fora do RLS.** O Tenant A não enxergava
-a categoria do Tenant B, mas uma FK simples aceitava que ele criasse um produto apontando para
-ela. O RLS protege o que se lê e o que se grava; não protege para onde uma referência aponta.
+**Adicionais e remoções são grupos de opção**, e não uma tabela `product_addons`. A estrutura é a
+mesma — lista de escolhas com preço e limite de seleções —, e uma tabela à parte daria ao cálculo
+do pedido duas regras em vez de uma.
 
-A correção é a FK composta, `(tenant_id, category_id) → categories(tenant_id, id)`. Ao procurar
-o mesmo padrão no que já existia, o catálogo do PostgreSQL mostrou três FKs com a mesma falha,
-das Fases 3 e 4. Não eram exploráveis — o id vinha sempre do servidor —, mas eram o formato exato
-de um IDOR. Corrigidas em commit separado, `fix(db)`, para revisão à parte.
-
-Dois detalhes vieram junto. O `drizzle-kit` gerou a migration com as FKs **antes** da restrição
-única que elas referenciam, e ela teve de ser reordenada à mão. E a FK da auditoria precisou de
-`ON DELETE SET NULL (actor_user_id)`, que o Drizzle não expressa: o `SET NULL` comum anularia
-também o `tenant_id` e a remoção de um usuário falharia.
+**Combo é um produto do tipo `COMBO`**, e não uma tabela `combos`. No cardápio ele se comporta
+como produto, e uma tabela à parte obrigaria carrinho e pedido a tratar dois tipos de item.
 
 ### Decisões desta fase
 
-**Excluir categoria com produtos é recusado**, com a contagem na mensagem, em vez de levá-los
-junto. A FK com `RESTRICT` é a segunda barreira.
+**Grupos reutilizáveis**: "Adicionais" é ligado a vários produtos, e trocar o preço do bacon é uma
+edição só.
 
-**Reordenação exige a lista completa.** Uma parcial deixaria as ausentes intercaladas; e a mesma
-regra recusa id de outro estabelecimento.
+**Acréscimo nunca negativo**: o preço base é o do menor tamanho. Elimina total negativo.
 
-**Preço com casas decimais é recusado.** O campo é em centavos; aceitar `25.9` esconderia o erro
-de quem achou que era em reais. Teto de R$ 100 mil contra um zero a mais.
+**"Obrigatório" derivado** de `minSelections >= 1`, nunca gravado.
 
-**Nome de categoria único sem diferenciar maiúsculas**, por índice em `lower(name)`.
-
-**Id de outro estabelecimento responde 404**, nunca 403 — o 403 confirmaria que o id existe.
+**Grupo que exige mais escolhas do que tem opções é recusado**: tornaria o produto impossível de
+pedir.
 
 ### Verificação executada
 
-| Verificação                           | Resultado                                 |
-| ------------------------------------- | ----------------------------------------- |
-| `pnpm typecheck` / `lint` / `build`   | zero erro                                 |
-| `pnpm test`                           | **247 testes** (243 API + 4 web)          |
-| Guarda de FK antes da correção        | acusou exatamente as três FKs             |
-| INSERT direto de A com categoria de B | recusado pela FK composta                 |
-| Imagem para produto inexistente       | 404, e nenhum arquivo sobra no disco      |
-| Troca de preço ao vivo                | `{"de": 2590, "para": 2790}` na auditoria |
-| Excluir categoria com 3 produtos      | 409, "A categoria tem 3 produto(s)"       |
+| Verificação                                     | Resultado                           |
+| ----------------------------------------------- | ----------------------------------- |
+| `pnpm typecheck` / `lint` / `build`             | zero erro                           |
+| `pnpm test`                                     | **284 testes** (280 API + 4 web)    |
+| Guardas de RLS e de FK sobre as 4 tabelas novas | passam                              |
+| Combo do seed pela API                          | avulso R$ 46,90, combo R$ 39,90     |
+| Excluir o X-Salada, componente do combo         | 409, "faz parte de: Combo X-Salada" |
+| PATCH com `type`                                | 400 por campo não reconhecido       |
 
 ---
 
-## Fase 7b — próxima
+## Fase 8 — próxima
 
-Grupos de opções com mínimo, máximo e obrigatoriedade; opções com alteração de preço;
-adicionais; remoções ("sem cebola"); e combos compostos de produtos. Todos com FK composta desde o
-início, e com o cuidado de que um combo não aponte para produto de outro estabelecimento.
+O cardápio público em `/{tenantSlug}`: a primeira tela para o cliente final. Uma rota pública da
+API que resolve o slug e devolve estabelecimento, status de aberto/fechado, taxa, pedido mínimo e
+o cardápio com grupos e combos; e, no frontend, a página mobile-first com cabeçalho, busca,
+categorias horizontais e cartões de produto.
 
 ---
 
 ## Fases anteriores
+
+**Fase 7a** entregou categorias e produtos. Descobriu-se ali que a checagem de chave
+estrangeira do PostgreSQL roda por fora do RLS; desde então toda FK entre tabelas tenant-scoped é
+composta, e o teste-guarda recusa as que não forem. Três FKs antigas foram corrigidas.
 
 **Fase 6** entregou o storage de imagens atrás de uma interface trocável, com o tipo detectado
 pelos bytes e SVG recusado. A regra `storage/` no `.gitignore` ignorava o próprio código-fonte,

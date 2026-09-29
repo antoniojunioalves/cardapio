@@ -7,6 +7,7 @@ import { novaChaveDeImagem, type StorageService } from '../storage/index.js'
 import { removerImagem, trocarImagem } from '../storage/replace.js'
 import type { TenantContext } from '../tenant/context.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
+import { combosQueContem } from './combos.js'
 import {
   countProductsInCategory,
   deleteCategory,
@@ -311,6 +312,16 @@ export async function atualizarProduto(
     const anterior = await findProduct(tx, id)
     if (!anterior) throw produtoNaoEncontrado()
 
+    // O tipo é definido na criação. Transformar um combo em produto simples
+    // deixaria componentes órfãos; o contrário, um combo vazio à venda.
+    if (patch.type !== undefined && patch.type !== anterior.type) {
+      throw new AppError(
+        'O tipo do produto não pode ser alterado depois de criado.',
+        400,
+        'PRODUCT_TYPE_IMMUTABLE',
+      )
+    }
+
     if (patch.categoryId !== undefined && patch.categoryId !== anterior.categoryId) {
       await exigirCategoria(tx, patch.categoryId)
     }
@@ -352,6 +363,10 @@ export async function atualizarProduto(
  *
  * Pode ser físico porque pedidos não dependem dele: na Fase 11, cada item de
  * pedido guarda uma cópia do nome e do preço no momento da compra.
+ *
+ * Um produto que é componente de combo é recusado, com o nome dos combos
+ * afetados: excluí-lo deixaria o combo à venda pelo mesmo preço com um item a
+ * menos. A FK com RESTRICT é a segunda barreira.
  */
 export async function excluirProduto(
   service: StorageService,
@@ -363,6 +378,14 @@ export async function excluirProduto(
     service,
     remover: () =>
       withTenant(context, async (tx) => {
+        const combos = await combosQueContem(tx, id)
+        if (combos.length > 0) {
+          throw new ConflictError(
+            `O produto faz parte de: ${combos.join(', ')}. Tire-o desses combos antes.`,
+            'PRODUCT_IN_COMBO',
+          )
+        }
+
         const produto = await deleteProduct(tx, id)
         if (!produto) throw produtoNaoEncontrado()
 

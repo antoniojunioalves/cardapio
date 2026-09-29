@@ -8,6 +8,10 @@ import { closeDatabase, db } from './index.js'
 import {
   businessHours,
   categories,
+  comboItems,
+  optionGroups,
+  options,
+  productOptionGroups,
   products,
   deliveryRegions,
   deliverySettings,
@@ -94,6 +98,46 @@ const ESTABELECIMENTOS = [
     horarios: NOITE_ATRAVESSANDO_MEIA_NOITE,
     regioes: [] as { nome: string; taxaEmCentavos: number }[],
     pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD'],
+    personalizacao: {
+      grupos: [
+        {
+          nome: 'Adicionais',
+          descricao: 'Escolha até 3',
+          min: 0,
+          max: 3,
+          opcoes: [
+            ['Bacon', 500],
+            ['Cheddar', 400],
+            ['Ovo', 200],
+          ],
+          produtos: ['X-Salada', 'X-Bacon', 'X-Tudo'],
+        },
+        {
+          nome: 'Remover ingredientes',
+          descricao: null,
+          min: 0,
+          max: 3,
+          opcoes: [
+            ['Sem cebola', 0],
+            ['Sem tomate', 0],
+            ['Sem alface', 0],
+          ],
+          produtos: ['X-Salada', 'X-Bacon', 'X-Tudo'],
+        },
+      ],
+      combos: [
+        {
+          nome: 'Combo X-Salada',
+          descricao: 'X-Salada, batata frita e refrigerante lata.',
+          preco: 3990,
+          itens: [
+            ['X-Salada', 1],
+            ['Batata frita', 1],
+            ['Refrigerante lata', 1],
+          ],
+        },
+      ],
+    },
     cardapio: [
       {
         categoria: 'Hambúrgueres',
@@ -149,6 +193,35 @@ const ESTABELECIMENTOS = [
       { nome: 'Vila Nova', taxaEmCentavos: 1000 },
     ],
     pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'MEAL_VOUCHER_VR'],
+    personalizacao: {
+      grupos: [
+        {
+          nome: 'Tamanho',
+          descricao: null,
+          min: 1,
+          max: 1,
+          // O preço do produto é o da média; a grande só acrescenta.
+          opcoes: [
+            ['Média', 0],
+            ['Grande', 1200],
+          ],
+          produtos: ['Margherita', 'Calabresa', 'Portuguesa', 'Chocolate'],
+        },
+        {
+          nome: 'Borda',
+          descricao: null,
+          min: 1,
+          max: 1,
+          opcoes: [
+            ['Tradicional', 0],
+            ['Catupiry', 800],
+            ['Cheddar', 800],
+          ],
+          produtos: ['Margherita', 'Calabresa', 'Portuguesa'],
+        },
+      ],
+      combos: [] as { nome: string; descricao: string; preco: number; itens: [string, number][] }[],
+    },
     cardapio: [
       {
         categoria: 'Pizzas salgadas',
@@ -325,6 +398,102 @@ async function semearCardapio(
   }
 }
 
+/**
+ * Grupos de opção e combos. Idempotência própria — só semeia se o
+ * estabelecimento ainda não tiver nenhum grupo —, porque o cardápio pode já ter
+ * sido semeado numa versão anterior deste script, sem personalização.
+ */
+async function semearPersonalizacao(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  estabelecimento: Estabelecimento,
+): Promise<void> {
+  const jaTem = await tx.select({ id: optionGroups.id }).from(optionGroups).limit(1)
+  if (jaTem.length > 0) return
+
+  const produtosPorNome = new Map(
+    (await tx.select({ id: products.id, name: products.name }).from(products)).map((p) => [
+      p.name,
+      p.id,
+    ]),
+  )
+  const idDe = (nome: string): string => {
+    const id = produtosPorNome.get(nome)
+    if (!id) throw new Error(`produto ${nome} não encontrado no seed`)
+    return id
+  }
+
+  const ordemPorProduto = new Map<string, number>()
+
+  for (const definicao of estabelecimento.personalizacao.grupos) {
+    const [grupo] = await tx
+      .insert(optionGroups)
+      .values({
+        tenantId,
+        name: definicao.nome,
+        description: definicao.descricao,
+        minSelections: definicao.min,
+        maxSelections: definicao.max,
+      })
+      .returning({ id: optionGroups.id })
+    if (!grupo) throw new Error(`grupo ${definicao.nome} não foi criado`)
+
+    await tx.insert(options).values(
+      definicao.opcoes.map(([nome, acrescimo], indice) => ({
+        tenantId,
+        groupId: grupo.id,
+        name: nome,
+        priceDeltaInCents: acrescimo,
+        sortOrder: indice * 10,
+      })),
+    )
+
+    for (const nomeDoProduto of definicao.produtos) {
+      const productId = idDe(nomeDoProduto)
+      const ordem = ordemPorProduto.get(productId) ?? 0
+      ordemPorProduto.set(productId, ordem + 10)
+      await tx
+        .insert(productOptionGroups)
+        .values({ tenantId, productId, groupId: grupo.id, sortOrder: ordem })
+    }
+  }
+
+  if (estabelecimento.personalizacao.combos.length === 0) return
+
+  // Combos ficam no topo do cardápio, como é comum nos aplicativos de delivery.
+  const [categoriaDeCombos] = await tx
+    .insert(categories)
+    .values({ tenantId, name: 'Combos', sortOrder: -10 })
+    .returning({ id: categories.id })
+  if (!categoriaDeCombos) throw new Error('categoria Combos não foi criada')
+
+  for (const [indice, definicao] of estabelecimento.personalizacao.combos.entries()) {
+    const [combo] = await tx
+      .insert(products)
+      .values({
+        tenantId,
+        categoryId: categoriaDeCombos.id,
+        type: 'COMBO',
+        name: definicao.nome,
+        description: definicao.descricao,
+        priceInCents: definicao.preco,
+        sortOrder: indice * 10,
+      })
+      .returning({ id: products.id })
+    if (!combo) throw new Error(`combo ${definicao.nome} não foi criado`)
+
+    await tx.insert(comboItems).values(
+      definicao.itens.map(([nome, quantidade], ordem) => ({
+        tenantId,
+        comboProductId: combo.id,
+        itemProductId: idDe(nome),
+        quantity: quantidade,
+        sortOrder: ordem * 10,
+      })),
+    )
+  }
+}
+
 async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promise<void> {
   for (const estabelecimento of ESTABELECIMENTOS) {
     await db
@@ -381,6 +550,7 @@ async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promis
 
       await semearConfiguracoes(tx, tenant.id, estabelecimento)
       await semearCardapio(tx, tenant.id, estabelecimento)
+      await semearPersonalizacao(tx, tenant.id, estabelecimento)
     })
 
     infraLogger.info(

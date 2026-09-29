@@ -638,6 +638,62 @@ grava o novo, commita, só então apaga o antigo — é sutil demais para existi
 Com ela extraída, uma tentativa de imagem para um produto inexistente também não deixa arquivo
 órfão: o novo é apagado quando a transação falha, e há teste que conta os arquivos.
 
+### 8.6 Personalização: um modelo para tamanho, adicional e remoção
+
+"Tamanho", "Adicionais" e "Remover ingredientes" são todos **grupos de opção**. A estrutura é a
+mesma — uma lista de escolhas com preço e um limite de seleções —, e só muda o mínimo e o máximo:
+
+| Grupo      | mín | máx | Opções                            |
+| ---------- | --- | --- | --------------------------------- |
+| Tamanho    | 1   | 1   | Normal +0 · Grande +R$ 6,00       |
+| Adicionais | 0   | 3   | Bacon +R$ 5,00 · Cheddar +R$ 4,00 |
+| Remover    | 0   | 3   | Sem cebola · Sem tomate           |
+
+Isso diverge da lista de tabelas do escopo original, que previa `product_addons` à parte. Uma
+tabela de adicionais duplicaria a estrutura, e o cálculo de preço da Fase 11 teria duas regras em
+vez de uma.
+
+**"Obrigatório" é derivado**, nunca gravado: é `minSelections >= 1`. Gravar os dois permitiria um
+grupo obrigatório com mínimo zero, e ninguém saberia qual vale.
+
+**Os grupos são reutilizáveis.** "Adicionais" é criado uma vez e ligado aos dez hambúrgueres;
+trocar o preço do bacon é uma edição, não dez. Pedidos antigos não mudam, porque o preço é
+copiado para o pedido na Fase 11.
+
+**O acréscimo de preço não pode ser negativo.** O preço base do produto é o do menor tamanho, e
+as opções só somam. Com desconto por opção, a soma de um item poderia ficar negativa, e a conta
+do pedido precisaria de uma trava a mais que um dia alguém esqueceria.
+
+**Um grupo não pode exigir mais escolhas do que tem opções.** "Escolha 2" com uma opção só torna
+o produto impossível de pedir, e ninguém perceberia até o cliente travar no checkout. A regra é
+uma função pura, `problemasDoGrupo`, testada sem banco.
+
+Na edição de um grupo, opções com id são alteradas, sem id são criadas, e as ausentes são
+removidas. Um id que não pertence ao grupo é recusado — sem isso, editar "Adicionais" poderia
+sequestrar uma opção de "Tamanho", ou de outro estabelecimento.
+
+Excluir um **grupo em uso** é recusado: se "Tamanho" sumisse em silêncio, o produto passaria a ser
+vendido sem tamanho, pelo preço base.
+
+### 8.7 Combos
+
+Um combo é um **produto do tipo `COMBO`**, com os componentes em `combo_items`. Também diverge do
+escopo original, que previa uma tabela `combos`: no cardápio o combo se comporta exatamente como
+um produto — categoria, preço, imagem, disponibilidade, ordem, carrinho —, e uma tabela à parte
+obrigaria o carrinho e o pedido a tratar dois tipos de item. De quebra, o combo pode ter grupos de
+opção, como "escolha a bebida".
+
+- **O tipo é imutável.** Transformar um combo em produto simples deixaria componentes órfãos; o
+  contrário, um combo vazio à venda. O PATCH recusa o campo.
+- **Combo não contém combo.** A composição viraria árvore, a cozinha e a mensagem do pedido
+  teriam de desdobrá-la, e um ciclo seria possível.
+- **Excluir um componente é recusado**, dizendo de quais combos ele faz parte: o combo passaria a
+  ser vendido pelo mesmo preço com um item a menos.
+- A consulta devolve `precoAvulsoEmCentavos` — quanto os itens custariam separados, para o
+  cardápio mostrar a economia — e `todosDisponiveis`, falso se algum componente estiver esgotado.
+  Um combo com componente esgotado não deve ser vendido; quem aplica isso é o cardápio público, na
+  Fase 8, e o cálculo do pedido, na Fase 11.
+
 ---
 
 ## 9. Frontend

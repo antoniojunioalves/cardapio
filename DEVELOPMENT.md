@@ -78,7 +78,7 @@ apps/api/src/
 ├── audit/         registro de ações administrativas
 ├── settings/      configurações, horários, entrega — domínio + repositório + serviço
 ├── storage/       StorageService, provider local, detecção de tipo, troca de imagem
-├── catalog/       categorias e produtos — repositório, serviço, apresentação
+├── catalog/       categorias, produtos, grupos de opção e combos
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/

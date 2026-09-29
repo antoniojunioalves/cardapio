@@ -37,6 +37,7 @@ export async function registerOpenApi(instance: FastifyInstance): Promise<void> 
           description: 'Estabelecimento, horários, entrega e formas de pagamento',
         },
         { name: 'Catálogo', description: 'Categorias e produtos' },
+        { name: 'Personalização', description: 'Grupos de opção, adicionais, remoções e combos' },
       ],
       components: {
         securitySchemes: {
