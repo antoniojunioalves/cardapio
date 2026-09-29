@@ -723,7 +723,7 @@ a unicidade é `(tenant_id, phone)`. O telefone é guardado normalizado — só 
 `5511987654321` — e uma CHECK recusa outra forma; a normalização vive em `packages/shared` e é a
 mesma no formulário e na API. O endereço tem **CEP** (só os 8 dígitos, também com CHECK),
 obrigatório no schema e primeiro campo do formulário, porque é por ele que a futura consulta aos
-Correios vai preencher o resto. A coluna é anulável só para os endereços gravados antes dela. O endereço **não** guarda a região de entrega: as regiões são
+Correios vai preencher o resto. A coluna é anulável só para os endereços gravados antes dela. O endereço **não** guarda a região de entrega (ligá-los está no ROADMAP): as regiões são
 salvas por substituição do conjunto e mudam de id. O cliente nasce no primeiro pedido (Fase 11);
 não há conta com senha no MVP.
 

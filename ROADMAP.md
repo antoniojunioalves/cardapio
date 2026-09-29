@@ -55,6 +55,17 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   o cliente só completa número e complemento. A escolha do serviço (API dos Correios ou uma
   intermediária) e o que fazer quando ele estiver fora do ar ficam para essa fase — o cliente
   precisa continuar podendo digitar à mão.
+- **Região de entrega atrelada ao endereço.** Hoje, na entrega por região, o cliente escolhe a
+  região a cada pedido, inclusive quando usa um endereço salvo — que não guarda a região (Fase
+  10). O objetivo é o endereço já trazer a sua região, e o cliente não precisar escolher de novo.
+  **A usabilidade ainda vai ser pensada antes de implementar.** Pontos em aberto:
+  - como a região se liga ao endereço: escolhida uma vez e guardada nele, deduzida do bairro, ou
+    por faixa de CEP cadastrada pelo lojista;
+  - as regiões hoje são salvas por substituição do conjunto e mudam de id a cada edição do
+    lojista — guardar o id no endereço exige ids estáveis, ou guardar outra chave;
+  - o que acontece quando a região do endereço é desativada ou removida, e quando o bairro do
+    endereço não corresponde a nenhuma região;
+  - se o cliente pode discordar da região sugerida, e como o lojista fica sabendo.
 - Integração com Google Maps e Apple Maps
 - Geocoding e armazenamento de latitude/longitude
 - Seleção de endereço por pin no mapa
