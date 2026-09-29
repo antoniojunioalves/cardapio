@@ -23,6 +23,30 @@ export function mockarApi(resposta: Resposta) {
   return fetch
 }
 
+/**
+ * Simula a API respondendo por rota: o cardápio no GET e a identificação do
+ * cliente no POST. Devolve o mock, para conferir o que foi enviado.
+ */
+export function mockarApiDoCheckout(
+  cardapio: CardapioPublico,
+  identificacao: Resposta = { status: 200, corpo: { cliente: null } },
+) {
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    const resposta: Resposta =
+      init?.method === 'POST' && url.endsWith('/customers/identify')
+        ? identificacao
+        : { status: 200, corpo: cardapio }
+    if (resposta === 'falha-de-rede') return Promise.reject(new Error('conexão recusada'))
+    return Promise.resolve({
+      ok: resposta.status < 400,
+      status: resposta.status,
+      json: () => Promise.resolve(resposta.corpo),
+    })
+  })
+  vi.stubGlobal('fetch', fetch)
+  return fetch
+}
+
 export function abrir(caminho: string): RenderResult {
   // Sem espera entre tentativas: o teste de falha de rede passaria segundos
   // aguardando o backoff padrão.
