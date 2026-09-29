@@ -12,11 +12,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hookform/resolvers": "5.9.1",
     "@repo/config": "workspace:*",
+    "@repo/shared": "workspace:*",
     "@tanstack/react-query": "5.104.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-hook-form": "7.89.0",
     "react-router": "8.4.0",
+    "zod": "4.6.5",
     "zustand": "5.0.15"
   },
   "devDependencies": {

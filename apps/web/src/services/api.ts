@@ -29,10 +29,7 @@ interface CorpoDeErro {
   error?: { message?: string }
 }
 
-/** GET que devolve o JSON da resposta ou lança `ApiError`. */
-export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${API_URL}${caminho}`, { ...(signal && { signal }) })
-
+async function lerResposta<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const corpo = (await response.json().catch(() => ({}))) as CorpoDeErro
     throw new ApiError(
@@ -42,6 +39,22 @@ export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise
   }
 
   return (await response.json()) as T
+}
+
+/** GET que devolve o JSON da resposta ou lança `ApiError`. */
+export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise<T> {
+  return lerResposta<T>(await fetch(`${API_URL}${caminho}`, { ...(signal && { signal }) }))
+}
+
+/** POST com corpo JSON, que devolve o JSON da resposta ou lança `ApiError`. */
+export async function postJson<T>(caminho: string, corpo: unknown): Promise<T> {
+  return lerResposta<T>(
+    await fetch(`${API_URL}${caminho}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(corpo),
+    }),
+  )
 }
 
 /** Consulta a sonda de saúde da API. */
