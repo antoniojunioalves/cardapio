@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 
 import { hashPassword } from '../auth/password.js'
 import { infraLogger } from '../lib/logger.js'
@@ -106,6 +106,7 @@ const ESTABELECIMENTOS = [
         telefone: '5511987654321',
         enderecos: [
           {
+            cep: '01452000',
             rua: 'Rua dos Ipês',
             numero: '450',
             complemento: 'apto 12',
@@ -113,6 +114,7 @@ const ESTABELECIMENTOS = [
             referencia: 'Portão azul',
           },
           {
+            cep: '01430001',
             rua: 'Avenida Brasil',
             numero: '1200',
             complemento: null,
@@ -225,6 +227,7 @@ const ESTABELECIMENTOS = [
         telefone: '5511987654321',
         enderecos: [
           {
+            cep: '01504001',
             rua: 'Rua Vergueiro',
             numero: '88',
             complemento: null,
@@ -562,7 +565,22 @@ async function semearClientes(
       .from(customerAddresses)
       .where(eq(customerAddresses.customerId, salvo.id))
       .limit(1)
-    if (jaTem.length > 0) continue
+    if (jaTem.length > 0) {
+      // Endereços semeados antes de o CEP existir ganham o CEP de demonstração.
+      for (const e of cliente.enderecos) {
+        await tx
+          .update(customerAddresses)
+          .set({ postalCode: e.cep })
+          .where(
+            and(
+              eq(customerAddresses.customerId, salvo.id),
+              eq(customerAddresses.street, e.rua),
+              isNull(customerAddresses.postalCode),
+            ),
+          )
+      }
+      continue
+    }
 
     // O primeiro da lista é o mais recente: aparece primeiro no checkout.
     const agora = Date.now()
@@ -570,6 +588,7 @@ async function semearClientes(
       cliente.enderecos.map((e, i) => ({
         tenantId,
         customerId: salvo.id,
+        postalCode: e.cep,
         street: e.rua,
         number: e.numero,
         complement: e.complemento,

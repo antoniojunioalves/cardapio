@@ -79,6 +79,12 @@ export const customerAddresses = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     customerId: uuid().notNull(),
 
+    /**
+     * CEP, só os 8 dígitos. Anulável porque os endereços gravados antes dele
+     * existir não o têm — inventar um valor seria pior. Todo endereço novo
+     * passa pelo `enderecoSchema` de `@repo/shared`, que o exige.
+     */
+    postalCode: varchar({ length: 8 }),
     street: varchar({ length: 120 }).notNull(),
     number: varchar({ length: 20 }).notNull(),
     complement: varchar({ length: 80 }),
@@ -95,6 +101,7 @@ export const customerAddresses = pgTable(
       columns: [table.tenantId, table.customerId],
       foreignColumns: [customers.tenantId, customers.id],
     }).onDelete('cascade'),
+    check('customer_addresses_cep_formato', sql`${table.postalCode} ~ '^[0-9]{8}$'`),
     unique('customer_addresses_tenant_id_id').on(table.tenantId, table.id),
     index('customer_addresses_cliente_idx').on(table.customerId, table.lastUsedAt),
     isolamento(table.tenantId),

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { mascararTelefoneDigitado, normalizarTelefone } from '@repo/shared'
+import { mascararCepDigitado, mascararTelefoneDigitado, normalizarTelefone } from '@repo/shared'
 import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form'
 
@@ -260,6 +260,32 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo }: CheckoutFormPro
 
           {!usandoEnderecoSalvo && (
             <div className="grid grid-cols-3 gap-stack">
+              {/*
+               * O CEP vem primeiro: quando a consulta aos Correios existir
+               * (ROADMAP), é ele que vai preencher rua, bairro e cidade.
+               */}
+              <Controller
+                control={control}
+                name="postalCode"
+                render={({ field }) => (
+                  <TextField
+                    className="col-span-3 sm:col-span-1"
+                    rotulo="CEP"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    placeholder="00000-000"
+                    erro={erroDe(erros, 'postalCode')}
+                    ref={field.ref}
+                    name={field.name}
+                    value={field.value}
+                    onChange={(e) => {
+                      field.onChange(mascararCepDigitado(e.target.value))
+                    }}
+                    onBlur={field.onBlur}
+                  />
+                )}
+              />
+              <div className="hidden sm:col-span-2 sm:block" />
               <TextField
                 className="col-span-2"
                 rotulo="Rua"

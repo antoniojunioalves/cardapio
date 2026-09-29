@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { normalizarTelefone } from './phone.js'
+import { normalizarCep } from './postal-code.js'
 
 /**
  * Cliente final e endereço, validados igual no formulário e na API.
@@ -19,6 +20,20 @@ export const telefoneSchema = z.string().transform((valor, ctx) => {
       code: 'custom',
       message: 'Informe um telefone com DDD, como (11) 98765-4321.',
     })
+    return z.NEVER
+  }
+  return normalizado
+})
+
+/** Aceita o CEP com ou sem hífen e entrega só os 8 dígitos. */
+export const cepSchema = z.string().transform((valor, ctx) => {
+  if (valor.trim() === '') {
+    ctx.addIssue({ code: 'custom', message: 'Informe o CEP.' })
+    return z.NEVER
+  }
+  const normalizado = normalizarCep(valor)
+  if (!normalizado) {
+    ctx.addIssue({ code: 'custom', message: 'Informe um CEP com 8 dígitos, como 01310-100.' })
     return z.NEVER
   }
   return normalizado
@@ -44,6 +59,8 @@ export const nomeDoClienteSchema = textoObrigatorio(120, 'Informe seu nome.').re
 )
 
 export const enderecoSchema = z.object({
+  /** Primeiro campo do endereço: é por ele que a busca nos Correios vai preencher o resto. */
+  postalCode: cepSchema,
   street: textoObrigatorio(120, 'Informe a rua.'),
   number: textoObrigatorio(20, 'Informe o número, ou "s/n".'),
   complement: textoOpcional(80),

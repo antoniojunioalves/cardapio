@@ -50,6 +50,11 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Endereço e entrega
 
+- **Busca do endereço pelo CEP na base dos Correios.** O campo CEP já existe e é o primeiro do
+  endereço no checkout (Fase 10); a consulta vai preencher rua, bairro e cidade a partir dele, e
+  o cliente só completa número e complemento. A escolha do serviço (API dos Correios ou uma
+  intermediária) e o que fazer quando ele estiver fora do ar ficam para essa fase — o cliente
+  precisa continuar podendo digitar à mão.
 - Integração com Google Maps e Apple Maps
 - Geocoding e armazenamento de latitude/longitude
 - Seleção de endereço por pin no mapa
@@ -93,7 +98,6 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Carrinho que expira: hoje ele fica no navegador até ser esvaziado ou enviado
 - Carrinho entre aparelhos, ligado ao cliente identificado
 - Checkout que lembra nome e telefone no aparelho, sem precisar digitar de novo
-- Busca de endereço pelo CEP
 
 ## Catálogo
 

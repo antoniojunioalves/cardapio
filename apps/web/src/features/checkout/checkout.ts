@@ -90,6 +90,7 @@ export interface ValoresDoCheckout {
   fulfillment: string
   /** Id de um endereço salvo, ou vazio para um endereço novo. */
   savedAddressId: string
+  postalCode: string
   street: string
   number: string
   complement: string
@@ -129,6 +130,7 @@ export interface ContextoDoCheckout {
 }
 
 const CAMPOS_DO_ENDERECO = [
+  'postalCode',
   'street',
   'number',
   'complement',
@@ -242,6 +244,7 @@ export const VALORES_INICIAIS: ValoresDoCheckout = {
   name: '',
   fulfillment: '',
   savedAddressId: '',
+  postalCode: '',
   street: '',
   number: '',
   complement: '',

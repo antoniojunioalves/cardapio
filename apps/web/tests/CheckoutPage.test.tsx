@@ -122,6 +122,37 @@ describe('checkout', () => {
     expect(campo('Telefone (WhatsApp)')).toHaveValue('(11) 98765-4321')
   })
 
+  it('o CEP é o primeiro campo do endereço, com máscara, e é obrigatório', async () => {
+    await abrirCheckout()
+    fireEvent.click(screen.getByRole('radio', { name: 'Entrega' }))
+
+    const secao = screen.getByRole('group', { name: 'Endereço de entrega' })
+    const campos = within(secao).getAllByRole('textbox')
+    expect(campos[0]).toBe(campo('CEP'))
+
+    escrever('CEP', '01310100')
+    expect(campo('CEP')).toHaveValue('01310-100')
+
+    escrever('CEP', '')
+    fireEvent.click(botaoDeEnviar())
+    expect(await screen.findByText('Informe o CEP.')).toBeVisible()
+  })
+
+  it('entrega em endereço novo fica conferida com o CEP', async () => {
+    await abrirCheckout()
+    informarTelefone('11912345678')
+    escrever('Nome', 'João Souza')
+    fireEvent.click(screen.getByRole('radio', { name: 'Entrega' }))
+    escrever('CEP', '01310-100')
+    escrever('Rua', 'Avenida Paulista')
+    escrever('Número', '1000')
+    escrever('Bairro', 'Bela Vista')
+    fireEvent.click(screen.getByRole('radio', { name: 'Pix' }))
+    fireEvent.click(botaoDeEnviar())
+
+    expect(await screen.findByText('Pedido conferido')).toBeVisible()
+  })
+
   it('pedido completo por retirada fica conferido', async () => {
     await abrirCheckout()
     informarTelefone('11987654321')

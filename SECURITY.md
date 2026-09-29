@@ -141,7 +141,7 @@ Mitigações em vigor (`POST /api/v1/public/{tenantSlug}/customers/identify`):
 
 - **O endereço completo nunca é devolvido.** A resposta traz o primeiro nome e, de cada
   endereço, rua, bairro e o número mascarado — `Rua dos Ipês, 4•• — Jardim Paulista`.
-  Complemento, referência, sobrenome e o telefone não saem. O cliente escolhe o endereço pelo id,
+  CEP, complemento, referência, sobrenome e o telefone não saem. O cliente escolhe o endereço pelo id,
   e o servidor completa o pedido (Fase 11). Um teste procura na resposta cada um desses dados.
 - O endereço é exibido para **confirmação**, nunca usado em silêncio.
 - Toda identificação que encontra alguém é registrada em auditoria (`customer.identified`), com o

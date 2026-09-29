@@ -721,13 +721,15 @@ estabelecimento, status, horários, entrega, formas de pagamento e cardápio.
 na pizzaria são dois clientes, sem ligação. O dado serve a quem o coletou (SECURITY.md, LGPD), e
 a unicidade é `(tenant_id, phone)`. O telefone é guardado normalizado — só dígitos, com o país,
 `5511987654321` — e uma CHECK recusa outra forma; a normalização vive em `packages/shared` e é a
-mesma no formulário e na API. O endereço **não** guarda a região de entrega: as regiões são
+mesma no formulário e na API. O endereço tem **CEP** (só os 8 dígitos, também com CHECK),
+obrigatório no schema e primeiro campo do formulário, porque é por ele que a futura consulta aos
+Correios vai preencher o resto. A coluna é anulável só para os endereços gravados antes dela. O endereço **não** guarda a região de entrega: as regiões são
 salvas por substituição do conjunto e mudam de id. O cliente nasce no primeiro pedido (Fase 11);
 não há conta com senha no MVP.
 
 `POST /api/v1/public/{tenantSlug}/customers/identify` reconhece quem já pediu. Como telefone não
 prova identidade (SECURITY.md, seção 5), a resposta é deliberadamente pobre: primeiro nome e, de
-cada endereço, rua, bairro e número mascarado. **O endereço completo nunca volta ao navegador** —
+cada endereço, rua, bairro e número mascarado — o CEP não sai. **O endereço completo nunca volta ao navegador** —
 o pedido referencia o endereço salvo pelo id, e o servidor o completa. Com isso, "revelar o
 endereço de quem digitou o telefone errado" deixa de ser possível por esta rota; o que ainda sai é
 nome, rua e bairro, até o OTP.

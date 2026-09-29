@@ -113,6 +113,13 @@
       "when": 1790689756686,
       "tag": "0015_force_rls_clientes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790691180258,
+      "tag": "0016_cep_do_endereco",
+      "breakpoints": true
     }
   ]
 }

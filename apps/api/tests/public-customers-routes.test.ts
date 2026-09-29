@@ -47,6 +47,7 @@ async function criarCliente(
     street: string
     number: string
     complement?: string
+    postalCode?: string
     neighborhood: string
     reference?: string
     diasAtras: number
@@ -66,6 +67,7 @@ async function criarCliente(
         street: e.street,
         number: e.number,
         complement: e.complement ?? null,
+        postalCode: e.postalCode ?? null,
         neighborhood: e.neighborhood,
         reference: e.reference ?? null,
         lastUsedAt: new Date(Date.now() - e.diasAtras * 86_400_000),
@@ -89,6 +91,7 @@ beforeAll(async () => {
       street: 'Rua dos Ipês',
       number: '450',
       complement: 'apto 12',
+      postalCode: '01452000',
       neighborhood: 'Jardim Paulista',
       reference: 'Portão azul',
       diasAtras: 1,
@@ -159,7 +162,8 @@ describe('identificação por telefone', () => {
       enderecos: cliente?.enderecos.map(({ resumo, bairro }) => ({ resumo, bairro })),
     })
 
-    for (const proibido of ['450', '1200', 'apto', 'Portão', 'Oliveira', 'Santos', TELEFONE]) {
+    const proibidos = ['450', '1200', 'apto', 'Portão', 'Oliveira', 'Santos', TELEFONE, '01452']
+    for (const proibido of proibidos) {
       expect(corpo, proibido).not.toContain(proibido)
     }
   })
@@ -208,6 +212,21 @@ describe('isolamento entre estabelecimentos', () => {
         tx.insert(customerAddresses).values({
           tenantId: pizzaria.tenantId,
           customerId: mariaNaLanchonete,
+          street: 'Rua',
+          number: '1',
+          neighborhood: 'Bairro',
+        }),
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('o banco recusa CEP fora do formato de 8 dígitos', async () => {
+    await expect(
+      withTenant(tenantContextFromUser(lanchonete.tenantId), (tx) =>
+        tx.insert(customerAddresses).values({
+          tenantId: lanchonete.tenantId,
+          customerId: mariaNaLanchonete,
+          postalCode: '01452-000',
           street: 'Rua',
           number: '1',
           neighborhood: 'Bairro',

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   enderecoSchema,
+  formatarCep,
   formatarTelefone,
+  mascararCepDigitado,
+  normalizarCep,
   identificarClienteSchema,
   mascararTelefoneDigitado,
   normalizarTelefone,
@@ -52,6 +55,28 @@ describe('telefone', () => {
   })
 })
 
+describe('CEP', () => {
+  it('aceita com e sem hífen, e guarda só os dígitos', () => {
+    expect(normalizarCep('01310-100')).toBe('01310100')
+    expect(normalizarCep('01310100')).toBe('01310100')
+    expect(normalizarCep(' 01.310-100 ')).toBe('01310100')
+  })
+
+  it('recusa tamanho errado e a faixa 00000, que não existe', () => {
+    expect(normalizarCep('0131010')).toBeNull()
+    expect(normalizarCep('013101000')).toBeNull()
+    expect(normalizarCep('00000-123')).toBeNull()
+    expect(normalizarCep('')).toBeNull()
+  })
+
+  it('formata e mascara enquanto digita', () => {
+    expect(formatarCep('01310100')).toBe('01310-100')
+    expect(mascararCepDigitado('013')).toBe('013')
+    expect(mascararCepDigitado('013101')).toBe('01310-1')
+    expect(mascararCepDigitado('01310100999')).toBe('01310-100')
+  })
+})
+
 describe('schemas', () => {
   it('telefone inválido vem com mensagem para a pessoa', () => {
     const resultado = identificarClienteSchema.safeParse({ phone: '123' })
@@ -64,6 +89,7 @@ describe('schemas', () => {
   it('endereço apara espaços e transforma opcional vazio em nulo', () => {
     expect(
       enderecoSchema.parse({
+        postalCode: '01310-100',
         street: '  Rua das Flores ',
         number: '12',
         complement: '',
@@ -72,6 +98,7 @@ describe('schemas', () => {
         reference: '   ',
       }),
     ).toEqual({
+      postalCode: '01310100',
       street: 'Rua das Flores',
       number: '12',
       complement: null,
@@ -82,7 +109,21 @@ describe('schemas', () => {
   })
 
   it('endereço sem bairro diz o que falta', () => {
-    const resultado = enderecoSchema.safeParse({ street: 'Rua', number: '1', neighborhood: ' ' })
+    const resultado = enderecoSchema.safeParse({
+      postalCode: '01310-100',
+      street: 'Rua',
+      number: '1',
+      neighborhood: ' ',
+    })
     expect(resultado.error?.issues.map((i) => i.message)).toEqual(['Informe o bairro.'])
+  })
+
+  it('CEP é obrigatório, e o erro diz o que falta ou o formato esperado', () => {
+    const base = { street: 'Rua', number: '1', neighborhood: 'Centro' }
+    const mensagem = (postalCode: string) =>
+      enderecoSchema.safeParse({ ...base, postalCode }).error?.issues[0]?.message
+
+    expect(mensagem('')).toBe('Informe o CEP.')
+    expect(mensagem('0131')).toBe('Informe um CEP com 8 dígitos, como 01310-100.')
   })
 })

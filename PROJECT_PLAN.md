@@ -72,7 +72,8 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 | 7   | React Hook Form + Zod; `TextField` genérico com erro acessível                                     | ✅     |
 | 8   | Página `/{slug}/checkout`: dados, modalidade, endereço salvo ou novo, região, pagamento, troco     | ✅     |
 | 9   | Prévia de taxa e total; impedimentos: fechado, mínimo, itens com problema; "Continuar" no carrinho | ✅     |
-| 10  | Testes: 9 do shared, 17 da API, 16 de regra e 16 de tela no web                                    | ✅     |
+| 10  | Testes: 13 do shared, 18 da API, 16 de regra e 18 de tela no web                                   | ✅     |
+| 11  | CEP obrigatório e primeiro campo do endereço, sem consulta aos Correios ainda                      | ✅     |
 
 ### Decisões desta fase
 
@@ -99,6 +100,12 @@ MVP.md não. Fica no ROADMAP — o telefone cobre o "já pedi aqui antes".
 
 **O cliente nasce no primeiro pedido (Fase 11).** Até lá, só os clientes do seed são encontrados.
 
+**O endereço tem CEP, obrigatório e primeiro campo** — pedido na validação. Guardado só com os
+8 dígitos, com máscara `00000-000` no formulário. Ainda não consulta os Correios: o campo fica
+pronto para a busca do endereço pelo CEP, registrada no ROADMAP. A coluna é anulável só porque
+endereços gravados antes dela não têm CEP; todo endereço novo passa pelo schema, que o exige, e o
+seed completa os de demonstração. A identificação por telefone não devolve o CEP.
+
 **O endereço não guarda a região.** As regiões são salvas por substituição e mudam de id; a região
 é escolhida a cada pedido.
 
@@ -124,7 +131,7 @@ se resolve no carrinho. Estabelecimento fechado deixa chegar ao checkout, que av
 | Verificação                                | Resultado                                                         |
 | ------------------------------------------ | ----------------------------------------------------------------- |
 | `pnpm typecheck` / `lint` / `build`        | zero erro                                                         |
-| `pnpm test`                                | **452 testes** (331 API + 112 web + 9 shared)                     |
+| `pnpm test`                                | **459 testes** (332 API + 114 web + 13 shared)                    |
 | Testes sensíveis à regra                   | sem máscara, sem limite e sem a trava do telefone: cada um cai    |
 | API rodando: preflight, identificação, 400 | CORS libera o POST; endereços mascarados; cada tenant a sua Maria |
 | Vite em dev resolve `@repo/shared`         | sim, pelo `dist` do pacote                                        |

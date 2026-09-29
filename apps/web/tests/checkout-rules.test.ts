@@ -40,6 +40,7 @@ const valores = (extra: Partial<ValoresDoCheckout> = {}): ValoresDoCheckout => (
 })
 
 const endereco = {
+  postalCode: '01310-100',
   street: 'Rua das Flores',
   number: '12',
   neighborhood: 'Centro',
@@ -183,8 +184,9 @@ describe('formulário', () => {
     })
   })
 
-  it('entrega com endereço novo exige rua, número e bairro', () => {
+  it('entrega com endereço novo exige CEP, rua, número e bairro', () => {
     expect(errosDe(conferir(valores({ fulfillment: 'DELIVERY' })))).toEqual({
+      postalCode: 'Informe o CEP.',
       street: 'Informe a rua.',
       number: 'Informe o número, ou "s/n".',
       neighborhood: 'Informe o bairro.',
@@ -192,7 +194,7 @@ describe('formulário', () => {
 
     const resultado = conferir(valores({ fulfillment: 'DELIVERY', ...endereco, complement: ' ' }))
     expect(resultado.data?.address).toEqual({
-      newAddress: { ...endereco, complement: null, reference: null },
+      newAddress: { ...endereco, postalCode: '01310100', complement: null, reference: null },
     })
   })
 
