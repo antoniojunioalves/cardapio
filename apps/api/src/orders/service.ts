@@ -14,11 +14,13 @@ import type { Order, OrderStatus } from '../db/schema/index.js'
 import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
 import { AppError, ConflictError, NotFoundError } from '../lib/errors.js'
 import { montarCardapioPublico } from '../public-menu/service.js'
+import { ensureSettings } from '../settings/repository.js'
 import type { StorageService } from '../storage/index.js'
 import type { TenantContext } from '../tenant/context.js'
 import { resolverEstabelecimentoPublico } from '../tenant/public.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
 import { calcularPedido } from './pricing.js'
+import { linkDoWhatsapp, montarMensagem, type EnderecoDaMensagem } from './whatsapp.js'
 import {
   buscarPedido,
   buscarPorIdempotencia,
@@ -77,7 +79,8 @@ export async function criarPedido(
     return await withTenant(context, async (tx) => {
       // O mesmo envio de novo — duplo clique, rede que caiu depois do commit.
       const existente = await buscarPorIdempotencia(tx, entrada.idempotencyKey)
-      if (existente) return apresentarCriado(tx, existente)
+      if (existente)
+        return apresentarCriado(tx, existente, await whatsappDoEstabelecimento(tx, context))
 
       const cardapio = await montarCardapioPublico(tx, context, tenant, storage, agora)
       const calculo = calcularPedido(cardapio, entrada)
@@ -142,9 +145,35 @@ export async function criarPedido(
         else await salvarEnderecoUsado(tx, context.tenantId, clienteId, endereco)
       }
 
+      const numero = await proximoNumero(tx, context.tenantId)
+      const mensagem = montarMensagem({
+        estabelecimento: tenant.name,
+        numero,
+        // O nome digitado — o completo, quando completado, fica só no pedido.
+        cliente: { nome: entrada.customer.name, telefone: entrada.customer.phone },
+        itens: calculado.itens.map((i) => ({
+          quantidade: i.quantidade,
+          nome: i.produto.name,
+          totalEmCentavos: i.totalEmCentavos,
+          opcoes: i.opcoes.map((o) => o.opcao),
+          observacao: i.observacao,
+          combo: i.produto.combo?.items ?? null,
+        })),
+        subtotalEmCentavos: calculado.subtotalEmCentavos,
+        taxaEmCentavos: calculado.taxaEmCentavos,
+        totalEmCentavos: calculado.totalEmCentavos,
+        endereco: enderecoDaMensagem(endereco, enderecoSalvoId !== null),
+        regiao: calculado.regiao?.name ?? null,
+        pagamento: {
+          nome: calculado.formaDePagamento.name,
+          trocoParaEmCentavos: calculado.trocoParaEmCentavos,
+        },
+        observacao: entrada.notes,
+      })
+
       const pedido = await inserirPedido(tx, {
         tenantId: context.tenantId,
-        number: await proximoNumero(tx, context.tenantId),
+        number: numero,
         idempotencyKey: entrada.idempotencyKey,
         customerId: clienteId,
         customerName: nomeDoPedido(cliente?.name ?? null, entrada.customer.name),
@@ -166,6 +195,7 @@ export async function criarPedido(
         subtotalInCents: calculado.subtotalEmCentavos,
         deliveryFeeInCents: calculado.taxaEmCentavos,
         totalInCents: calculado.totalEmCentavos,
+        whatsappMessage: mensagem,
       })
 
       await inserirItens(
@@ -189,7 +219,7 @@ export async function criarPedido(
         })),
       )
 
-      return apresentarCriado(tx, pedido)
+      return apresentarCriado(tx, pedido, cardapio.establishment.whatsappPhone)
     })
   } catch (error) {
     // Dois envios com a mesma chave ao mesmo tempo: o segundo esbarra na
@@ -199,7 +229,7 @@ export async function criarPedido(
       return withTenant(context, async (tx) => {
         const gravado = await buscarPorIdempotencia(tx, entrada.idempotencyKey)
         if (!gravado) throw error
-        return apresentarCriado(tx, gravado)
+        return apresentarCriado(tx, gravado, await whatsappDoEstabelecimento(tx, context))
       })
     }
     throw error
@@ -220,8 +250,37 @@ export function nomeDoPedido(nomeGuardado: string | null, nomeEnviado: string): 
   return nomeEnviado
 }
 
-async function apresentarCriado(tx: TenantTransaction, pedido: Order): Promise<PedidoCriado> {
+/** Endereço salvo vai mascarado para a mensagem; digitado, completo. */
+function enderecoDaMensagem(
+  endereco: DadosDeEndereco | null,
+  salvo: boolean,
+): EnderecoDaMensagem | null {
+  if (!endereco) return null
+  if (salvo) {
+    return {
+      tipo: 'SALVO',
+      street: endereco.street,
+      number: endereco.number,
+      neighborhood: endereco.neighborhood,
+    }
+  }
+  return { tipo: 'NOVO', ...endereco }
+}
+
+async function whatsappDoEstabelecimento(
+  tx: TenantTransaction,
+  context: TenantContext,
+): Promise<string | null> {
+  return (await ensureSettings(tx, context)).whatsappPhone
+}
+
+async function apresentarCriado(
+  tx: TenantTransaction,
+  pedido: Order,
+  whatsappDoEstabelecimento: string | null,
+): Promise<PedidoCriado> {
   const itens = (await carregarItens(tx, [pedido.id])).get(pedido.id) ?? []
+  const mensagem = pedido.whatsappMessage ?? ''
   return {
     number: pedido.number,
     status: pedido.status,
@@ -239,6 +298,10 @@ async function apresentarCriado(tx: TenantTransaction, pedido: Order): Promise<P
     paymentMethodName: pedido.paymentMethodName,
     changeForInCents: pedido.changeForInCents,
     createdAt: pedido.createdAt.toISOString(),
+    whatsapp: {
+      url: mensagem ? linkDoWhatsapp(whatsappDoEstabelecimento, mensagem) : null,
+      message: mensagem,
+    },
   }
 }
 

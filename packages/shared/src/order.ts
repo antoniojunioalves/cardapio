@@ -92,6 +92,12 @@ export const pedidoCriadoSchema = z.object({
   paymentMethodName: z.string(),
   changeForInCents: z.number().nullable(),
   createdAt: z.string(),
+  /**
+   * A mensagem do pedido para o WhatsApp do estabelecimento, e o link que
+   * abre a conversa com ela pronta. `url` nulo: o estabelecimento não
+   * cadastrou WhatsApp.
+   */
+  whatsapp: z.object({ url: z.string().nullable(), message: z.string() }),
 })
 
 export type PedidoCriado = z.output<typeof pedidoCriadoSchema>
