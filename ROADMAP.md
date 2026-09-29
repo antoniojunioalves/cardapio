@@ -87,6 +87,8 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Avaliação de produtos
 - Pedir novamente a partir do histórico
 - Lista de favoritos
+- Carrinho que expira: hoje ele fica no navegador até ser esvaziado ou enviado
+- Carrinho entre aparelhos, ligado ao cliente identificado
 
 ## Catálogo
 

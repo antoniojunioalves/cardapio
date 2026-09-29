@@ -199,6 +199,12 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
 - Vale o limite global de requisições.
 - **A página no navegador não decide nada**: status, disponibilidade e preço exibidos são
   informativos. O pedido é validado e recalculado no servidor (Fase 11).
+- **O carrinho no navegador é do cliente, não do sistema.** Fica no `localStorage`, que qualquer
+  um edita. Por isso o item não guarda preço — o de exibição é recalculado do cardápio atual —, o
+  que vem de lá passa por uma limpeza de formato e limites antes de ser usado, e a Fase 11 vai
+  tratar o pedido enviado como entrada hostil: ids, opções, quantidades e observação validados e
+  o preço calculado do zero no servidor. A chave do carrinho (o slug) não escolhe o
+  estabelecimento do pedido.
 
 ## 8. Cabeçalhos, CORS e limites
 

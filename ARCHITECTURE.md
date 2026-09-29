@@ -750,6 +750,9 @@ src/
 | `/:tenantSlug` | cardápio público                                       |
 | qualquer outra | não encontrado                                         |
 
+No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
+faz o "voltar" do celular fechar a janela em vez de sair do cardápio.
+
 `/:tenantSlug` casa com um segmento só; as rotas administrativas, quando vierem, ficam sob um
 prefixo próprio para nunca colidirem com um slug.
 
@@ -758,7 +761,25 @@ minuto — status e esgotados mudam sozinhos. As regras de apresentação ficam 
 `features/menu/presentation.ts`, sem React, e são testadas como funções puras. **Nenhuma decide
 negócio**: aberto, disponível e preço chegam prontos da API.
 
-### 9.4 Temas
+### 9.4 Carrinho
+
+O carrinho vive no navegador, numa store do Zustand persistida no `localStorage`
+(`features/cart/store.ts`), **um por estabelecimento**, com o slug como chave local.
+
+**O item guarda escolhas, não preço:** produto, opções por grupo, quantidade e observação. Na hora
+de mostrar, `resolverCarrinho` (`features/cart/cart.ts`) confere cada item contra o cardápio atual
+do TanStack Query e calcula o preço de exibição. Produto que saiu, esgotou, opção indisponível ou
+grupo obrigatório novo marcam a linha, que sai do subtotal. Assim o estado de cliente (o que foi
+escolhido) não duplica o estado de servidor (quanto custa, o que existe) — a divisão de 9.1.
+
+A regra de escolha (`features/cart/selection.ts`) aplica mínimo e máximo e soma os acréscimos. Ela
+existe para guiar o cliente; **quem decide é o servidor**: na Fase 11 o pedido chega como entrada
+hostil e é validado e precificado do zero, com a regra de disponibilidade de 8.8.
+
+O que volta do `localStorage` passa por `sanearCarrinhos` antes de entrar na store: formato
+conferido item a item, quantidade limitada a 1–50, observação a 140 caracteres.
+
+### 9.5 Temas
 
 Os **valores** vivem em CSS custom properties, em
 [`apps/web/src/theme/tokens.css`](apps/web/src/theme/tokens.css), dentro do bloco `@theme` do
