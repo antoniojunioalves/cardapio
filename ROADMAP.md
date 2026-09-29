@@ -110,7 +110,17 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Experiência do cliente
 
-- Acompanhamento do status do pedido em tempo real
+- **Acompanhamento do pedido pelo cliente, com o status atualizado.** Depois de enviar o pedido, o
+  cliente acompanha numa página própria cada mudança feita no painel — recebido, aceito, em
+  preparo, pronto, saiu para entrega, concluído ou cancelado (com o motivo). O que já existe e
+  pode ser reaproveitado: o status do pedido e o seu caminho (Fase 11), os avisos emitidos a cada
+  mudança de status e o canal ao vivo (Fase 13). Cuidados já decididos na arquitetura:
+  - a página usa um **código público aleatório** do pedido, nunca o id nem o número sequencial
+    (ARCHITECTURE.md, 4.2) — número sequencial em URL deixaria qualquer um ver os pedidos dos
+    outros trocando um dígito;
+  - a página mostra só o que o cliente pode ver: status, itens e valores, sem o endereço completo
+    de um endereço salvo (a mesma regra da identificação por telefone);
+  - hoje a confirmação não sobrevive a recarregar a página; o link de acompanhamento resolve isso.
 - Notificações push
 - Avaliação do estabelecimento
 - Avaliação de produtos
