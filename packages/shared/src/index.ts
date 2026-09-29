@@ -5,5 +5,6 @@
  * lado aplica fica nele — a máscara do endereço, por exemplo, é do servidor.
  */
 export * from './customer.js'
+export * from './order.js'
 export * from './phone.js'
 export * from './postal-code.js'
