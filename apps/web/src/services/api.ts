@@ -48,20 +48,39 @@ async function lerResposta<T>(response: Response): Promise<T> {
   return (await response.json()) as T
 }
 
+export interface Requisicao {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** Enviado como JSON. */
+  body?: unknown
+  /** Token de acesso do painel, enviado como `Authorization: Bearer`. */
+  token?: string
+  signal?: AbortSignal
+}
+
+/** Chama a API e devolve o JSON da resposta, ou lança `ApiError`. 204 devolve `undefined`. */
+export async function requisitar<T>(caminho: string, requisicao: Requisicao = {}): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (requisicao.body !== undefined) headers['content-type'] = 'application/json'
+  if (requisicao.token) headers.authorization = `Bearer ${requisicao.token}`
+
+  const response = await fetch(`${API_URL}${caminho}`, {
+    ...(requisicao.method && { method: requisicao.method }),
+    ...(Object.keys(headers).length > 0 && { headers }),
+    ...(requisicao.body !== undefined && { body: JSON.stringify(requisicao.body) }),
+    ...(requisicao.signal && { signal: requisicao.signal }),
+  })
+  if (response.status === 204) return undefined as T
+  return lerResposta<T>(response)
+}
+
 /** GET que devolve o JSON da resposta ou lança `ApiError`. */
 export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise<T> {
-  return lerResposta<T>(await fetch(`${API_URL}${caminho}`, { ...(signal && { signal }) }))
+  return requisitar<T>(caminho, signal ? { signal } : {})
 }
 
 /** POST com corpo JSON, que devolve o JSON da resposta ou lança `ApiError`. */
 export async function postJson<T>(caminho: string, corpo: unknown): Promise<T> {
-  return lerResposta<T>(
-    await fetch(`${API_URL}${caminho}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(corpo),
-    }),
-  )
+  return requisitar<T>(caminho, { method: 'POST', body: corpo })
 }
 
 /** Consulta a sonda de saúde da API. */
