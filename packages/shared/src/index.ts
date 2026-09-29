@@ -6,5 +6,6 @@
  */
 export * from './customer.js'
 export * from './order.js'
+export * from './order-status.js'
 export * from './phone.js'
 export * from './postal-code.js'
