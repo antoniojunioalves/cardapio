@@ -63,7 +63,11 @@ A Fase 8 foi dividida em duas a pedido do Junio: **8a**, a API pública, e **8b*
 | 6   | Testes: 10 da regra de disponibilidade, 24 da rota                                      | ✅     |
 | 7   | ROADMAP: preço de combo parametrizável (fixo, percentual ou valor) por estabelecimento  | ✅     |
 
-### Decisões desta fase
+### Duas divergências do escopo original, deliberadas
+
+**Adicionais e remoções são grupos de opção**, e não uma tabela `product_addons`. A estrutura é a
+mesma — lista de escolhas com preço e limite de seleções —, e uma tabela à parte daria ao cálculo
+do pedido duas regras em vez de uma.
 
 **Uma rota só**, com cabeçalho, status, entrega, pagamento e cardápio. É o que a página precisa
 para desenhar a primeira tela; dividir em várias chamadas atrasaria a primeira pintura no celular.
