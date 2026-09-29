@@ -15,11 +15,13 @@ import { registerUploads } from './plugins/uploads.js'
 import { adminCatalogRoutes } from './routes/admin-catalog.js'
 import { adminCustomizationRoutes } from './routes/admin-customization.js'
 import { adminImageRoutes } from './routes/admin-images.js'
+import { adminOrderRoutes } from './routes/admin-orders.js'
 import { adminSettingsRoutes } from './routes/admin-settings.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
 import { publicCustomerRoutes } from './routes/public-customers.js'
 import { publicMenuRoutes } from './routes/public-menu.js'
+import { publicOrderRoutes } from './routes/public-orders.js'
 
 export interface BuildAppOptions {
   /** Substituível nos testes para exercitar o caminho de banco indisponível. */
@@ -76,8 +78,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(adminImageRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCatalogRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCustomizationRoutes, { prefix: '/api/v1/admin' })
+  await instance.register(adminOrderRoutes, { prefix: '/api/v1/admin' })
   await instance.register(publicMenuRoutes, { prefix: '/api/v1/public' })
   await instance.register(publicCustomerRoutes, { prefix: '/api/v1/public' })
+  await instance.register(publicOrderRoutes, { prefix: '/api/v1/public' })
 
   return instance
 }

@@ -8,7 +8,9 @@ import {
 import { statusDoEstabelecimento, type StatusDoEstabelecimento } from '../settings/opening-hours.js'
 import { urlDaImagem, type StorageService } from '../storage/index.js'
 import { resolverEstabelecimentoPublico } from '../tenant/public.js'
-import { withTenant } from '../tenant/with-tenant.js'
+import type { TenantContext } from '../tenant/context.js'
+import type { TenantRecord } from '../tenant/repository.js'
+import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
 import { podeSerPedido } from './availability.js'
 import { carregarCardapio, type CardapioCarregado } from './repository.js'
 
@@ -114,75 +116,91 @@ export async function obterCardapioPublico(
   agora: Date = new Date(),
 ): Promise<CardapioPublico> {
   const { tenant, context } = await resolverEstabelecimentoPublico(slug)
+  return withTenant(context, (tx) => montarCardapioPublico(tx, context, tenant, storage, agora))
+}
 
-  return withTenant(context, async (tx) => {
-    const configuracoes = await ensureSettings(tx, context)
-    const intervalos = await listBusinessHours(tx)
-    const entrega = await ensureDeliverySettings(tx, context)
-    const regioes = await listDeliveryRegions(tx)
-    const formas = await listPaymentMethods(tx)
-    const cardapio = await carregarCardapio(tx)
+/**
+ * Monta o cardápio público dentro de uma transação já aberta.
+ *
+ * Separado de `obterCardapioPublico` para o pedido (Fase 11) usar **a mesma
+ * visão** que o cliente recebeu: as mesmas categorias ativas, a mesma
+ * disponibilidade, as mesmas regiões e formas de pagamento. Se o pedido
+ * montasse a sua própria, cedo ou tarde uma regra divergiria da outra, e o
+ * cardápio ofereceria o que o pedido recusa — ou o contrário.
+ */
+export async function montarCardapioPublico(
+  tx: TenantTransaction,
+  context: TenantContext,
+  tenant: Pick<TenantRecord, 'slug' | 'name' | 'timezone'>,
+  storage: StorageService,
+  agora: Date,
+): Promise<CardapioPublico> {
+  const configuracoes = await ensureSettings(tx, context)
+  const intervalos = await listBusinessHours(tx)
+  const entrega = await ensureDeliverySettings(tx, context)
+  const regioes = await listDeliveryRegions(tx)
+  const formas = await listPaymentMethods(tx)
+  const cardapio = await carregarCardapio(tx)
 
-    const porRegiao = entrega.feeMode === 'BY_REGION'
+  const porRegiao = entrega.feeMode === 'BY_REGION'
 
-    return {
-      establishment: {
-        slug: tenant.slug,
-        name: tenant.name,
-        description: configuracoes.description,
-        logoUrl: urlDaImagem(storage, configuracoes.logoKey),
-        coverUrl: urlDaImagem(storage, configuracoes.coverKey),
-        timezone: tenant.timezone,
-        // Público por necessidade: é o número para onde o pedido será enviado.
-        whatsappPhone: configuracoes.whatsappPhone,
-        contactPhone: configuracoes.contactPhone,
-        address: configuracoes.addressStreet
-          ? {
-              street: configuracoes.addressStreet,
-              number: configuracoes.addressNumber,
-              complement: configuracoes.addressComplement,
-              neighborhood: configuracoes.addressNeighborhood,
-              city: configuracoes.addressCity,
-              state: configuracoes.addressState,
-              postalCode: configuracoes.addressPostalCode,
-            }
-          : null,
-        prepTimeMinMinutes: configuracoes.prepTimeMinMinutes,
-        prepTimeMaxMinutes: configuracoes.prepTimeMaxMinutes,
-        minimumOrderInCents: configuracoes.minimumOrderInCents,
-      },
-      status: statusDoEstabelecimento({
-        intervalos,
-        timezone: tenant.timezone,
-        aceitandoPedidos: configuracoes.isAcceptingOrders,
-        agora,
-      }),
-      hours: intervalos.map((i) => ({
-        dayOfWeek: i.dayOfWeek,
-        opensAt: i.opensAt,
-        closesAt: i.closesAt,
-      })),
-      delivery: {
-        deliveryEnabled: entrega.deliveryEnabled,
-        pickupEnabled: entrega.pickupEnabled,
-        feeMode: entrega.feeMode,
-        fixedFeeInCents: porRegiao ? null : entrega.fixedFeeInCents,
-        // Região inativa conta como inexistente, como no cálculo da taxa.
-        regions: porRegiao
-          ? regioes
-              .filter((r) => r.isActive)
-              .map((r) => ({ id: r.id, name: r.name, feeInCents: r.feeInCents }))
-          : [],
-        estimatedMinMinutes: entrega.estimatedMinMinutes,
-        estimatedMaxMinutes: entrega.estimatedMaxMinutes,
-      },
-      paymentMethods: formas
-        .filter((f) => f.isEnabled)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((f) => ({ id: f.id, code: f.code, name: f.name, kind: f.kind })),
-      categories: montarCategorias(cardapio, storage),
-    }
-  })
+  return {
+    establishment: {
+      slug: tenant.slug,
+      name: tenant.name,
+      description: configuracoes.description,
+      logoUrl: urlDaImagem(storage, configuracoes.logoKey),
+      coverUrl: urlDaImagem(storage, configuracoes.coverKey),
+      timezone: tenant.timezone,
+      // Público por necessidade: é o número para onde o pedido será enviado.
+      whatsappPhone: configuracoes.whatsappPhone,
+      contactPhone: configuracoes.contactPhone,
+      address: configuracoes.addressStreet
+        ? {
+            street: configuracoes.addressStreet,
+            number: configuracoes.addressNumber,
+            complement: configuracoes.addressComplement,
+            neighborhood: configuracoes.addressNeighborhood,
+            city: configuracoes.addressCity,
+            state: configuracoes.addressState,
+            postalCode: configuracoes.addressPostalCode,
+          }
+        : null,
+      prepTimeMinMinutes: configuracoes.prepTimeMinMinutes,
+      prepTimeMaxMinutes: configuracoes.prepTimeMaxMinutes,
+      minimumOrderInCents: configuracoes.minimumOrderInCents,
+    },
+    status: statusDoEstabelecimento({
+      intervalos,
+      timezone: tenant.timezone,
+      aceitandoPedidos: configuracoes.isAcceptingOrders,
+      agora,
+    }),
+    hours: intervalos.map((i) => ({
+      dayOfWeek: i.dayOfWeek,
+      opensAt: i.opensAt,
+      closesAt: i.closesAt,
+    })),
+    delivery: {
+      deliveryEnabled: entrega.deliveryEnabled,
+      pickupEnabled: entrega.pickupEnabled,
+      feeMode: entrega.feeMode,
+      fixedFeeInCents: porRegiao ? null : entrega.fixedFeeInCents,
+      // Região inativa conta como inexistente, como no cálculo da taxa.
+      regions: porRegiao
+        ? regioes
+            .filter((r) => r.isActive)
+            .map((r) => ({ id: r.id, name: r.name, feeInCents: r.feeInCents }))
+        : [],
+      estimatedMinMinutes: entrega.estimatedMinMinutes,
+      estimatedMaxMinutes: entrega.estimatedMaxMinutes,
+    },
+    paymentMethods: formas
+      .filter((f) => f.isEnabled)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((f) => ({ id: f.id, code: f.code, name: f.name, kind: f.kind })),
+    categories: montarCategorias(cardapio, storage),
+  }
 }
 
 function montarCategorias(
