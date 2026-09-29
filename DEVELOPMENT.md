@@ -159,7 +159,8 @@ Campo que a API também valida usa o schema de `@repo/shared`, nunca uma cópia.
 do estabelecimento (região, forma aceita, troco) vai num schema montado com o cardápio — veja
 `criarSchemaDoCheckout`. Atenção ao Zod 4: o `superRefine` não roda quando um campo da base já
 falhou; para mostrar todos os erros de uma vez, deixe a base aceitar texto e valide tudo no
-`superRefine`.
+`superRefine`. E a base precisa aceitar `null`: grupo de rádios sem nada marcado chega assim
+depois que o foco passa por ele, e um `z.string()` puro derruba a base inteira.
 
 ### Código compartilhado entre API e web
 

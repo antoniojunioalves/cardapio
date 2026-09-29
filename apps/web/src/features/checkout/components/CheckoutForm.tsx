@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { mascararCepDigitado, mascararTelefoneDigitado, normalizarTelefone } from '@repo/shared'
 import { useEffect, useRef, useState } from 'react'
-import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form'
+import { Controller, useForm, useWatch, type FieldErrors, type Resolver } from 'react-hook-form'
 
 import { TextField } from '@/components/TextField'
 import type { LinhaDoCarrinho, ResumoDoCarrinho } from '@/features/cart/cart'
@@ -55,7 +55,15 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo }: CheckoutFormPro
   const form = useForm<ValoresDoCheckout, unknown, DadosDoCheckout>({
     resolver: (valores, contexto, opcoes) => {
       if (!schemaAtual.current) throw new Error('schema do checkout ainda não montado')
-      return zodResolver(schemaAtual.current)(valores, contexto, opcoes)
+      // O schema aceita também `null` em cada campo (rádio sem nada marcado); os
+      // valores do formulário, só texto, cabem nele. O TypeScript não prova isso
+      // para as opções do resolver, daí a conversão.
+      const resolver = zodResolver(schemaAtual.current) as unknown as Resolver<
+        ValoresDoCheckout,
+        unknown,
+        DadosDoCheckout
+      >
+      return resolver(valores, contexto, opcoes)
     },
     defaultValues: {
       ...VALORES_INICIAIS,

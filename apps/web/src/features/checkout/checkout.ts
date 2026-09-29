@@ -150,7 +150,8 @@ function enderecoDosValores(v: Record<(typeof CAMPOS_DO_ENDERECO)[number], strin
  * regras que dependem do estabelecimento (região, forma de pagamento aceita,
  * troco a partir do total) vêm junto.
  *
- * A base aceita tudo como texto, e toda regra roda num `superRefine` só: no
+ * A base aceita tudo como texto (ou nulo, lido como vazio), e toda regra roda
+ * num `superRefine` só: no
  * Zod 4 o `superRefine` não roda quando um campo da base já falhou, e a pessoa
  * veria o erro do telefone, corrigiria, e só então descobriria os outros.
  */
@@ -161,9 +162,17 @@ export function criarSchemaDoCheckout(contexto: ContextoDoCheckout) {
   const porRegiao = delivery.feeMode === 'BY_REGION'
   const observacaoSchema = textoOpcional(OBSERVACAO_DO_PEDIDO_MAXIMA)
 
+  // Grupo de rádios sem nada marcado chega como `null`: o `onBlur` do React
+  // Hook Form relê o valor do DOM, e basta o foco passar pelo grupo. Tratado
+  // como vazio, cai na mensagem do `superRefine` em vez do erro cru do Zod —
+  // e, principalmente, não faz a base falhar e esconder as demais regras.
+  const texto = z
+    .string()
+    .nullish()
+    .transform((valor) => valor ?? '')
   const campos = Object.fromEntries(
-    Object.keys(VALORES_INICIAIS).map((campo) => [campo, z.string()]),
-  ) as Record<keyof ValoresDoCheckout, z.ZodString>
+    Object.keys(VALORES_INICIAIS).map((campo) => [campo, texto]),
+  ) as Record<keyof ValoresDoCheckout, typeof texto>
 
   return z
     .object(campos)

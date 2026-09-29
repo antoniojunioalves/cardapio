@@ -169,6 +169,24 @@ describe('formulário', () => {
     })
   })
 
+  it('rádio sem nada marcado (null) vira a mensagem tratada, sem esconder os outros erros', () => {
+    // O `onBlur` do React Hook Form relê um grupo de rádios sem nada marcado
+    // como `null` — basta o foco passar por ele.
+    const comNulos = {
+      ...VALORES_INICIAIS,
+      fulfillment: 'DELIVERY',
+      paymentMethodId: null,
+      savedAddressId: null,
+    } as unknown as ValoresDoCheckout
+
+    const erros = errosDe(conferir(comNulos))
+
+    expect(erros.paymentMethodId).toBe('Escolha a forma de pagamento.')
+    expect(erros.postalCode).toBe('Informe o CEP.')
+    expect(erros.street).toBe('Informe a rua.')
+    expect(Object.values(erros).join(' ')).not.toContain('Invalid input')
+  })
+
   it('retirada não pede endereço, e o telefone sai normalizado', () => {
     const resultado = conferir(valores())
 

@@ -117,6 +117,11 @@ continua copiado no web — migrá-lo é mudança à parte.
 um campo da base já falhou: a pessoa veria o erro do telefone e só depois os demais. A base aceita
 tudo como texto, e um teste exige os quatro erros de um formulário vazio de uma vez.
 
+**Grupo de rádios sem nada marcado chega como `null`**, não como vazio: o `onBlur` do React Hook
+Form relê o valor do DOM, e basta o foco passar pelo grupo. Na validação isso mostrou o erro cru
+do Zod no pagamento e, pior, fez a base falhar e esconder as regras do endereço até o pagamento
+ser escolhido. A base do schema passou a ler `null` como vazio, e dois testes reproduzem o caso.
+
 **O endereço mais recente vem marcado**, e trocar o telefone some com os endereços do número
 anterior — a resposta vale só para o número que está no campo.
 
@@ -131,7 +136,7 @@ se resolve no carrinho. Estabelecimento fechado deixa chegar ao checkout, que av
 | Verificação                                | Resultado                                                         |
 | ------------------------------------------ | ----------------------------------------------------------------- |
 | `pnpm typecheck` / `lint` / `build`        | zero erro                                                         |
-| `pnpm test`                                | **459 testes** (332 API + 114 web + 13 shared)                    |
+| `pnpm test`                                | **461 testes** (332 API + 116 web + 13 shared)                    |
 | Testes sensíveis à regra                   | sem máscara, sem limite e sem a trava do telefone: cada um cai    |
 | API rodando: preflight, identificação, 400 | CORS libera o POST; endereços mascarados; cada tenant a sua Maria |
 | Vite em dev resolve `@repo/shared`         | sim, pelo `dist` do pacote                                        |

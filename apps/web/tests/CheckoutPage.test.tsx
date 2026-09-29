@@ -116,6 +116,20 @@ describe('checkout', () => {
     expect(campo('Nome')).toHaveAccessibleDescription('Informe seu nome.')
   })
 
+  it('o foco passar pelo pagamento sem escolher não esconde os erros do endereço', async () => {
+    await abrirCheckout()
+    fireEvent.click(screen.getByRole('radio', { name: 'Entrega' }))
+    fireEvent.blur(screen.getByRole('radio', { name: 'Pix' }))
+    fireEvent.click(botaoDeEnviar())
+
+    // Já no primeiro envio: pagamento com a mensagem tratada, e o endereço junto.
+    expect(await screen.findByText('Escolha a forma de pagamento.')).toBeVisible()
+    expect(screen.getByText('Informe o CEP.')).toBeVisible()
+    expect(screen.getByText('Informe a rua.')).toBeVisible()
+    expect(screen.getByText('Informe o bairro.')).toBeVisible()
+    expect(screen.queryByText(/Invalid input/)).not.toBeInTheDocument()
+  })
+
   it('o telefone ganha máscara enquanto é digitado', async () => {
     await abrirCheckout()
     escrever('Telefone (WhatsApp)', '11987654321')
