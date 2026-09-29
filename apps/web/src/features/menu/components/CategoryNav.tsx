@@ -40,7 +40,7 @@ export function CategoryNav({ categorias }: { categorias: readonly CategoriaPubl
   return (
     <nav
       aria-label="Categorias"
-      className="sticky top-0 z-10 border-b border-border bg-surface-muted/95 backdrop-blur"
+      className="sticky top-0 z-10 mt-stack border-b border-border bg-surface-muted/95 backdrop-blur"
     >
       <ul className="mx-auto flex max-w-3xl gap-2 overflow-x-auto px-page-x py-2 [scrollbar-width:none]">
         {categorias.map((categoria) => {

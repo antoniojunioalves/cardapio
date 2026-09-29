@@ -101,6 +101,17 @@ describe('cardápio público', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Combos' })).toBeInTheDocument()
   })
 
+  it('a faixa de categorias fica no mesmo contêiner que o cardápio, para continuar fixa', async () => {
+    await abrirCardapio()
+
+    // O jsdom não calcula layout, então o teste trava a causa: um elemento
+    // `sticky` só fica preso enquanto o pai está na tela. Se a faixa for
+    // envolvida num elemento da altura dela, ela volta a sumir ao rolar.
+    const nav = screen.getByRole('navigation', { name: 'Categorias' })
+    expect(nav).toHaveClass('sticky')
+    expect(nav.parentElement).toContainElement(screen.getByRole('main'))
+  })
+
   it('tocar numa categoria rola até ela e a destaca', async () => {
     await abrirCardapio()
 

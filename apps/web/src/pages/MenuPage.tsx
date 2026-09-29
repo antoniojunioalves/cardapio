@@ -81,9 +81,12 @@ export function MenuPage() {
         />
       </div>
 
-      <div className="mt-stack">
-        <CategoryNav categorias={categorias} />
-      </div>
+      {/*
+       * Filho direto do contêiner da página, sem envoltório: um elemento
+       * `sticky` só fica preso enquanto o pai dele está na tela. Dentro de um
+       * <div> da altura da própria faixa, ela subia junto com o <div>.
+       */}
+      <CategoryNav categorias={categorias} />
 
       <main className="mx-auto mt-stack flex max-w-3xl flex-col gap-section-y px-page-x">
         {vazio && (

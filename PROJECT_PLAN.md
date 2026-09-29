@@ -76,6 +76,10 @@ menor tamanho, e sem o aviso o cartão enganaria.
 
 **Produto esgotado aparece apagado, com selo**, em vez de sumir.
 
+**A faixa de categorias é filha direta do contêiner da página.** Na validação ela subia junto com a
+rolagem: estava dentro de um `<div>` da própria altura, e `sticky` só prende enquanto o pai está na
+tela. Um teste trava essa estrutura, já que o jsdom não calcula layout.
+
 **O contrato da API está copiado** em `apps/web/src/features/menu/types.ts`. Ainda não há
 `packages/shared`; ele entra quando houver um segundo contrato compartilhado que justifique.
 
@@ -87,7 +91,7 @@ cores do estabelecimento; a página usa o tema do produto. Registrado no ROADMAP
 | Verificação                            | Resultado                                         |
 | -------------------------------------- | ------------------------------------------------- |
 | `pnpm typecheck` / `lint` / `build`    | zero erro                                         |
-| `pnpm test`                            | **351 testes** (314 API + 37 web)                 |
+| `pnpm test`                            | **352 testes** (314 API + 38 web)                 |
 | `pnpm dev`: web em `/lanchonete-do-ze` | 200; API com CORS para a origem da web e no-cache |
 | Conferência visual no navegador        | a fazer na validação                              |
 
