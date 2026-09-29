@@ -1,20 +1,19 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-28
-**Fase atual:** 7b — concluída, aguardando validação
-**Próxima:** Fase 8 — cardápio público
+**Fase atual:** 8a — concluída, aguardando validação
+**Próxima:** Fase 8b — página do cardápio público
 
 ---
 
 ## Estado atual
 
-**O catálogo está completo na API.** Categorias, produtos com imagem, grupos de opção — tamanho,
-adicionais, remoções — reutilizáveis entre produtos, e combos com cálculo de quanto os itens
-custariam separados. Tudo com permissão, auditoria e isolamento comprovado, inclusive nas
-referências entre tabelas.
+**O cardápio público existe na API.** `GET /api/v1/public/{tenantSlug}/menu` devolve, sem login, o
+estabelecimento, se está aberto agora, as condições de entrega, as formas de pagamento e o
+cardápio com grupos de opção e combos — com a disponibilidade já calculada.
 
-**Ainda não existe:** cardápio público, carrinho, pedidos, e nenhuma tela no frontend. A Fase 8 é
-a primeira em que o cliente final verá alguma coisa.
+**Ainda não existe:** nenhuma tela para o cliente final, carrinho e pedidos. A Fase 8b é a
+primeira em que o cliente final verá alguma coisa.
 
 ---
 
@@ -26,11 +25,13 @@ a primeira em que o cliente final verá alguma coisa.
 | 1   | Monorepo, tooling, Docker, PostgreSQL                                                                               | ✅ Concluída |
 | 2   | Base do backend: Drizzle, migrations, `/ready`, rate limiting, OpenAPI                                              | ✅ Concluída |
 | 3   | Multi-tenancy: modelo, `TenantContext`, RLS, testes de isolamento, tabelas de plano                                 | ✅ Concluída |
-| 4   | Autenticação administrativa, RBAC e `audit_logs` — _auditoria subiu da 15_                                          | ⬜ Próxima   |
+| 4   | Autenticação administrativa, RBAC e `audit_logs` — _auditoria subiu da 15_                                          | ✅ Concluída |
 | 5   | Tenant e configurações: estabelecimento, horários, entrega, pedido mínimo, pagamentos — _absorveu a antiga fase 13_ | ✅ Concluída |
-| 6   | Storage de imagens: `StorageService` + provider local — _subiu da 14_                                               | ⬜           |
-| 7   | Catálogo: categorias, produtos, grupos de opções, adicionais, combos                                                | ⬜           |
-| 8   | Cardápio público                                                                                                    | ⬜           |
+| 6   | Storage de imagens: `StorageService` + provider local — _subiu da 14_                                               | ✅ Concluída |
+| 7a  | Catálogo: categorias e produtos                                                                                     | ✅ Concluída |
+| 7b  | Catálogo: grupos de opção, adicionais, remoções e combos                                                            | ✅ Concluída |
+| 8a  | Cardápio público — API                                                                                              | ✅ Concluída |
+| 8b  | Cardápio público — página no frontend                                                                               | ⬜ Próxima   |
 | 9   | Carrinho                                                                                                            | ⬜           |
 | 10  | Customer e checkout                                                                                                 | ⬜           |
 | 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ⬜           |
@@ -46,67 +47,70 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 7b — concluída
+## Fase 8a — concluída
+
+A Fase 8 foi dividida em duas a pedido do Junio: **8a**, a API pública, e **8b**, a página.
 
 ### Microtasks
 
-| #   | Tarefa                                                                              | Status |
-| --- | ----------------------------------------------------------------------------------- | ------ |
-| 1   | Tipo de produto `SIMPLE`/`COMBO`, imutável                                          | ✅     |
-| 2   | `option_groups`, `options`, `product_option_groups`, `combo_items`, com FK composta | ✅     |
-| 3   | Regra pura de coerência do grupo: mínimo não pode exceder as opções                 | ✅     |
-| 4   | Edição de grupo com opções: altera, cria e remove numa transação                    | ✅     |
-| 5   | Ligação ordenada de grupos a produtos                                               | ✅     |
-| 6   | Composição de combo, com preço avulso e disponibilidade dos componentes             | ✅     |
-| 7   | Exclusões recusadas: grupo em uso e produto que é componente                        | ✅     |
-| 8   | Nove rotas sob a tag Personalização                                                 | ✅     |
-| 9   | Seed com adicionais, remoções, tamanho, borda e um combo                            | ✅     |
-| 10  | Testes: 7 de domínio, 21 de rota, 11 de isolamento                                  | ✅     |
-
-### Duas divergências do escopo original, deliberadas
-
-**Adicionais e remoções são grupos de opção**, e não uma tabela `product_addons`. A estrutura é a
-mesma — lista de escolhas com preço e limite de seleções —, e uma tabela à parte daria ao cálculo
-do pedido duas regras em vez de uma.
-
-**Combo é um produto do tipo `COMBO`**, e não uma tabela `combos`. No cardápio ele se comporta
-como produto, e uma tabela à parte obrigaria carrinho e pedido a tratar dois tipos de item.
+| #   | Tarefa                                                                                  | Status |
+| --- | --------------------------------------------------------------------------------------- | ------ |
+| 1   | Regra pura de disponibilidade: produto, componente do combo, grupo obrigatório esgotado | ✅     |
+| 2   | Leitura do cardápio em cinco consultas fixas, sem uma por produto                       | ✅     |
+| 3   | Resolução pelo slug: inexistente, suspenso e formato impossível respondem o mesmo 404   | ✅     |
+| 4   | Resposta montada campo a campo, com schema de resposta como segunda barreira            | ✅     |
+| 5   | `GET /api/v1/public/{tenantSlug}/menu`, sem login, com `Cache-Control: no-cache`        | ✅     |
+| 6   | Testes: 10 da regra de disponibilidade, 24 da rota                                      | ✅     |
+| 7   | ROADMAP: preço de combo parametrizável (fixo, percentual ou valor) por estabelecimento  | ✅     |
 
 ### Decisões desta fase
 
-**Grupos reutilizáveis**: "Adicionais" é ligado a vários produtos, e trocar o preço do bacon é uma
-edição só.
+**Uma rota só**, com cabeçalho, status, entrega, pagamento e cardápio. É o que a página precisa
+para desenhar a primeira tela; dividir em várias chamadas atrasaria a primeira pintura no celular.
 
-**Acréscimo nunca negativo**: o preço base é o do menor tamanho. Elimina total negativo.
+**Suspenso responde igual a inexistente.** "Suspenso" revelaria a situação comercial de um cliente
+da plataforma a qualquer um que digitasse o endereço.
 
-**"Obrigatório" derivado** de `minSelections >= 1`, nunca gravado.
+**Disponibilidade calculada no servidor, em três níveis:** o produto esgotado; o combo com um
+componente esgotado; e o produto cujo grupo obrigatório não tem mais opções suficientes — "todos os
+tamanhos acabaram". Adicional opcional esgotado não tira o lanche do cardápio. Produto
+indisponível **aparece marcado**, em vez de sumir, para o cliente não achar que o cardápio mudou.
 
-**Grupo que exige mais escolhas do que tem opções é recusado**: tornaria o produto impossível de
-pedir.
+**Categoria inativa some com os produtos; categoria ativa sem produto também some.**
+
+**WhatsApp e telefone de contato são públicos**, porque o pedido será enviado para esse número. O
+e-mail de contato e a pausa manual (`isAcceptingOrders`) não saem — a pausa aparece como status
+`PAUSADO`.
+
+**Sem cache.** Aberto/fechado e esgotado mudam de um minuto para o outro; guardar a resposta
+mostraria a lanchonete aberta depois de fechar. Cache de borda com invalidação está no ROADMAP.
 
 ### Verificação executada
 
-| Verificação                                     | Resultado                           |
-| ----------------------------------------------- | ----------------------------------- |
-| `pnpm typecheck` / `lint` / `build`             | zero erro                           |
-| `pnpm test`                                     | **284 testes** (280 API + 4 web)    |
-| Guardas de RLS e de FK sobre as 4 tabelas novas | passam                              |
-| Combo do seed pela API                          | avulso R$ 46,90, combo R$ 39,90     |
-| Excluir o X-Salada, componente do combo         | 409, "faz parte de: Combo X-Salada" |
-| PATCH com `type`                                | 400 por campo não reconhecido       |
+| Verificação                         | Resultado                                              |
+| ----------------------------------- | ------------------------------------------------------ |
+| `pnpm typecheck` / `lint` / `build` | zero erro                                              |
+| `pnpm test`                         | **318 testes** (314 API + 4 web)                       |
+| Cardápio do seed pela rota real     | 4 categorias, combo com avulso R$ 46,90, suco esgotado |
+| Slug inexistente                    | 404                                                    |
 
 ---
 
-## Fase 8 — próxima
+## Fase 8b — próxima
 
-O cardápio público em `/{tenantSlug}`: a primeira tela para o cliente final. Uma rota pública da
-API que resolve o slug e devolve estabelecimento, status de aberto/fechado, taxa, pedido mínimo e
-o cardápio com grupos e combos; e, no frontend, a página mobile-first com cabeçalho, busca,
-categorias horizontais e cartões de produto.
+A página do cardápio em `/{tenantSlug}`, mobile-first: cabeçalho com logo, capa e status
+aberto/fechado, taxa e pedido mínimo, busca, categorias horizontais e cartões de produto com
+disponibilidade. Primeira fase com roteamento no frontend e com o tema do estabelecimento aplicado.
+Seleção de opções e carrinho ficam para a Fase 9.
 
 ---
 
 ## Fases anteriores
+
+**Fase 7b** entregou grupos de opção reutilizáveis — tamanho, adicionais e remoções num modelo
+só — e combos como produtos do tipo `COMBO`, divergindo de propósito do escopo original. Grupo
+que exigiria mais escolhas do que tem opções é recusado, porque tornaria o produto impossível de
+pedir.
 
 **Fase 7a** entregou categorias e produtos. Descobriu-se ali que a checagem de chave
 estrangeira do PostgreSQL roda por fora do RLS; desde então toda FK entre tabelas tenant-scoped é

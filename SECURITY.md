@@ -182,6 +182,22 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
 
 ---
 
+### Área pública — **em vigor**
+
+`GET /api/v1/public/{tenantSlug}/menu` é a única rota sem login. O que a protege:
+
+- **O tenant vem só do slug**, traduzido para id pelo servidor. Um token de outro estabelecimento
+  enviado junto é ignorado — há teste para isso.
+- **Estabelecimento suspenso responde o mesmo 404 de um inexistente**, sem revelar a suspensão.
+- **Resposta montada campo a campo**, sem repassar linhas do banco. O schema de resposta descarta
+  o que não estiver declarado, e um teste percorre a resposta inteira procurando campos internos
+  (`tenantId`, chaves de storage, `sortOrder`, `isActive`, e-mail de contato, entre outros).
+- **Expõe de propósito:** nome, descrição, imagens, WhatsApp e telefone de contato (o pedido é
+  enviado para esse número), endereço do estabelecimento (retirada), horários, regiões ativas com
+  taxa e formas de pagamento habilitadas. **Não expõe:** e-mail de contato, regiões inativas,
+  formas desabilitadas, categorias inativas.
+- Vale o limite global de requisições.
+
 ## 8. Cabeçalhos, CORS e limites
 
 | Item             | Estado                                                                                                |

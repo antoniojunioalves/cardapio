@@ -9,9 +9,10 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 7b concluída.** O catálogo está completo na API: categorias, produtos com
-imagem, **grupos de opção** — tamanho, adicionais, remoções — e **combos**. A próxima fase é o
-cardápio público, a primeira tela que o cliente final vai ver. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 8a concluída.** O catálogo está completo na API, e o **cardápio público** já
+responde sem login em `GET /api/v1/public/{tenantSlug}/menu` — estabelecimento, aberto/fechado,
+entrega, pagamento e produtos com disponibilidade calculada. A próxima fase é a página que o
+cliente final vai ver. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 
@@ -19,6 +20,8 @@ Depois de `pnpm db:seed`, dá para entrar com:
 | --------------------- | ----------------- | ------------- |
 | `lanchonete-do-ze`    | `ze@exemplo.com`  | `cardapio123` |
 | `pizzaria-da-esquina` | `ana@exemplo.com` | `cardapio123` |
+
+E o cardápio público, sem login: `curl http://localhost:3333/api/v1/public/lanchonete-do-ze/menu`.
 
 ---
 

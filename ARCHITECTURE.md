@@ -691,8 +691,27 @@ opção, como "escolha a bebida".
   ser vendido pelo mesmo preço com um item a menos.
 - A consulta devolve `precoAvulsoEmCentavos` — quanto os itens custariam separados, para o
   cardápio mostrar a economia — e `todosDisponiveis`, falso se algum componente estiver esgotado.
-  Um combo com componente esgotado não deve ser vendido; quem aplica isso é o cardápio público, na
-  Fase 8, e o cálculo do pedido, na Fase 11.
+  Um combo com componente esgotado não deve ser vendido; o cardápio público já o marca como
+  indisponível (8.8), e o cálculo do pedido, na Fase 11, vai recusá-lo.
+- **O preço do combo é fixo**, digitado pelo lojista. Preço por percentual ou por desconto sobre a
+  soma dos itens, escolhido por estabelecimento, está no ROADMAP.
+
+### 8.8 Cardápio público
+
+`GET /api/v1/public/{tenantSlug}/menu` resolve o slug, abre o contexto com
+`tenantContextFromPublicSlug` e devolve tudo o que a primeira tela precisa numa chamada:
+estabelecimento, status, horários, entrega, formas de pagamento e cardápio.
+
+- **Cinco consultas fixas** para o cardápio — categorias, produtos, vínculos com grupos, opções,
+  componentes de combo —, independente do número de produtos. Um grupo usado por dez produtos é
+  lido uma vez.
+- **A disponibilidade é calculada no servidor** por uma regra pura
+  (`src/public-menu/availability.ts`): produto esgotado; combo sem componentes ou com componente
+  esgotado; grupo obrigatório sem opções disponíveis suficientes. A mesma regra vai ser usada pelo
+  cálculo do pedido na Fase 11 — o que o cardápio mostra é informativo, quem recusa é o pedido.
+- **A resposta é montada campo a campo** em `src/public-menu/service.ts`, nunca por spread de
+  linha do banco: uma coluna nova não pode vazar para o público só por existir.
+- **Sem cache** (`Cache-Control: no-cache`): status e disponibilidade mudam a cada minuto.
 
 ---
 
