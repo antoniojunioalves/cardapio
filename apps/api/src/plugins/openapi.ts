@@ -38,6 +38,10 @@ export async function registerOpenApi(instance: FastifyInstance): Promise<void> 
         },
         { name: 'Catálogo', description: 'Categorias e produtos' },
         { name: 'Personalização', description: 'Grupos de opção, adicionais, remoções e combos' },
+        {
+          name: 'Cardápio público',
+          description: 'Área sem login, resolvida pelo slug do estabelecimento',
+        },
       ],
       components: {
         securitySchemes: {

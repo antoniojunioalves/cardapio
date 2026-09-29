@@ -274,6 +274,15 @@ o registro de tenants; usá-lo com dado de estabelecimento devolve zero linhas, 
 encontra contexto. O sintoma é "sumiu tudo", não um vazamento — falha fechada, mas confusa se
 você não souber a causa.
 
+### Expondo dados na área pública
+
+Rotas sem login ficam em `src/routes/public-*.ts`, sob `/api/v1/public`, e o contexto nasce de
+`tenantContextFromPublicSlug` depois de `findTenantBySlug` — recusando estabelecimento suspenso
+com o mesmo 404 de um inexistente. A resposta é montada **campo a campo**, nunca com spread de
+uma linha do banco, e o teste da rota procura campos internos na resposta inteira. Ao expor um
+campo novo, acrescente-o nos três lugares: o serviço, o schema de resposta e, se for interno, a
+lista de proibidos do teste.
+
 Nos testes de componente, busque pelo que a pessoa usuária percebe — papel, rótulo, texto — e não
 por classe CSS ou `data-testid`. Um teste que quebra ao renomear uma classe não estava testando
 comportamento.

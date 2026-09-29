@@ -88,6 +88,46 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Pedir novamente a partir do histórico
 - Lista de favoritos
 
+## Catálogo
+
+### Preço do combo parametrizável por estabelecimento
+
+Pedido na validação da Fase 7b. Hoje o preço do combo é **fixo**, digitado pelo lojista, e não
+acompanha os itens: se o X-Salada sobe de R$ 25,90 para R$ 27,90, o combo continua a R$ 39,90 até
+alguém mudá-lo. A API já mostra o preço avulso ao lado, para o lojista perceber a diferença.
+
+A evolução é deixar **cada estabelecimento escolher** o modo, porque a prática varia:
+
+| Modo              | Como o preço é formado    | Exemplo                                   |
+| ----------------- | ------------------------- | ----------------------------------------- |
+| Fixo (atual)      | Valor digitado            | Combo a R$ 39,90                          |
+| Percentual        | Soma dos itens menos X%   | Soma R$ 46,90, 15% de desconto → R$ 39,87 |
+| Desconto em valor | Soma dos itens menos R$ Y | Soma R$ 46,90 − R$ 7,00 → R$ 39,90        |
+
+Pontos a decidir quando for implementado:
+
+- **Onde fica o parâmetro:** um padrão por estabelecimento, com possibilidade de sobrescrever
+  por combo.
+- **Arredondamento:** percentual gera centavos quebrados (R$ 39,87). A regra de arredondamento
+  precisa ser única e explícita — é a mesma questão registrada para cupons.
+- **O preço do pedido continua congelado** no momento da compra, como hoje: mudar o preço de um
+  item não altera pedidos já feitos.
+- **Auditoria:** no modo percentual, alterar o preço de um item muda o preço de todos os combos
+  que o contêm. O registro precisa deixar isso rastreável.
+
+### Cache do cardápio público
+
+Hoje o cardápio público não usa cache: status e disponibilidade mudam a cada minuto. Com volume, a
+evolução é separar o que muda pouco (cardápio, imagens) do que muda sempre (status, esgotados),
+cachear a primeira parte na borda e invalidar a cada edição do lojista.
+
+### Personalização dos componentes de um combo
+
+Hoje os componentes de um combo vão no padrão, sem escolha de opções: o X-Salada do combo não
+pergunta se o cliente quer bacon. O combo pode ter grupos de opção próprios ("escolha a bebida"),
+mas não herda os do componente. Levar os grupos dos componentes para dentro do combo é uma
+evolução com impacto no carrinho e no cálculo do pedido.
+
 ## Crescimento e retenção
 
 - Cupons de desconto

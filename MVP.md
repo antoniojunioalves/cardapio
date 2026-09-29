@@ -36,12 +36,13 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### Cardápio público
 
-- [ ] Acesso por `/{tenantSlug}`, sem login
-- [ ] Cabeçalho do estabelecimento com status aberto/fechado e horário
-- [ ] Taxa de entrega e pedido mínimo visíveis
+- [ ] Acesso por `/{tenantSlug}`, sem login — _API pronta (8a); falta a página (8b)_
+- [ ] Cabeçalho do estabelecimento com status aberto/fechado e horário — _API pronta_
+- [ ] Taxa de entrega e pedido mínimo visíveis — _API pronta_
 - [ ] Busca
 - [ ] Navegação por categorias
-- [ ] Cartões de produto com imagem, descrição, preço e disponibilidade
+- [ ] Cartões de produto com imagem, descrição, preço e disponibilidade — _API pronta, com a
+      disponibilidade de combos e grupos obrigatórios já calculada_
 - [ ] Seleção de opções e adicionais
 - [ ] Carrinho persistido no navegador, com indicador de quantidade
 - [ ] Checkout: telefone, nome, endereço, forma de pagamento, observações
