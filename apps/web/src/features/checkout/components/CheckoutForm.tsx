@@ -1,19 +1,28 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { mascararCepDigitado, mascararTelefoneDigitado, normalizarTelefone } from '@repo/shared'
+import {
+  mascararCepDigitado,
+  mascararTelefoneDigitado,
+  normalizarTelefone,
+  type PedidoCriado,
+} from '@repo/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch, type FieldErrors, type Resolver } from 'react-hook-form'
 
 import { TextField } from '@/components/TextField'
 import type { LinhaDoCarrinho, ResumoDoCarrinho } from '@/features/cart/cart'
 import type { CardapioPublico } from '@/features/menu/types'
+import { novoUuid } from '@/utils/id'
 import { formatarPreco } from '@/utils/money'
 
-import { useIdentificacao } from '../api'
+import { useEnviarPedido, useIdentificacao } from '../api'
 import {
   OBSERVACAO_DO_PEDIDO_MAXIMA,
   VALORES_INICIAIS,
   criarSchemaDoCheckout,
+  descreverFalhaNoEnvio,
   impedimentosDoPedido,
+  montarPedido,
   modalidadesDisponiveis,
   taxaDeEntrega,
   type DadosDoCheckout,
@@ -27,6 +36,8 @@ interface CheckoutFormProps {
   cardapio: CardapioPublico
   linhas: readonly LinhaDoCarrinho[]
   resumo: ResumoDoCarrinho
+  /** O pedido foi aceito pelo servidor. */
+  aoEnviado: (pedido: PedidoCriado) => void
 }
 
 const NOME_DA_MODALIDADE: Record<Modalidade, string> = {
@@ -42,11 +53,18 @@ const legenda = 'text-heading mb-stack text-content'
 const erroDe = (erros: FieldErrors<ValoresDoCheckout>, campo: keyof ValoresDoCheckout) =>
   erros[campo]?.message
 
-export function CheckoutForm({ slug, cardapio, linhas, resumo }: CheckoutFormProps) {
+export function CheckoutForm({ slug, cardapio, linhas, resumo, aoEnviado }: CheckoutFormProps) {
   const { delivery, paymentMethods, establishment } = cardapio
   const modalidades = modalidadesDisponiveis(delivery)
   const identificacao = useIdentificacao(slug)
-  const [conferido, setConferido] = useState<DadosDoCheckout | null>(null)
+  const envio = useEnviarPedido(slug)
+  const queryClient = useQueryClient()
+
+  // Uma chave por tentativa de pedido: reenviar o mesmo pedido (rede que caiu,
+  // duplo clique) usa a mesma, e o servidor devolve o que já criou. Quando o
+  // pedido é recusado e o cliente muda alguma coisa, a próxima tentativa é
+  // outra, com chave nova.
+  const [chave, setChave] = useState(novoUuid)
 
   // O schema depende do total e dos endereços identificados, que mudam com o
   // preenchimento. O resolver lê sempre o do render mais recente.
@@ -119,34 +137,33 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo }: CheckoutFormPro
     })
   }
 
-  if (conferido) {
-    return (
-      <div
-        role="status"
-        className="flex flex-col gap-stack rounded-card bg-surface p-card shadow-card"
-      >
-        <p className="text-heading text-content">Pedido conferido</p>
-        <p className="text-body text-content-muted">
-          Tudo certo com os seus dados. O envio do pedido ao estabelecimento entra na próxima etapa
-          do sistema.
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setConferido(null)
-          }}
-          className="text-body self-start font-semibold text-primary hover:underline"
-        >
-          Voltar e editar
-        </button>
-      </div>
+  function enviar(dados: DadosDoCheckout) {
+    envio.mutate(
+      montarPedido(
+        dados,
+        linhas.map((l) => l.item),
+        total,
+        chave,
+      ),
+      {
+        onSuccess: aoEnviado,
+        onError: (erro) => {
+          if (descreverFalhaNoEnvio(erro).cardapioMudou) {
+            setChave(novoUuid())
+            // O cardápio de agora mostra o que mudou: esgotado, preço, região.
+            void queryClient.invalidateQueries({ queryKey: ['cardapio-publico', slug] })
+          }
+        },
+      },
     )
   }
+
+  const falha = envio.isError ? descreverFalhaNoEnvio(envio.error) : null
 
   return (
     <form
       noValidate
-      onSubmit={(evento) => void form.handleSubmit(setConferido)(evento)}
+      onSubmit={(evento) => void form.handleSubmit(enviar)(evento)}
       className="flex flex-col gap-section-y"
     >
       <fieldset className="flex flex-col gap-stack rounded-card bg-surface p-card shadow-card">
@@ -420,13 +437,26 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo }: CheckoutFormPro
         </ul>
       )}
 
+      {falha && (
+        <div role="alert" className="flex flex-col gap-1 rounded-control bg-accent-50 p-3">
+          <p className="text-body font-semibold text-accent-800">O pedido não foi enviado</p>
+          <ul className="flex flex-col gap-1">
+            {falha.mensagens.map((texto) => (
+              <li key={texto} className="text-caption text-accent-800">
+                {texto}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <button
         type="submit"
-        disabled={impedimentos.length > 0}
-        aria-label={`Fazer pedido, ${formatarPreco(total)}`}
+        disabled={impedimentos.length > 0 || envio.isPending}
+        aria-label={envio.isPending ? 'Enviando o pedido' : `Fazer pedido, ${formatarPreco(total)}`}
         className="text-body flex items-center justify-between rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover disabled:bg-neutral-300 disabled:text-neutral-600"
       >
-        <span>Fazer pedido</span>
+        <span>{envio.isPending ? 'Enviando…' : 'Fazer pedido'}</span>
         <span>{formatarPreco(total)}</span>
       </button>
     </form>

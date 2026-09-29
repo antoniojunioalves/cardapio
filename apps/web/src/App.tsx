@@ -6,13 +6,15 @@ import { CheckoutPage } from '@/pages/CheckoutPage'
 import { HomePage } from '@/pages/HomePage'
 import { MenuPage } from '@/pages/MenuPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { OrderSentPage } from '@/pages/OrderSentPage'
 
 /**
  * As rotas da aplicação, separadas dos providers para os testes montarem com
  * `MemoryRouter` num endereço qualquer.
  *
  * `/:tenantSlug` casa com um segmento só, então `/lanchonete-do-ze` abre o
- * cardápio, `/lanchonete-do-ze/checkout` finaliza o pedido e qualquer outro
+ * cardápio, `/lanchonete-do-ze/checkout` finaliza o pedido,
+ * `/lanchonete-do-ze/pedido-enviado` confirma, e qualquer outro
  * segundo segmento cai no não encontrado. As
  * rotas administrativas, quando vierem, ficam sob um prefixo próprio.
  */
@@ -22,6 +24,7 @@ export function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/:tenantSlug" element={<MenuPage />} />
       <Route path="/:tenantSlug/checkout" element={<CheckoutPage />} />
+      <Route path="/:tenantSlug/pedido-enviado" element={<OrderSentPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

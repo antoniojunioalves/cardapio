@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import { resolverCarrinho, resumirCarrinho } from '@/features/cart/cart'
 import { useCarrinho } from '@/features/cart/store'
@@ -8,6 +8,7 @@ import { useCardapioPublico } from '@/features/menu/api'
 import { ApiError } from '@/services/api'
 
 import { NotFoundPage } from './NotFoundPage'
+import type { EstadoDoPedidoEnviado } from './OrderSentPage'
 
 /**
  * O checkout em `/{tenantSlug}/checkout`.
@@ -18,7 +19,8 @@ import { NotFoundPage } from './NotFoundPage'
 export function CheckoutPage() {
   const { tenantSlug = '' } = useParams()
   const consulta = useCardapioPublico(tenantSlug)
-  const { itens } = useCarrinho(tenantSlug)
+  const { itens, esvaziar } = useCarrinho(tenantSlug)
+  const navigate = useNavigate()
 
   const nome = consulta.data?.establishment.name
   useEffect(() => {
@@ -85,7 +87,21 @@ export function CheckoutPage() {
             </Link>
           </div>
         ) : (
-          <CheckoutForm slug={tenantSlug} cardapio={cardapio} linhas={linhas} resumo={resumo} />
+          <CheckoutForm
+            slug={tenantSlug}
+            cardapio={cardapio}
+            linhas={linhas}
+            resumo={resumo}
+            aoEnviado={(pedido) => {
+              const estado: EstadoDoPedidoEnviado = {
+                pedido,
+                estabelecimento: cardapio.establishment.name,
+              }
+              // `replace`: o "voltar" não reabre um checkout já enviado.
+              void navigate(`/${tenantSlug}/pedido-enviado`, { replace: true, state: estado })
+              esvaziar()
+            }}
+          />
         )}
       </main>
     </div>

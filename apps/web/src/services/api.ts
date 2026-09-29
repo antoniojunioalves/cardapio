@@ -17,16 +17,21 @@ export interface HealthResponse {
  */
 export class ApiError extends Error {
   readonly status: number
+  /** O código estável da API (`ORDER_REJECTED`, `PRICE_CHANGED`), para a tela decidir o que fazer. */
+  readonly code: string | null
+  readonly details: unknown
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code: string | null = null, details?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
+    this.details = details
   }
 }
 
 interface CorpoDeErro {
-  error?: { message?: string }
+  error?: { code?: string; message?: string; details?: unknown }
 }
 
 async function lerResposta<T>(response: Response): Promise<T> {
@@ -35,6 +40,8 @@ async function lerResposta<T>(response: Response): Promise<T> {
     throw new ApiError(
       response.status,
       corpo.error?.message ?? `A API respondeu com status ${String(response.status)}.`,
+      corpo.error?.code ?? null,
+      corpo.error?.details,
     )
   }
 
