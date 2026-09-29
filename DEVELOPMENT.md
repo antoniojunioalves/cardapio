@@ -83,8 +83,8 @@ apps/api/src/
 
 apps/web/src/
 ├── components/    genéricos, sem regra de negócio
-├── features/      por domínio
-├── pages/         composição de rotas
+├── features/      por domínio — menu/ tem api, tipos, apresentação e componentes
+├── pages/         composição de rotas — MenuPage, HomePage, NotFoundPage
 ├── layouts/
 ├── theme/         tokens de design
 ├── services/      clientes HTTP
@@ -273,6 +273,12 @@ Sempre por `withTenant(context, tx => …)`. O client `db` cru só serve para da
 o registro de tenants; usá-lo com dado de estabelecimento devolve zero linhas, porque o RLS não
 encontra contexto. O sintoma é "sumiu tudo", não um vazamento — falha fechada, mas confusa se
 você não souber a causa.
+
+### Testando uma página
+
+Monte `AppRoutes` dentro de `MemoryRouter` e de um `QueryClient` novo por teste, e simule a API
+com `vi.stubGlobal('fetch', …)` — veja `apps/web/tests/MenuPage.test.tsx`. Regra de
+apresentação vai para um módulo sem React e ganha teste unitário próprio.
 
 ### Expondo dados na área pública
 
