@@ -496,6 +496,35 @@ describe('envio do pedido', () => {
 })
 
 describe('confirmação', () => {
+  it('oferece enviar o pedido pelo WhatsApp do estabelecimento', async () => {
+    await abrirCheckout()
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+
+    const link = await screen.findByRole('link', { name: 'Enviar pedido pelo WhatsApp' })
+    expect(link).toHaveAttribute('href', PEDIDO_CRIADO.whatsapp.url)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('sem WhatsApp cadastrado, diz que o pedido foi registrado e mostra o telefone', async () => {
+    await abrirCheckout({
+      envios: [
+        {
+          status: 201,
+          corpo: { ...PEDIDO_CRIADO, whatsapp: { url: null, message: '*Pedido #42*' } },
+        },
+      ],
+    })
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+
+    expect(await screen.findByText(/O pedido já foi registrado/)).toHaveTextContent(
+      'o telefone é 5511988887777',
+    )
+    expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument()
+  })
+
   it('aberta sem o pedido (recarregada), diz que os detalhes não ficam guardados', () => {
     mockarApiDoCheckout(cardapioDoZe())
     abrir('/lanchonete-do-ze/pedido-enviado')

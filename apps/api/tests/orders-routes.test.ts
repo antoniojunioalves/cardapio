@@ -135,7 +135,10 @@ async function montarLanchonete(): Promise<void> {
   const ctx = tenantContextFromUser(lanchonete.tenantId)
   const ator = lanchonete.userId
 
-  await atualizarConfiguracoes(ctx, ator, { minimumOrderInCents: 2000 })
+  await atualizarConfiguracoes(ctx, ator, {
+    minimumOrderInCents: 2000,
+    whatsappPhone: '5511999990000',
+  })
   await substituirHorarios(ctx, ator, SEMPRE_ABERTO)
   await substituirEntrega(ctx, ator, {
     configuracao: {
@@ -301,6 +304,40 @@ describe('criar pedido', () => {
     expect((numeros.at(-1) ?? 0) - (numeros[0] ?? 0)).toBe(4)
   })
 
+  it('devolve a mensagem do WhatsApp e o link para o número do estabelecimento', async () => {
+    const criado = await criar()
+
+    expect(criado.whatsapp.url).toMatch(/^https:\/\/wa\.me\/5511999990000\?text=/)
+    expect(decodeURIComponent(criado.whatsapp.url?.split('text=')[1] ?? '')).toBe(
+      criado.whatsapp.message,
+    )
+    // Endereço digitado na hora: sai completo.
+    expect(criado.whatsapp.message).toContain(`*Pedido #${String(criado.number)}* —`)
+    expect(criado.whatsapp.message).toContain(
+      'Avenida Paulista, 1000, apto 5 — Bela Vista, São Paulo',
+    )
+    expect(criado.whatsapp.message).toContain('CEP 01310-100')
+    expect(criado.whatsapp.message).toContain('*Cliente:* Maria Oliveira — (11) 98765-4321')
+
+    // A mensagem fica guardada no pedido.
+    const [gravado] = await naLanchonete((tx) =>
+      tx.select().from(orders).where(eq(orders.number, criado.number)),
+    )
+    expect(gravado?.whatsappMessage).toBe(criado.whatsapp.message)
+  })
+
+  it('sem WhatsApp cadastrado, a mensagem vem sem link', async () => {
+    const ctx = tenantContextFromUser(lanchonete.tenantId)
+    await atualizarConfiguracoes(ctx, lanchonete.userId, { whatsappPhone: null })
+    try {
+      const criado = await criar()
+      expect(criado.whatsapp.url).toBeNull()
+      expect(criado.whatsapp.message).toContain('*Pedido #')
+    } finally {
+      await atualizarConfiguracoes(ctx, lanchonete.userId, { whatsappPhone: '5511999990000' })
+    }
+  })
+
   it('o mesmo envio repetido devolve o mesmo pedido, sem duplicar', async () => {
     const corpo = pedido()
     const primeiro = await criar(corpo)
@@ -308,6 +345,7 @@ describe('criar pedido', () => {
 
     expect(segundo.number).toBe(primeiro.number)
     expect(terceiro.number).toBe(primeiro.number)
+    expect(segundo.whatsapp.message).toBe(primeiro.whatsapp.message)
     const gravados = await naLanchonete((tx) =>
       tx.select().from(orders).where(eq(orders.idempotencyKey, corpo.idempotencyKey)),
     )
@@ -433,7 +471,11 @@ describe('endereço salvo', () => {
     const resposta = await enviar(lanchonete.slug, pedido({ address: { savedAddressId } }))
 
     expect(resposta.statusCode).toBe(201)
-    for (const trecho of ['Paulista', '1000', 'apto', '01310']) {
+    // O nome da rua sai, mascarado, na mensagem do WhatsApp; o resto não.
+    expect(resposta.json<PedidoCriado>().whatsapp.message).toContain(
+      'Avenida Paulista, 1••• — Bela Vista (endereço cadastrado)',
+    )
+    for (const trecho of ['1000', 'apto', '01310']) {
       expect(resposta.body).not.toContain(trecho)
     }
     const numero = resposta.json<PedidoCriado>().number
@@ -465,8 +507,9 @@ describe('endereço salvo', () => {
       tx.select().from(orders).where(eq(orders.number, criado.number)),
     )
     expect(gravado?.customerName).toBe('Maria Oliveira')
-    // A resposta ao navegador não leva o nome guardado.
+    // A resposta ao navegador — mensagem do WhatsApp inclusive — não leva o nome guardado.
     expect(JSON.stringify(criado)).not.toContain('Oliveira')
+    expect(criado.whatsapp.message).toContain('*Cliente:* Maria —')
   })
 
   it('cliente que já existe mantém o nome guardado; o pedido guarda o nome digitado', async () => {

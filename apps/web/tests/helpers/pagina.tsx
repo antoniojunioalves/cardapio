@@ -35,6 +35,10 @@ export const PEDIDO_CRIADO = {
   paymentMethodName: 'Pix',
   changeForInCents: null,
   createdAt: '2026-09-29T15:00:00.000Z',
+  whatsapp: {
+    url: 'https://wa.me/5511999990000?text=*Pedido%20%2342*',
+    message: '*Pedido #42*',
+  },
 }
 
 /**
