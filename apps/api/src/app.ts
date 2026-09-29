@@ -22,6 +22,7 @@ import { healthRoutes } from './routes/health.js'
 import { publicCustomerRoutes } from './routes/public-customers.js'
 import { publicMenuRoutes } from './routes/public-menu.js'
 import { publicOrderRoutes } from './routes/public-orders.js'
+import { registerRealtime } from './realtime/plugin.js'
 
 export interface BuildAppOptions {
   /** Substituível nos testes para exercitar o caminho de banco indisponível. */
@@ -54,7 +55,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   instance.setSerializerCompiler(serializerCompiler)
 
   await instance.register(helmet)
-  await instance.register(cors, { origin: env.WEB_ORIGIN, credentials: true })
+  await instance.register(cors, {
+    origin: env.WEB_ORIGIN,
+    credentials: true,
+    // O padrão do @fastify/cors 11 é só GET, HEAD e POST; o painel altera
+    // status (PATCH), substitui horários (PUT) e exclui produtos (DELETE).
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  })
 
   if (options.rateLimit !== false) {
     await registerRateLimit(instance)
@@ -82,6 +89,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(publicMenuRoutes, { prefix: '/api/v1/public' })
   await instance.register(publicCustomerRoutes, { prefix: '/api/v1/public' })
   await instance.register(publicOrderRoutes, { prefix: '/api/v1/public' })
+
+  await registerRealtime(instance)
 
   return instance
 }

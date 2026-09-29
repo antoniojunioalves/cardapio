@@ -19,6 +19,7 @@ import type { StorageService } from '../storage/index.js'
 import type { TenantContext } from '../tenant/context.js'
 import { resolverEstabelecimentoPublico } from '../tenant/public.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
+import { avisarPedido } from '../realtime/notify.js'
 import { calcularPedido } from './pricing.js'
 import { linkDoWhatsapp, montarMensagem, type EnderecoDaMensagem } from './whatsapp.js'
 import {
@@ -219,6 +220,14 @@ export async function criarPedido(
         })),
       )
 
+      // Entregue ao painel só depois do commit (`realtime/notify.ts`).
+      await avisarPedido(tx, {
+        tipo: 'PEDIDO_CRIADO',
+        tenantId: context.tenantId,
+        pedidoId: pedido.id,
+        numero: pedido.number,
+      })
+
       return apresentarCriado(tx, pedido, cardapio.establishment.whatsappPhone)
     })
   } catch (error) {
@@ -371,6 +380,14 @@ export async function mudarStatusDoPedido(
         para,
         ...(para === 'CANCELLED' && { motivo }),
       },
+    })
+
+    await avisarPedido(tx, {
+      tipo: 'STATUS_MUDOU',
+      tenantId: context.tenantId,
+      pedidoId: id,
+      numero: pedido.number,
+      status: para,
     })
 
     return { ...atualizado, itens: (await carregarItens(tx, [id])).get(id) ?? [] }
