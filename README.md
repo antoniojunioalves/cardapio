@@ -12,8 +12,9 @@ pelo WhatsApp do estabelecimento.
 **Status atual: Fase 11 concluída.** O cliente final já vê o cardápio, monta o carrinho e envia
 o pedido, recalculado no servidor: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
-de terça a domingo) ou a `pizzaria-da-esquina` (almoço e jantar, de segunda a sábado). A próxima
-fase é a mensagem pelo WhatsApp. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a sábado) ou a
+`padaria-pao-quente` (das 08:00 às 18:00, todos os dias). A próxima fase é a mensagem pelo
+WhatsApp. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 
@@ -21,6 +22,7 @@ Depois de `pnpm db:seed`, dá para entrar com:
 | --------------------- | ----------------- | ------------- |
 | `lanchonete-do-ze`    | `ze@exemplo.com`  | `cardapio123` |
 | `pizzaria-da-esquina` | `ana@exemplo.com` | `cardapio123` |
+| `padaria-pao-quente`  | `bia@exemplo.com` | `cardapio123` |
 
 E o cardápio público, sem login: `curl http://localhost:3333/api/v1/public/lanchonete-do-ze/menu`.
 
