@@ -23,19 +23,39 @@ export function mockarApi(resposta: Resposta) {
   return fetch
 }
 
+/** Um pedido como a API devolve ao criar: 2 açaís, retirada, Pix. */
+export const PEDIDO_CRIADO = {
+  number: 42,
+  status: 'RECEIVED',
+  fulfillment: 'PICKUP',
+  items: [{ name: 'Açaí na tigela', quantity: 2, options: [], notes: null, totalInCents: 3600 }],
+  subtotalInCents: 3600,
+  deliveryFeeInCents: 0,
+  totalInCents: 3600,
+  paymentMethodName: 'Pix',
+  changeForInCents: null,
+  createdAt: '2026-09-29T15:00:00.000Z',
+}
+
 /**
- * Simula a API respondendo por rota: o cardápio no GET e a identificação do
- * cliente no POST. Devolve o mock, para conferir o que foi enviado.
+ * Simula a API respondendo por rota: o cardápio no GET, a identificação do
+ * cliente e o envio do pedido nos POSTs. `envios` responde um por tentativa,
+ * na ordem — o último se repete. Devolve o mock, para conferir o que foi
+ * enviado.
  */
 export function mockarApiDoCheckout(
   cardapio: CardapioPublico,
   identificacao: Resposta = { status: 200, corpo: { cliente: null } },
+  envios: readonly Resposta[] = [{ status: 201, corpo: PEDIDO_CRIADO }],
 ) {
+  let tentativa = 0
   const fetch = vi.fn((url: string, init?: RequestInit) => {
-    const resposta: Resposta =
-      init?.method === 'POST' && url.endsWith('/customers/identify')
-        ? identificacao
-        : { status: 200, corpo: cardapio }
+    let resposta: Resposta = { status: 200, corpo: cardapio }
+    if (init?.method === 'POST' && url.endsWith('/customers/identify')) resposta = identificacao
+    if (init?.method === 'POST' && url.endsWith('/orders')) {
+      resposta = envios[Math.min(tentativa, envios.length - 1)] ?? 'falha-de-rede'
+      tentativa += 1
+    }
     if (resposta === 'falha-de-rede') return Promise.reject(new Error('conexão recusada'))
     return Promise.resolve({
       ok: resposta.status < 400,
