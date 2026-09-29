@@ -48,6 +48,7 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Autenticação em dois fatores para usuários administrativos
 - Bloqueio temporário de conta após N tentativas falhas — hoje há apenas o limite por IP
 - Histórico de senhas, para impedir reuso da anterior
+- Refresh token do painel em cookie `httpOnly`, em vez do `localStorage` (SECURITY.md)
 - **Conta de cliente final, com os dados completos no checkout.** Hoje o cliente é reconhecido só
   pelo telefone, e por isso o checkout mostra apenas o primeiro nome e os endereços mascarados
   (SECURITY.md, seção 5): telefone não prova quem está digitando. Com o cliente **logado na

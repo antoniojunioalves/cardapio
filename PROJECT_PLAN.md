@@ -1,8 +1,8 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-29
-**Fase atual:** 12 — concluída, aguardando validação
-**Próxima:** Fase 13 — WebSocket e pedidos em tempo real
+**Fase atual:** 13 — concluída, aguardando validação (12 e 13 juntas)
+**Próxima:** Fase 14 — limites por plano
 
 ---
 
@@ -32,8 +32,13 @@ rotas do painel (`/api/v1/admin/orders`), com auditoria.
 WhatsApp", com a mensagem pronta — número, itens, opções, valores, entrega, pagamento e cliente —,
 montada no servidor. Endereço escolhido da lista sai mascarado; digitado na hora, completo.
 
-**Ainda não existe:** os pedidos chegando em tempo real (Fase 13) e qualquer tela administrativa —
-o lojista ainda usa a API para ver o endereço completo de um endereço salvo.
+**O estabelecimento recebe os pedidos ao vivo.** Em `/{tenantSlug}/admin` o lojista entra, e em
+`/{tenantSlug}/admin/pedidos` vê os pedidos chegarem sem recarregar — com endereço completo,
+itens, pagamento e botões de status —, com alerta sonoro opcional e o número de pedidos novos no
+título da aba.
+
+**Ainda não existe:** tela para cardápio, configurações e usuários — o lojista ainda configura
+tudo pela API.
 
 ---
 
@@ -56,7 +61,7 @@ o lojista ainda usa a API para ver o endereço completo de um endereço salvo.
 | 10  | Customer e checkout                                                                                                 | ✅ Concluída |
 | 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ✅ Concluída |
 | 12  | WhatsApp                                                                                                            | ✅ Concluída |
-| 13  | WebSocket e pedidos em tempo real                                                                                   | ⬜           |
+| 13  | WebSocket e pedidos em tempo real                                                                                   | ✅ Concluída |
 | 14  | Limites por plano                                                                                                   | ⬜           |
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ⬜           |
 
@@ -67,61 +72,86 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 12 — concluída
+## Fase 13 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                  | Status |
-| --- | --------------------------------------------------------------------------------------- | ------ |
-| 1   | Mensagem montada no servidor, módulo puro (`orders/whatsapp.ts`), e o link `wa.me`      | ✅     |
-| 2   | Endereço salvo mascarado na mensagem; digitado, completo; nome como o cliente digitou   | ✅     |
-| 3   | Mensagem guardada no pedido (`whatsapp_message`), para o reenvio devolver o mesmo texto | ✅     |
-| 4   | Resposta do pedido com `whatsapp: { url, message }`; `url` nulo sem WhatsApp cadastrado | ✅     |
-| 5   | Confirmação com "Enviar pedido pelo WhatsApp"; sem WhatsApp, o telefone de contato      | ✅     |
-| 6   | Testes: 6 da mensagem, 2 novos e 3 ajustados nas rotas, 2 de tela                       | ✅     |
+| #   | Tarefa                                                                                               | Status |
+| --- | ---------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Regra do status movida para `packages/shared`, usada pela API e pelo painel                          | ✅     |
+| 2   | `@fastify/websocket` 11.3.1; canal por estabelecimento (`realtime/channel.ts`, puro)                 | ✅     |
+| 3   | Avisos por `LISTEN`/`NOTIFY` do PostgreSQL, emitidos dentro da transação do pedido                   | ✅     |
+| 4   | `GET /api/v1/admin/orders/stream`: token na primeira mensagem, `orders:read`, origem conferida, ping | ✅     |
+| 5   | CORS liberando PUT, PATCH e DELETE                                                                   | ✅     |
+| 6   | Web: sessão do painel (token na memória, refresh no navegador, renovação única)                      | ✅     |
+| 7   | Login em `/{slug}/admin` e painel em `/{slug}/admin/pedidos`                                         | ✅     |
+| 8   | Conexão ao vivo com reconexão, renovação no 4001, desistência no 4003, releitura ao reconectar       | ✅     |
+| 9   | Cartão do pedido com detalhe completo, botões de status e cancelamento com motivo                    | ✅     |
+| 10  | Alerta sonoro opcional e contador de pedidos novos no título                                         | ✅     |
+| 11  | Testes: 9 do tempo real na API, 16 do painel no web                                                  | ✅     |
 
 ### Decisões desta fase
 
-**Endereço salvo sai mascarado na mensagem; completo só depois do OTP** — decisão do Junio. A
-mensagem sai do celular de quem fez o pedido: com o endereço completo, quem digitou o telefone de
-outra pessoa o receberia no próprio WhatsApp. Endereço digitado na hora sai completo, porque foi
-a pessoa quem o informou. O estabelecimento vê o endereço completo no pedido — por enquanto pela
-API; a tela vem com a Fase 13. Registrado no ROADMAP, no item do OTP.
+**Os avisos vêm do `LISTEN`/`NOTIFY` do PostgreSQL.** O `pg_notify` é chamado dentro da transação
+do pedido, e o banco só o entrega **depois do commit**: um pedido desfeito nunca vira alerta, e o
+alerta nunca chega antes de o pedido existir. Funciona com mais de uma instância da API sem
+Redis. Um teste emite um aviso numa transação desfeita e confere que ele não chega.
 
-**O nome na mensagem é o digitado.** Quando o cliente usa o primeiro nome preenchido pela
-identificação, o pedido grava o nome completo (Fase 11), mas a mensagem leva só o que foi
-digitado — senão o sobrenome vazaria por aqui.
+**O aviso leva só ids.** O painel relê a lista pela API REST, que confere permissão e isolamento.
+Nenhum dado pessoal passa pelo canal.
 
-**A mensagem é montada no servidor e guardada no pedido.** Um formato só, calculado sobre o que
-foi gravado. Guardar o texto faz o reenvio com a mesma chave devolver a mesma mensagem: ela
-depende de coisas que o pedido não guarda, como o endereço ter vindo da lista ou digitado.
+**Canal por estabelecimento, com o tenant tirado do token.** A conexão só assina o canal do
+tenant do token; um teste conecta duas lojas e confere que cada uma recebe só o seu.
 
-**Um botão, não a abertura automática.** O navegador bloqueia janelas abertas depois de esperar a
-rede; o toque precisa ser da pessoa. O link abre em outra aba com `noopener`.
+**O token vai na primeira mensagem, não na URL** (que acaba em log de acesso). Conexão sem token
+em 5 s, com token inválido ou expirado fecha com `4001`; sem `orders:read`, com `4003`. A conexão
+fecha quando o token expira, e o painel renova e reconecta. O navegador não aplica CORS a
+WebSocket, então a origem é conferida no handshake — segunda barreira depois do token.
 
-**O pedido já está registrado antes do WhatsApp.** A mensagem avisa o estabelecimento; não é ela
-que cria o pedido. Sem WhatsApp cadastrado, a confirmação diz isso e mostra o telefone de contato.
+**O painel relê a lista ao conectar e reconectar**, porque avisos emitidos com a conexão fora não
+voltam, e de minuto em minuto como rede de segurança.
+
+**Endereço do painel: `/{slug}/admin`.** O login já pedia o slug; vindo da URL, a sessão fica
+presa a um estabelecimento, e abrir o painel de outro slug pede login.
+
+**Sessão no navegador:** token de acesso só na memória; refresh token no `localStorage`, para o
+tablet da cozinha continuar logado ao recarregar. É dívida registrada em SECURITY.md (um script
+injetado poderia lê-lo); o lugar certo é um cookie `httpOnly` (ROADMAP). A renovação é **uma por
+vez**: duas simultâneas apresentariam o mesmo refresh token, e o servidor entenderia como roubo.
+
+**A regra do status mudou para `packages/shared`.** O painel mostra só os próximos passos válidos
+com a mesma função que a API usa para recusar.
+
+**Alerta sonoro por botão.** O navegador só toca som depois de um gesto na página; o botão "Ligar
+som" é esse gesto. O som é gerado com Web Audio, sem arquivo.
+
+**Nos testes, o fechamento é provado com porta de verdade.** O `injectWS` do plugin não repassa o
+fechamento do cliente ao servidor; com o cliente nativo e porta real, a assinatura é removida.
 
 ### Verificação executada
 
-| Verificação                         | Resultado                                            |
-| ----------------------------------- | ---------------------------------------------------- |
-| `pnpm typecheck` / `lint` / `build` | zero erro                                            |
-| `pnpm test`                         | **520 testes** (379 API + 128 web + 13 shared)       |
-| Teste sensível à regra              | endereço salvo saindo completo derruba o teste certo |
-| Mensagem no WhatsApp de verdade     | a fazer na validação                                 |
+| Verificação                            | Resultado                                                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build`    | zero erro                                                                         |
+| `pnpm test`                            | **545 testes** (388 API + 144 web + 13 shared)                                    |
+| Testes sensíveis à regra               | canal sem filtro de tenant, renovação duplicada, retentativa no 4003: cada um cai |
+| API rodando                            | CORS libera PATCH; `ready` com o login real do Zé; 4001 com token inválido        |
+| Pedido chegando ao painel no navegador | a fazer na validação                                                              |
 
 ---
 
-## Fase 13 — próxima
+## Fase 14 — próxima
 
-WebSocket e pedidos em tempo real: o pedido novo aparece no painel do estabelecimento sem
-recarregar a página. É onde nasce a primeira tela administrativa — e onde o CORS precisa passar a
-liberar `PATCH`, `PUT` e `DELETE`.
+Limites por plano: aplicar os limites de `plan_features` (pedidos por mês, usuários), com
+mensagens claras para o lojista e sem bloquear o cliente final no meio do pedido.
 
 ---
 
 ## Fases anteriores
+
+**Fase 12** entregou a mensagem do pedido para o WhatsApp do estabelecimento, montada no servidor
+e guardada no pedido, com um botão na confirmação. Endereço escolhido da lista sai mascarado
+(completo só depois do OTP, decisão do Junio); digitado, completo; o nome é o digitado.
 
 **Fase 11** entregou o pedido recalculado no servidor, sobre a mesma montagem do cardápio que o
 cliente recebe: recusa com todos os problemas, 409 quando o total difere do visto, envio
@@ -226,12 +256,11 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pendências conhecidas
 
-| Item                                                                                                          | Quando resolve                  |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Rate limit conta em memória — vira limite por instância se houver mais de uma                                 | Deploy                          |
-| Sem Dockerfile para API e web                                                                                 | Deploy                          |
-| Sem CI                                                                                                        | A definir                       |
-| Nenhuma rota HTTP expõe tenants ainda — a fase é de fundação                                                  | Fases 5 e 8                     |
-| Contrato do cardápio público copiado no web, fora do `packages/shared`                                        | Quando o contrato mudar de novo |
-| Checkout não lembra os dados no aparelho ao voltar ao cardápio                                                | ROADMAP                         |
-| CORS libera só GET, HEAD e POST (padrão do `@fastify/cors` 11) — o painel vai precisar de PATCH, PUT e DELETE | Quando o painel ganhar tela     |
+| Item                                                                          | Quando resolve                  |
+| ----------------------------------------------------------------------------- | ------------------------------- |
+| Rate limit conta em memória — vira limite por instância se houver mais de uma | Deploy                          |
+| Sem Dockerfile para API e web                                                 | Deploy                          |
+| Sem CI                                                                        | A definir                       |
+| Nenhuma rota HTTP expõe tenants ainda — a fase é de fundação                  | Fases 5 e 8                     |
+| Contrato do cardápio público copiado no web, fora do `packages/shared`        | Quando o contrato mudar de novo |
+| Checkout não lembra os dados no aparelho ao voltar ao cardápio                | ROADMAP                         |

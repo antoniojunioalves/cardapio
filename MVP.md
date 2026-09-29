@@ -15,7 +15,7 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### Administração do estabelecimento
 
-- [ ] Login de usuário administrativo
+- [x] Login de usuário administrativo
 - [ ] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF`
 - [ ] Configuração do estabelecimento: nome, logo, descrição, contato, WhatsApp
 - [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia
@@ -29,8 +29,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [ ] Adicionais com alteração de preço
 - [ ] Combos
 - [ ] Upload de imagens
-- [ ] Lista de pedidos com atualização de status
-- [ ] Pedidos novos chegando em tempo real
+- [x] Lista de pedidos com atualização de status
+- [x] Pedidos novos chegando em tempo real
 - [ ] Lista de clientes e histórico de pedidos
 - [ ] Registro de auditoria das ações administrativas
 

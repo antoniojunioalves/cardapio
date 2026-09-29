@@ -80,13 +80,14 @@ apps/api/src/
 ├── storage/       StorageService, provider local, detecção de tipo, troca de imagem
 ├── catalog/       categorias, produtos, grupos de opção e combos
 ├── customers/     cliente final: máscara, repositório, identificação por telefone
-├── orders/        pedido: cálculo puro, status, repositório, serviço
+├── orders/        pedido: cálculo puro, status, repositório, serviço, mensagem do WhatsApp
+├── realtime/      pedidos ao vivo: canal por tenant, LISTEN/NOTIFY, WebSocket
 ├── public-menu/   cardápio público
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
 ├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper, TextField
-├── features/      por domínio — menu/, cart/ (regras, store), checkout/ (schema, envio)
+├── features/      por domínio — menu/, cart/, checkout/, admin/ (sessão, ao vivo, pedidos)
 ├── pages/         composição de rotas — MenuPage, CheckoutPage, OrderSentPage, HomePage…
 ├── layouts/
 ├── theme/         tokens de design
@@ -303,6 +304,13 @@ com `vi.stubGlobal('fetch', …)` — os helpers estão em `apps/web/tests/helpe
 store do Zustand é global ao módulo: zere-a no `beforeEach` com `setState` e limpe o
 `localStorage`. Regra de
 apresentação vai para um módulo sem React e ganha teste unitário próprio.
+
+### Testando o WebSocket
+
+Na API, `app.injectWS(url)` abre uma conexão de verdade sem porta — mas **não repassa ao servidor
+o fechamento do cliente**. Para provar o que acontece ao fechar, suba a aplicação numa porta
+(`app.listen({ port: 0 })`) e use o `WebSocket` nativo do Node. No web, os testes trocam o
+`WebSocket` global por um falso que o teste controla (`tests/AdminPanel.test.tsx`).
 
 ### Expondo dados na área pública
 
