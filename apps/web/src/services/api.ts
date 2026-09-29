@@ -9,20 +9,44 @@ export interface HealthResponse {
 }
 
 /**
- * Consulta a sonda de saúde da API.
+ * Erro de uma resposta da API, com o status HTTP preservado.
  *
- * A partir da Fase 2 o acesso a dados passa pelo TanStack Query; esta função
- * direta existe porque ainda não há estado de servidor para gerenciar — só a
- * verificação de que os dois processos se enxergam.
+ * Guardar o status é o que permite à tela distinguir "este estabelecimento não
+ * existe" (404, mostrar a página de não encontrado) de "a API caiu" (mostrar
+ * tentar de novo) — duas situações que pedem respostas diferentes ao cliente.
  */
-export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
-  const response = await fetch(`${API_URL}/health`, { ...(signal && { signal }) })
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+interface CorpoDeErro {
+  error?: { message?: string }
+}
+
+/** GET que devolve o JSON da resposta ou lança `ApiError`. */
+export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_URL}${caminho}`, { ...(signal && { signal }) })
 
   if (!response.ok) {
-    throw new Error(`A API respondeu com status ${String(response.status)}.`)
+    const corpo = (await response.json().catch(() => ({}))) as CorpoDeErro
+    throw new ApiError(
+      response.status,
+      corpo.error?.message ?? `A API respondeu com status ${String(response.status)}.`,
+    )
   }
 
-  return (await response.json()) as HealthResponse
+  return (await response.json()) as T
+}
+
+/** Consulta a sonda de saúde da API. */
+export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  return getJson<HealthResponse>('/health', signal)
 }
 
 export { API_URL }
