@@ -21,6 +21,10 @@ Quitação em duas etapas:
 2. **OTP** por WhatsApp ou SMS antes de exibir qualquer dado pessoal por telefone. Até lá, o
    primeiro nome, a rua e o bairro continuam visíveis para quem souber o telefone.
 
+Com o OTP, a **mensagem do WhatsApp** (Fase 12) passa a levar o endereço completo também quando
+o cliente escolhe um endereço salvo — decisão do Junio. Até lá, endereço salvo sai mascarado na
+mensagem, e o estabelecimento vê o completo no pedido.
+
 ### Rate limiting na consulta por telefone
 
 Feito na Fase 10: 10 identificações por minuto por IP. O que falta é o contador compartilhado

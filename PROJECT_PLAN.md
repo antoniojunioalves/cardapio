@@ -1,8 +1,8 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-29
-**Fase atual:** 11 — concluída, aguardando validação
-**Próxima:** Fase 12 — WhatsApp
+**Fase atual:** 12 — concluída, aguardando validação
+**Próxima:** Fase 13 — WebSocket e pedidos em tempo real
 
 ---
 
@@ -28,8 +28,12 @@ calculados de novo sobre a mesma montagem do cardápio público. O pedido guarda
 ganha número sequencial por estabelecimento, e o cliente vê a confirmação. O status avança pelas
 rotas do painel (`/api/v1/admin/orders`), com auditoria.
 
-**Ainda não existe:** a mensagem pelo WhatsApp (Fase 12), os pedidos chegando em tempo real
-(Fase 13) e qualquer tela administrativa — o lojista ainda usa a API.
+**O pedido chega ao WhatsApp do estabelecimento.** A confirmação oferece "Enviar pedido pelo
+WhatsApp", com a mensagem pronta — número, itens, opções, valores, entrega, pagamento e cliente —,
+montada no servidor. Endereço escolhido da lista sai mascarado; digitado na hora, completo.
+
+**Ainda não existe:** os pedidos chegando em tempo real (Fase 13) e qualquer tela administrativa —
+o lojista ainda usa a API para ver o endereço completo de um endereço salvo.
 
 ---
 
@@ -51,7 +55,7 @@ rotas do painel (`/api/v1/admin/orders`), com auditoria.
 | 9   | Carrinho                                                                                                            | ✅ Concluída |
 | 10  | Customer e checkout                                                                                                 | ✅ Concluída |
 | 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ✅ Concluída |
-| 12  | WhatsApp                                                                                                            | ⬜           |
+| 12  | WhatsApp                                                                                                            | ✅ Concluída |
 | 13  | WebSocket e pedidos em tempo real                                                                                   | ⬜           |
 | 14  | Limites por plano                                                                                                   | ⬜           |
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ⬜           |
@@ -63,107 +67,67 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 11 — concluída
+## Fase 12 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                                                 | Status |
-| --- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Montagem do cardápio público extraída para rodar dentro de uma transação (`montarCardapioPublico`)                     | ✅     |
-| 2   | Tabelas `orders`, `order_items`, `order_item_options`, `order_counters`, com RLS forçado                               | ✅     |
-| 3   | Contrato do pedido em `packages/shared`: corpo, problemas e resposta                                                   | ✅     |
-| 4   | Cálculo puro (`orders/pricing.ts`): aberto, modalidade, disponibilidade, opções, preço, mínimo, taxa, pagamento, troco | ✅     |
-| 5   | `POST /public/{slug}/orders`: recusa com todos os problemas (422), total diferente (409), idempotente, 10/min por IP   | ✅     |
-| 6   | Cliente criado no primeiro pedido; endereço novo guardado sem duplicar; endereço salvo só do dono do telefone          | ✅     |
-| 7   | Número sequencial por estabelecimento, sem repetir em pedidos simultâneos                                              | ✅     |
-| 8   | Status (`orders/status.ts`) e rotas do painel: listar, detalhar, mudar status com auditoria                            | ✅     |
-| 9   | Web: envio de verdade, problemas na tela, nova chave após recusa, confirmação, carrinho esvaziado                      | ✅     |
-| 10  | Testes: 15 de cálculo e status, 23 das rotas contra o banco, 7 novos de tela                                           | ✅     |
+| #   | Tarefa                                                                                  | Status |
+| --- | --------------------------------------------------------------------------------------- | ------ |
+| 1   | Mensagem montada no servidor, módulo puro (`orders/whatsapp.ts`), e o link `wa.me`      | ✅     |
+| 2   | Endereço salvo mascarado na mensagem; digitado, completo; nome como o cliente digitou   | ✅     |
+| 3   | Mensagem guardada no pedido (`whatsapp_message`), para o reenvio devolver o mesmo texto | ✅     |
+| 4   | Resposta do pedido com `whatsapp: { url, message }`; `url` nulo sem WhatsApp cadastrado | ✅     |
+| 5   | Confirmação com "Enviar pedido pelo WhatsApp"; sem WhatsApp, o telefone de contato      | ✅     |
+| 6   | Testes: 6 da mensagem, 2 novos e 3 ajustados nas rotas, 2 de tela                       | ✅     |
 
 ### Decisões desta fase
 
-**O pedido é calculado sobre a mesma montagem do cardápio que o cliente recebe.** A montagem do
-`GET /menu` foi extraída para `montarCardapioPublico`, que roda dentro da transação do pedido.
-Categoria inativa, produto esgotado, combo com componente esgotado, região desativada e forma de
-pagamento desligada somem dali, e o pedido os recusa pela mesma razão. Duas montagens
-divergiriam cedo ou tarde.
+**Endereço salvo sai mascarado na mensagem; completo só depois do OTP** — decisão do Junio. A
+mensagem sai do celular de quem fez o pedido: com o endereço completo, quem digitou o telefone de
+outra pessoa o receberia no próprio WhatsApp. Endereço digitado na hora sai completo, porque foi
+a pessoa quem o informou. O estabelecimento vê o endereço completo no pedido — por enquanto pela
+API; a tela vem com a Fase 13. Registrado no ROADMAP, no item do OTP.
 
-**O navegador não manda preço.** O corpo traz ids, quantidades e escolhas; campos a mais são
-descartados pelo schema, e um teste manda preços inventados e confere que são ignorados.
+**O nome na mensagem é o digitado.** Quando o cliente usa o primeiro nome preenchido pela
+identificação, o pedido grava o nome completo (Fase 11), mas a mensagem leva só o que foi
+digitado — senão o sobrenome vazaria por aqui.
 
-**Total diferente do que o cliente viu → 409, e nada é gravado.** O navegador envia o total que
-mostrou (`expectedTotalInCents`). Se o lojista mudou um preço no meio, o cliente não é cobrado por
-um valor que não viu: a tela recarrega o cardápio e pede para conferir.
+**A mensagem é montada no servidor e guardada no pedido.** Um formato só, calculado sobre o que
+foi gravado. Guardar o texto faz o reenvio com a mesma chave devolver a mesma mensagem: ela
+depende de coisas que o pedido não guarda, como o endereço ter vindo da lista ou digitado.
 
-**Recusa com todos os problemas de uma vez (422)**, cada um com frase pronta para o cliente e,
-quando é de um item, o índice dele.
+**Um botão, não a abertura automática.** O navegador bloqueia janelas abertas depois de esperar a
+rede; o toque precisa ser da pessoa. O link abre em outra aba com `noopener`.
 
-**Idempotente.** O navegador gera uma chave por tentativa; repetir o envio (duplo clique, rede
-que caiu depois do commit) devolve o pedido já criado. Dois envios simultâneos com a mesma chave
-esbarram na restrição única, e o segundo devolve o do primeiro. Depois de uma recusa, a tela gera
-chave nova; depois de falha de rede, reusa a mesma.
-
-**Número do pedido por uma tabela contadora**, incrementada com `INSERT ... ON CONFLICT DO
-UPDATE ... RETURNING` na transação do pedido. A linha fica travada até o commit — cinco pedidos
-simultâneos recebem cinco números — e o rollback devolve o número. Uma `SEQUENCE` seria global e
-não volta no rollback.
-
-**O pedido é cópia, não referência.** Nome e telefone de quem pediu, endereço, região, forma de
-pagamento, preço de cada item com as opções, composição do combo. O item guarda o `productId`
-sem chave estrangeira: o produto pode sair do cardápio, o pedido fica. Um teste muda o produto
-depois do pedido e confere que o pedido não muda.
-
-**Endereço salvo só vale se for do dono do telefone** — o id vem do navegador. E a resposta do
-pedido não devolve endereço: com endereço salvo, devolvê-lo revelaria o que a identificação
-mascarou.
-
-**O cliente que já existe mantém o nome guardado**; o nome digitado fica no pedido. O telefone
-não prova quem digita, e um pedido não deve renomear o cliente de outra pessoa.
-
-**O nome vem preenchido com o primeiro nome** quando o telefone é conhecido — pedido na
-validação. Só o primeiro, porque é o que a identificação revela. Se o nome enviado é exatamente
-esse primeiro nome, o servidor grava no pedido o nome completo guardado: a cozinha vê "Maria
-Oliveira", e o navegador nunca recebe o sobrenome. O que a pessoa já digitou não é sobrescrito, e
-trocar o telefone tira o nome preenchido (mas não um editado). Voltar ao número já consultado
-reaplica a resposta sem nova busca.
-
-**Endereço novo igual a um salvo** (mesmo CEP, rua, número e complemento) não vira outra linha:
-o existente é marcado como usado.
-
-**Status só avança** — pode pular etapas, nunca voltar. "Saiu para entrega" só em entrega;
-cancelar exige motivo, de qualquer status não final. A mudança só grava se o status ainda for o
-esperado: duas pessoas mexendo ao mesmo tempo, a segunda recebe 409.
-
-**FK do pedido para o cliente com `NO ACTION`**, não `RESTRICT`: excluir o estabelecimento apaga
-tudo em cascata numa ordem que o PostgreSQL não garante, e `RESTRICT` checaria cedo demais.
-Excluir cliente com pedido continua recusado — há teste para os dois.
-
-**A confirmação recebe o pedido pelo estado da navegação**, não pela URL: o número não vai para
-endereço público. Recarregada, a página diz que os detalhes não ficam guardados.
+**O pedido já está registrado antes do WhatsApp.** A mensagem avisa o estabelecimento; não é ela
+que cria o pedido. Sem WhatsApp cadastrado, a confirmação diz isso e mostra o telefone de contato.
 
 ### Verificação executada
 
-| Verificação                                | Resultado                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------------------------ |
-| `pnpm typecheck` / `lint` / `build`        | zero erro                                                                      |
-| `pnpm test`                                | **510 testes** (371 API + 126 web + 13 shared)                                 |
-| Testes sensíveis à regra                   | sem o dono do endereço, sem a checagem de total, sem a chave nova: cada um cai |
-| API rodando: CORS, fechado, corpo inválido | POST liberado para a web; 422 com o motivo; 400                                |
-| Pedido criado com a API rodando            | não feito: os dois estabelecimentos do seed estavam fechados (15h)             |
-| Conferência visual no navegador            | a fazer na validação                                                           |
+| Verificação                         | Resultado                                            |
+| ----------------------------------- | ---------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build` | zero erro                                            |
+| `pnpm test`                         | **520 testes** (379 API + 128 web + 13 shared)       |
+| Teste sensível à regra              | endereço salvo saindo completo derruba o teste certo |
+| Mensagem no WhatsApp de verdade     | a fazer na validação                                 |
 
 ---
 
-## Fase 12 — próxima
+## Fase 13 — próxima
 
-O WhatsApp: depois do pedido, abrir a conversa com o estabelecimento com a mensagem formatada —
-número do pedido, itens, opções, total, pagamento e endereço. **Cuidado herdado da Fase 11:** com
-endereço salvo, a mensagem não pode levar o endereço completo para o navegador de quem digitou o
-telefone; o formato da mensagem precisa ser decidido com isso em mente.
+WebSocket e pedidos em tempo real: o pedido novo aparece no painel do estabelecimento sem
+recarregar a página. É onde nasce a primeira tela administrativa — e onde o CORS precisa passar a
+liberar `PATCH`, `PUT` e `DELETE`.
 
 ---
 
 ## Fases anteriores
+
+**Fase 11** entregou o pedido recalculado no servidor, sobre a mesma montagem do cardápio que o
+cliente recebe: recusa com todos os problemas, 409 quando o total difere do visto, envio
+idempotente, número sequencial por estabelecimento, cópia de tudo no pedido e status que só
+avança, com auditoria. Na validação, o nome passou a vir preenchido com o primeiro nome, e o
+pedido o completa com o nome guardado.
 
 **Fase 10** entregou o cliente final e o checkout: identificação por telefone que devolve só o
 primeiro nome e endereços mascarados, com limite próprio e auditoria; CEP como primeiro campo do

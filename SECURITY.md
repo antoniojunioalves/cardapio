@@ -235,6 +235,11 @@ O corpo de `POST .../orders` é tratado como **entrada hostil**:
 - **10 envios por minuto por IP.**
 - Estabelecimento suspenso ou inexistente responde o mesmo 404.
 
+**Mensagem do WhatsApp** (Fase 12): montada no servidor e entregue ao navegador de quem pediu,
+então segue a mesma regra da identificação — endereço salvo sai **mascarado**, endereço digitado
+na hora sai completo, e o nome é o que a pessoa digitou (nunca o completo guardado). O endereço
+completo de um endereço salvo só na mensagem depois do OTP (ROADMAP).
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.
