@@ -34,3 +34,25 @@ export class ForbiddenError extends AppError {
     this.name = 'ForbiddenError'
   }
 }
+
+/**
+ * 404 — o recurso não existe **para quem pergunta**.
+ *
+ * Um id de outro estabelecimento também cai aqui, e não num 403: o RLS o torna
+ * invisível, e responder "existe, mas não é seu" confirmaria a existência dele
+ * para quem está tentando adivinhar ids.
+ */
+export class NotFoundError extends AppError {
+  constructor(message = 'Não encontrado.') {
+    super(message, 404, 'NOT_FOUND')
+    this.name = 'NotFoundError'
+  }
+}
+
+/** 409 — a operação conflita com o estado atual: nome repetido, categoria com produtos. */
+export class ConflictError extends AppError {
+  constructor(message: string, code = 'CONFLICT') {
+    super(message, 409, code)
+    this.name = 'ConflictError'
+  }
+}

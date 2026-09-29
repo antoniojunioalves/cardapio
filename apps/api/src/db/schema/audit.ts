@@ -3,7 +3,6 @@ import { index, jsonb, pgPolicy, pgTable, timestamp, uuid, varchar } from 'drizz
 
 import { currentTenantId, primaryId } from './shared.js'
 import { tenants } from './tenants.js'
-import { users } from './users.js'
 
 /**
  * Registro de ações administrativas.
@@ -30,8 +29,16 @@ export const auditLogs = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
 
-    /** Nulo quando o ator foi removido, ou quando a ação foi do próprio sistema. */
-    actorUserId: uuid().references(() => users.id, { onDelete: 'set null' }),
+    /**
+     * Nulo quando o ator foi removido, ou quando a ação foi do próprio sistema.
+     *
+     * A chave estrangeira é composta — `(tenant_id, actor_user_id)` — e está na
+     * migration `0009`, escrita à mão: ela precisa de `ON DELETE SET NULL
+     * (actor_user_id)`, anulando só o ator. O `SET NULL` comum anularia também
+     * o `tenant_id`, que é obrigatório, e a remoção do usuário falharia. O
+     * Drizzle não expressa essa forma.
+     */
+    actorUserId: uuid(),
 
     /** `product.price_changed`, `order.cancelled`, `user.created`. */
     action: varchar({ length: 64 }).notNull(),

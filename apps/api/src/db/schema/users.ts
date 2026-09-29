@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  foreignKey,
   index,
   pgPolicy,
   pgTable,
@@ -44,6 +45,10 @@ export const users = pgTable(
   },
   (table) => [
     unique('users_tenant_email').on(table.tenantId, table.email),
+    // Alvo das chaves estrangeiras compostas: outras tabelas referenciam
+    // (tenant_id, id), e não só id, para que o banco exija que a referência
+    // fique dentro do mesmo estabelecimento. Ver `tests/rls-guard.test.ts`.
+    unique('users_tenant_id_id').on(table.tenantId, table.id),
     index('users_tenant_idx').on(table.tenantId),
     pgPolicy('tenant_isolation', {
       as: 'permissive',
@@ -74,9 +79,7 @@ export const refreshTokens = pgTable(
     tenantId: uuid()
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
-    userId: uuid()
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid().notNull(),
 
     tokenHash: varchar({ length: 64 }).notNull().unique(),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
@@ -86,6 +89,14 @@ export const refreshTokens = pgTable(
   },
   (table) => [
     index('refresh_tokens_user_idx').on(table.userId),
+    // Composta, e não `userId → users.id`: a checagem de FK roda por fora do
+    // RLS, então uma FK simples aceitaria um token apontando para usuário de
+    // outro estabelecimento.
+    foreignKey({
+      name: 'refresh_tokens_user_mesmo_tenant',
+      columns: [table.tenantId, table.userId],
+      foreignColumns: [users.tenantId, users.id],
+    }).onDelete('cascade'),
     pgPolicy('tenant_isolation', {
       as: 'permissive',
       for: 'all',

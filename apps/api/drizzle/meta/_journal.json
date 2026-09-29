@@ -57,6 +57,34 @@
       "when": 1790617005877,
       "tag": "0007_drop_storage_urls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790620766881,
+      "tag": "0008_fk_mesmo_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790620780785,
+      "tag": "0009_fk_auditoria_mesmo_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790620879347,
+      "tag": "0010_catalogo",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790620884688,
+      "tag": "0011_force_rls_catalogo",
+      "breakpoints": true
     }
   ]
 }

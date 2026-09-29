@@ -8,6 +8,7 @@ import { closeDatabase, db } from '../src/db/index.js'
 import { auditLogs, refreshTokens, userRoles, users } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
+import { hashPassword } from '../src/auth/password.js'
 import {
   criarTenantComUsuario,
   removerTenantDeTeste,
@@ -216,5 +217,96 @@ describe('registro de auditoria', () => {
         }),
       ),
     ).rejects.toThrow()
+  })
+})
+
+/**
+ * A checagem de chave estrangeira roda por fora do RLS. Antes das FKs
+ * compostas, o Tenant A não enxergava o usuário do Tenant B, mas conseguia
+ * gravar referências a ele — bastava saber o UUID. Estes testes provam que o
+ * banco agora recusa.
+ */
+describe('referências a usuário de outro estabelecimento', () => {
+  it('o Tenant A não atribui papel a um usuário do Tenant B', async () => {
+    // É o IDOR que a futura rota "atribuir papel" abriria: o dono de A manda
+    // o UUID de um usuário de B no corpo da requisição.
+    await expect(
+      withTenant(contextoDe(tenantA), (tx) =>
+        tx.insert(userRoles).values({
+          tenantId: tenantA.tenantId,
+          userId: tenantB.userId,
+          roleId: tenantA.roleId,
+        }),
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('o Tenant A não grava sessão para um usuário do Tenant B', async () => {
+    await expect(
+      withTenant(contextoDe(tenantA), (tx) =>
+        tx.insert(refreshTokens).values({
+          tenantId: tenantA.tenantId,
+          userId: tenantB.userId,
+          tokenHash: 'f'.repeat(64),
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('o Tenant A não atribui ação de auditoria a um usuário do Tenant B', async () => {
+    await expect(
+      withTenant(contextoDe(tenantA), (tx) =>
+        tx.insert(auditLogs).values({
+          tenantId: tenantA.tenantId,
+          actorUserId: tenantB.userId,
+          action: 'forjado',
+          entityType: 'teste',
+        }),
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('remover um usuário preserva a auditoria dele, só sem o vínculo', async () => {
+    // A FK usa ON DELETE SET NULL (actor_user_id): anula só o ator. O SET
+    // NULL comum anularia também o tenant_id, que é obrigatório, e a remoção
+    // do usuário falharia.
+    const contexto = contextoDe(tenantA)
+    const passwordHash = await hashPassword('temporaria')
+
+    const idDoRegistro = await withTenant(contexto, async (tx) => {
+      const [temporario] = await tx
+        .insert(users)
+        .values({
+          tenantId: tenantA.tenantId,
+          name: 'Funcionário desligado',
+          email: `desligado-${Date.now()}@exemplo.com`,
+          passwordHash,
+        })
+        .returning({ id: users.id })
+      if (!temporario) throw new Error('falha ao criar usuário temporário')
+
+      const [registro] = await tx
+        .insert(auditLogs)
+        .values({
+          tenantId: tenantA.tenantId,
+          actorUserId: temporario.id,
+          action: 'product.price_changed',
+          entityType: 'product',
+        })
+        .returning({ id: auditLogs.id })
+
+      await tx.delete(users).where(eq(users.id, temporario.id))
+      return registro?.id ?? ''
+    })
+
+    const [registro] = await withTenant(contexto, (tx) =>
+      tx
+        .select({ actor: auditLogs.actorUserId, tenantId: auditLogs.tenantId })
+        .from(auditLogs)
+        .where(eq(auditLogs.id, idDoRegistro)),
+    )
+
+    expect(registro).toEqual({ actor: null, tenantId: tenantA.tenantId })
   })
 })

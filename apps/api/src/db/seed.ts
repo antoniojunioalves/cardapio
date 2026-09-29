@@ -7,6 +7,8 @@ import { withTenant } from '../tenant/with-tenant.js'
 import { closeDatabase, db } from './index.js'
 import {
   businessHours,
+  categories,
+  products,
   deliveryRegions,
   deliverySettings,
   paymentMethods,
@@ -92,6 +94,43 @@ const ESTABELECIMENTOS = [
     horarios: NOITE_ATRAVESSANDO_MEIA_NOITE,
     regioes: [] as { nome: string; taxaEmCentavos: number }[],
     pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD'],
+    cardapio: [
+      {
+        categoria: 'Hambúrgueres',
+        produtos: [
+          {
+            nome: 'X-Salada',
+            descricao: 'Pão, hambúrguer 150 g, queijo, alface e tomate.',
+            preco: 2590,
+          },
+          {
+            nome: 'X-Bacon',
+            descricao: 'Pão, hambúrguer 150 g, queijo e bacon crocante.',
+            preco: 2990,
+          },
+          {
+            nome: 'X-Tudo',
+            descricao: 'Hambúrguer, bacon, ovo, presunto, queijo e salada.',
+            preco: 3490,
+          },
+        ],
+      },
+      {
+        categoria: 'Porções',
+        produtos: [
+          { nome: 'Batata frita', descricao: 'Porção de 400 g.', preco: 1500 },
+          { nome: 'Onion rings', descricao: 'Anéis de cebola empanados.', preco: 1800 },
+        ],
+      },
+      {
+        categoria: 'Bebidas',
+        produtos: [
+          { nome: 'Refrigerante lata', descricao: '350 ml.', preco: 600 },
+          // Esgotado de propósito: o cardápio público precisa saber exibir isso.
+          { nome: 'Suco natural', descricao: 'Laranja, 500 ml.', preco: 900, esgotado: true },
+        ],
+      },
+    ],
   },
   {
     slug: 'pizzaria-da-esquina',
@@ -110,6 +149,30 @@ const ESTABELECIMENTOS = [
       { nome: 'Vila Nova', taxaEmCentavos: 1000 },
     ],
     pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'MEAL_VOUCHER_VR'],
+    cardapio: [
+      {
+        categoria: 'Pizzas salgadas',
+        produtos: [
+          { nome: 'Margherita', descricao: 'Molho de tomate, muçarela e manjericão.', preco: 4500 },
+          { nome: 'Calabresa', descricao: 'Calabresa fatiada e cebola.', preco: 4800 },
+          {
+            nome: 'Portuguesa',
+            descricao: 'Presunto, ovo, cebola, azeitona e ervilha.',
+            preco: 5200,
+          },
+        ],
+      },
+      {
+        categoria: 'Pizzas doces',
+        produtos: [
+          { nome: 'Chocolate', descricao: 'Chocolate ao leite e granulado.', preco: 4200 },
+        ],
+      },
+      {
+        categoria: 'Bebidas',
+        produtos: [{ nome: 'Refrigerante 2 L', descricao: 'Garrafa.', preco: 1400 }],
+      },
+    ],
   },
 ] as const
 
@@ -232,6 +295,36 @@ async function semearConfiguracoes(
   }
 }
 
+/** Idempotente: só semeia se o estabelecimento ainda não tiver nenhuma categoria. */
+async function semearCardapio(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  estabelecimento: Estabelecimento,
+): Promise<void> {
+  const jaTem = await tx.select({ id: categories.id }).from(categories).limit(1)
+  if (jaTem.length > 0) return
+
+  for (const [indiceCategoria, secao] of estabelecimento.cardapio.entries()) {
+    const [categoria] = await tx
+      .insert(categories)
+      .values({ tenantId, name: secao.categoria, sortOrder: indiceCategoria * 10 })
+      .returning({ id: categories.id })
+    if (!categoria) throw new Error(`categoria ${secao.categoria} não foi criada`)
+
+    await tx.insert(products).values(
+      secao.produtos.map((produto, indice) => ({
+        tenantId,
+        categoryId: categoria.id,
+        name: produto.nome,
+        description: produto.descricao,
+        priceInCents: produto.preco,
+        isAvailable: !('esgotado' in produto && produto.esgotado),
+        sortOrder: indice * 10,
+      })),
+    )
+  }
+}
+
 async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promise<void> {
   for (const estabelecimento of ESTABELECIMENTOS) {
     await db
@@ -287,6 +380,7 @@ async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promis
         .onConflictDoNothing()
 
       await semearConfiguracoes(tx, tenant.id, estabelecimento)
+      await semearCardapio(tx, tenant.id, estabelecimento)
     })
 
     infraLogger.info(

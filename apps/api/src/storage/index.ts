@@ -18,7 +18,7 @@ export const storage: LocalStorageProvider = new LocalStorageProvider({
   urlBase: env.STORAGE_PUBLIC_URL,
 })
 
-export type CategoriaDeImagem = 'logo' | 'cover' | 'products'
+export type CategoriaDeImagem = 'logo' | 'cover' | 'categories' | 'products'
 
 /**
  * Monta a chave de uma imagem nova.
