@@ -16,7 +16,13 @@ export function MenuHeader({ cardapio }: { cardapio: CardapioPublico }) {
       </div>
 
       <div className="px-page-x">
-        <div className="mx-auto -mt-10 max-w-3xl rounded-card bg-surface p-card shadow-raised">
+        {/*
+         * `relative` é o que mantém o cartão por cima da capa. Sem ele, o
+         * navegador pinta primeiro os fundos e depois o conteúdo em linha: a
+         * <img> da capa cobria o fundo branco do cartão, e só o logo e o nome
+         * — também conteúdo em linha, e depois no HTML — ficavam visíveis.
+         */}
+        <div className="relative mx-auto -mt-10 max-w-3xl rounded-card bg-surface p-card shadow-raised">
           <div className="flex items-start gap-stack">
             {establishment.logoUrl ? (
               <img

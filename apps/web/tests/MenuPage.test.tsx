@@ -73,6 +73,21 @@ describe('cardápio público', () => {
     expect(nav.parentElement).toContainElement(screen.getByRole('main'))
   })
 
+  it('com capa, o cartão do estabelecimento fica por cima dela', async () => {
+    await abrirCardapio({
+      ...cardapioDoZe(),
+      establishment: { ...cardapioDoZe().establishment, coverUrl: 'http://api/capa.jpg' },
+    })
+
+    // O jsdom não calcula layout, então o teste trava a causa: o cartão sobe
+    // sobre a capa (margem negativa) e só fica por cima dela se for
+    // posicionado. Sem isso, a <img> da capa cobre o fundo do cartão.
+    const nome = screen.getByRole('heading', { level: 1, name: 'Lanchonete do Zé' })
+    const cartao = nome.closest('.-mt-10')
+    expect(cartao).toHaveClass('relative')
+    expect(document.querySelector('header img')).toHaveAttribute('src', 'http://api/capa.jpg')
+  })
+
   it('tocar numa categoria rola até ela e a destaca', async () => {
     await abrirCardapio()
 
