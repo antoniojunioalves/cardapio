@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 
+import { buscarProduto, resolverCarrinho, resumirCarrinho } from '@/features/cart/cart'
+import { CartBar } from '@/features/cart/components/CartBar'
+import { CartSheet } from '@/features/cart/components/CartSheet'
+import { ProductDialog } from '@/features/cart/components/ProductDialog'
+import { useCarrinho } from '@/features/cart/store'
 import { useCardapioPublico } from '@/features/menu/api'
 import { CategoryNav } from '@/features/menu/components/CategoryNav'
 import { MenuHeader } from '@/features/menu/components/MenuHeader'
@@ -16,6 +21,27 @@ export function MenuPage() {
   const { tenantSlug = '' } = useParams()
   const consulta = useCardapioPublico(tenantSlug)
   const [busca, setBusca] = useState('')
+  const carrinho = useCarrinho(tenantSlug)
+
+  // O produto aberto e o carrinho aberto moram na URL (`?produto=` e
+  // `?carrinho`): o "voltar" do celular fecha a janela em vez de sair do
+  // cardápio, e o link de um produto pode ser compartilhado.
+  const [parametros, setParametros] = useSearchParams()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const abrirJanela = (chave: 'produto' | 'carrinho', valor: string) => {
+    setParametros({ [chave]: valor }, { state: { janela: true } })
+  }
+
+  // Aberta pela página, a janela fecha voltando no histórico — senão o
+  // "voltar" seguinte a reabriria. Aberta por link direto, não há para onde
+  // voltar, e só se tira o parâmetro.
+  const fecharJanela = () => {
+    const abertaPelaPagina = (location.state as { janela?: boolean } | null)?.janela === true
+    if (abertaPelaPagina) void navigate(-1)
+    else setParametros({}, { replace: true })
+  }
 
   const nome = consulta.data?.establishment.name
   useEffect(() => {
@@ -61,8 +87,14 @@ export function MenuPage() {
   const cardapio = consulta.data
   const vazio = cardapio.categories.length === 0
 
+  const linhas = resolverCarrinho(carrinho.itens, cardapio)
+  const resumo = resumirCarrinho(linhas, cardapio.establishment.minimumOrderInCents)
+  const idDoProduto = parametros.get('produto')
+  const produtoAberto = idDoProduto ? buscarProduto(cardapio, idDoProduto) : null
+  const carrinhoAberto = parametros.has('carrinho')
+
   return (
-    <div className="min-h-dvh pb-section-y">
+    <div className={`min-h-dvh ${linhas.length > 0 ? 'pb-28' : 'pb-section-y'}`}>
       <MenuHeader cardapio={cardapio} />
 
       <div className="mx-auto mt-stack max-w-3xl px-page-x">
@@ -116,7 +148,13 @@ export function MenuPage() {
             )}
             <div className="mt-stack flex flex-col gap-stack">
               {categoria.products.map((produto) => (
-                <ProductCard key={produto.id} produto={produto} />
+                <ProductCard
+                  key={produto.id}
+                  produto={produto}
+                  aoAbrir={() => {
+                    abrirJanela('produto', produto.id)
+                  }}
+                />
               ))}
             </div>
           </section>
@@ -124,6 +162,42 @@ export function MenuPage() {
 
         <MenuInfo cardapio={cardapio} />
       </main>
+
+      {linhas.length > 0 && !carrinhoAberto && (
+        <CartBar
+          quantidadeDeItens={resumo.quantidadeDeItens}
+          subtotalEmCentavos={resumo.subtotalEmCentavos}
+          aoAbrir={() => {
+            abrirJanela('carrinho', '1')
+          }}
+        />
+      )}
+
+      {produtoAberto && (
+        <ProductDialog
+          // Trocar de produto recomeça a escolha do zero.
+          key={produtoAberto.id}
+          produto={produtoAberto}
+          aoAdicionar={(item) => {
+            carrinho.adicionar(item)
+            fecharJanela()
+          }}
+          aoFechar={fecharJanela}
+        />
+      )}
+
+      {carrinhoAberto && (
+        <CartSheet
+          linhas={linhas}
+          resumo={resumo}
+          pedidoMinimoEmCentavos={cardapio.establishment.minimumOrderInCents}
+          aberto={cardapio.status.aberto}
+          aoMudarQuantidade={carrinho.alterarQuantidade}
+          aoRemover={carrinho.remover}
+          aoEsvaziar={carrinho.esvaziar}
+          aoFechar={fecharJanela}
+        />
+      )}
     </div>
   )
 }
