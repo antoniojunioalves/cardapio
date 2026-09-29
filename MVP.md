@@ -44,8 +44,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Cartões de produto com imagem, descrição, preço e disponibilidade
 - [x] Seleção de opções e adicionais
 - [x] Carrinho persistido no navegador, com indicador de quantidade
-- [ ] Checkout: telefone, nome, endereço, forma de pagamento, observações
-- [ ] Identificação do cliente por telefone (ver a dívida registrada em SECURITY.md)
+- [x] Checkout: telefone, nome, endereço, forma de pagamento, observações — _o envio é da Fase 11_
+- [x] Identificação do cliente por telefone (ver a dívida registrada em SECURITY.md)
 - [ ] Pedido validado e **recalculado no servidor**
 - [ ] Abertura do WhatsApp do estabelecimento com a mensagem formatada
 

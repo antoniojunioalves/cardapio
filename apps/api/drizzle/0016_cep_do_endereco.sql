@@ -1,0 +1,2 @@
+ALTER TABLE "customer_addresses" ADD COLUMN "postal_code" varchar(8);--> statement-breakpoint
+ALTER TABLE "customer_addresses" ADD CONSTRAINT "customer_addresses_cep_formato" CHECK ("customer_addresses"."postal_code" ~ '^[0-9]{8}$');

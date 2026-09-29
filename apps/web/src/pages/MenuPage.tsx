@@ -195,6 +195,9 @@ export function MenuPage() {
           aoMudarQuantidade={carrinho.alterarQuantidade}
           aoRemover={carrinho.remover}
           aoEsvaziar={carrinho.esvaziar}
+          aoContinuar={() => {
+            void navigate(`/${tenantSlug}/checkout`)
+          }}
           aoFechar={fecharJanela}
         />
       )}

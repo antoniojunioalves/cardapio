@@ -18,6 +18,7 @@ import { adminImageRoutes } from './routes/admin-images.js'
 import { adminSettingsRoutes } from './routes/admin-settings.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
+import { publicCustomerRoutes } from './routes/public-customers.js'
 import { publicMenuRoutes } from './routes/public-menu.js'
 
 export interface BuildAppOptions {
@@ -76,6 +77,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(adminCatalogRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCustomizationRoutes, { prefix: '/api/v1/admin' })
   await instance.register(publicMenuRoutes, { prefix: '/api/v1/public' })
+  await instance.register(publicCustomerRoutes, { prefix: '/api/v1/public' })
 
   return instance
 }

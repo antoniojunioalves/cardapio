@@ -17,6 +17,7 @@ interface CartSheetProps {
   aoMudarQuantidade: (itemId: string, quantidade: number) => void
   aoRemover: (itemId: string) => void
   aoEsvaziar: () => void
+  aoContinuar: () => void
   aoFechar: () => void
 }
 
@@ -34,8 +35,13 @@ export function CartSheet({
   aoMudarQuantidade,
   aoRemover,
   aoEsvaziar,
+  aoContinuar,
   aoFechar,
 }: CartSheetProps) {
+  // Item com problema ou pedido abaixo do mínimo se resolvem aqui, no
+  // carrinho — não faz sentido ir preencher endereço antes.
+  const podeContinuar = !resumo.temProblema && resumo.faltaParaMinimoEmCentavos === 0
+
   const rodape = (
     <div className="flex flex-col gap-2">
       <div className="text-body flex justify-between font-semibold text-content">
@@ -49,6 +55,17 @@ export function CartSheet({
         </p>
       )}
       <p className="text-caption text-content-muted">A taxa de entrega é calculada no checkout.</p>
+      {resumo.temProblema && (
+        <p className="text-caption text-warning">Remova os itens indisponíveis para continuar.</p>
+      )}
+      <button
+        type="button"
+        onClick={aoContinuar}
+        disabled={!podeContinuar}
+        className="text-body mt-1 rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover disabled:bg-neutral-300 disabled:text-neutral-600"
+      >
+        Continuar
+      </button>
     </div>
   )
 

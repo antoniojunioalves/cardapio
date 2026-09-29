@@ -715,6 +715,31 @@ estabelecimento, status, horários, entrega, formas de pagamento e cardápio.
 
 ---
 
+### 8.9 Cliente final e identificação por telefone
+
+`customers` e `customer_addresses` são **por estabelecimento**: o mesmo telefone na lanchonete e
+na pizzaria são dois clientes, sem ligação. O dado serve a quem o coletou (SECURITY.md, LGPD), e
+a unicidade é `(tenant_id, phone)`. O telefone é guardado normalizado — só dígitos, com o país,
+`5511987654321` — e uma CHECK recusa outra forma; a normalização vive em `packages/shared` e é a
+mesma no formulário e na API. O endereço tem **CEP** (só os 8 dígitos, também com CHECK),
+obrigatório no schema e primeiro campo do formulário, porque é por ele que a futura consulta aos
+Correios vai preencher o resto. A coluna é anulável só para os endereços gravados antes dela. O endereço **não** guarda a região de entrega (ligá-los está no ROADMAP): as regiões são
+salvas por substituição do conjunto e mudam de id. O cliente nasce no primeiro pedido (Fase 11);
+não há conta com senha no MVP.
+
+`POST /api/v1/public/{tenantSlug}/customers/identify` reconhece quem já pediu. Como telefone não
+prova identidade (SECURITY.md, seção 5), a resposta é deliberadamente pobre: primeiro nome e, de
+cada endereço, rua, bairro e número mascarado — o CEP não sai. **O endereço completo nunca volta ao navegador** —
+o pedido referencia o endereço salvo pelo id, e o servidor o completa. Com isso, "revelar o
+endereço de quem digitou o telefone errado" deixa de ser possível por esta rota; o que ainda sai é
+nome, rua e bairro, até o OTP.
+
+A rota é POST (o telefone não vai para a URL, que acaba em logs), tem limite próprio de 10
+requisições por minuto por IP, responde `no-store` e audita cada identificação que encontra
+alguém. A resolução do slug é a mesma do cardápio, em `src/tenant/public.ts`.
+
+---
+
 ## 9. Frontend
 
 ### 9.1 Divisão de estado
@@ -744,11 +769,12 @@ src/
 
 ### 9.3 Rotas e dados
 
-| Rota           | Página                                                 |
-| -------------- | ------------------------------------------------------ |
-| `/`            | verificação do ambiente, até existir página do produto |
-| `/:tenantSlug` | cardápio público                                       |
-| qualquer outra | não encontrado                                         |
+| Rota                    | Página                                                 |
+| ----------------------- | ------------------------------------------------------ |
+| `/`                     | verificação do ambiente, até existir página do produto |
+| `/:tenantSlug`          | cardápio público                                       |
+| `/:tenantSlug/checkout` | finalizar pedido                                       |
+| qualquer outra          | não encontrado                                         |
 
 No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
 faz o "voltar" do celular fechar a janela em vez de sair do cardápio.
@@ -779,7 +805,26 @@ hostil e é validado e precificado do zero, com a regra de disponibilidade de 8.
 O que volta do `localStorage` passa por `sanearCarrinhos` antes de entrar na store: formato
 conferido item a item, quantidade limitada a 1–50, observação a 140 caracteres.
 
-### 9.5 Temas
+### 9.5 Checkout
+
+`/:tenantSlug/checkout` usa o cardápio do TanStack Query (em cache, vindo da página anterior) e o
+carrinho do Zustand, e monta o formulário com React Hook Form + Zod.
+
+- **Os campos usam os schemas de `packages/shared`** — telefone, nome, endereço —, os mesmos que a
+  API aplica. As regras que dependem do estabelecimento (modalidade oferecida, região ativa, forma
+  de pagamento aceita, troco a partir do total) estão num schema montado com o cardápio atual
+  (`features/checkout/checkout.ts`).
+- **Todas as regras rodam num passo só**, para a pessoa ver todos os erros de uma vez: no Zod 4 o
+  `superRefine` não roda depois de uma falha na base, então a base aceita texto e o
+  `superRefine` valida tudo.
+- A saída do schema é `DadosDoCheckout` — o formato que a Fase 11 vai enviar. Endereço salvo vai
+  só pelo id.
+- Taxa e total são **prévia**; fechado, abaixo do mínimo e item com problema impedem o envio,
+  com o motivo na tela. Quem decide é o servidor.
+- A identificação é mutação, não consulta: dado pessoal fora do cache, uma chamada por telefone,
+  e a resposta vale só para o número que está no campo.
+
+### 9.6 Temas
 
 Os **valores** vivem em CSS custom properties, em
 [`apps/web/src/theme/tokens.css`](apps/web/src/theme/tokens.css), dentro do bloco `@theme` do
@@ -914,11 +959,15 @@ diante de `pnpm install && pnpm db:up && pnpm dev`. Os Dockerfiles de API e web 
 fase de deploy, quando o alvo for imagem de produção — que é um artefato diferente de um
 ambiente de desenvolvimento.
 
-### Um pacote compartilhado, não vários
+### Pacote compartilhado só quando há o que compartilhar
 
-Existe apenas `packages/config`, com a identidade do produto e as bases de tsconfig e eslint. Um
-`packages/shared` com schemas Zod comuns aos dois lados entra quando houver de fato schema
-compartilhado — Fase 3 em diante. Pacote criado antes do uso vira indireção sem conteúdo.
+`packages/config` guarda a identidade do produto e as bases de tsconfig e eslint.
+`packages/shared` entrou na Fase 10, quando apareceu o primeiro schema que os dois lados
+validam igual — telefone e endereço, no formulário e na API. Antes disso, seria indireção sem
+conteúdo. Ele guarda só isso: regra que só um lado aplica fica nele.
+
+O contrato do cardápio público ainda está copiado no web (`features/menu/types.ts`), por ter
+nascido antes do pacote; migrá-lo é mudança à parte.
 
 ### Pacotes internos com escopo `@repo/`, não `@cardapio/`
 

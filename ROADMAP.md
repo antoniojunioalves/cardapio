@@ -17,13 +17,15 @@ de outra pessoa revela o endereço dela. Ver [SECURITY.md](SECURITY.md#5-dívida
 
 Quitação em duas etapas:
 
-1. **Mascarar** o endereço recuperado ("Rua das Flores, 1•• — Centro") até haver confirmação.
-2. **OTP** por WhatsApp ou SMS antes de exibir qualquer dado pessoal por telefone.
+1. ~~**Mascarar** o endereço recuperado ("Rua das Flores, 1•• — Centro")~~ — feito na Fase 10.
+2. **OTP** por WhatsApp ou SMS antes de exibir qualquer dado pessoal por telefone. Até lá, o
+   primeiro nome, a rua e o bairro continuam visíveis para quem souber o telefone.
 
 ### Rate limiting na consulta por telefone
 
-Sem ele, o endpoint de identificação vira uma ferramenta de varredura de endereços. Limite
-específico, mais estrito que o global.
+Feito na Fase 10: 10 identificações por minuto por IP. O que falta é o contador compartilhado
+entre instâncias (Redis, junto com o deploy) e um limite por estabelecimento, contra varredura
+distribuída entre muitos IPs.
 
 ### Retenção e eliminação de dados pessoais
 
@@ -42,11 +44,28 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Autenticação em dois fatores para usuários administrativos
 - Bloqueio temporário de conta após N tentativas falhas — hoje há apenas o limite por IP
 - Histórico de senhas, para impedir reuso da anterior
+- Conta de cliente final com senha — hoje o cliente é reconhecido só pelo telefone
 - Papéis personalizados por estabelecimento — hoje OWNER, ADMIN e STAFF são globais
 - Painel da plataforma para o Super Admin — hoje existe só a estrutura de dados
 
 ## Endereço e entrega
 
+- **Busca do endereço pelo CEP na base dos Correios.** O campo CEP já existe e é o primeiro do
+  endereço no checkout (Fase 10); a consulta vai preencher rua, bairro e cidade a partir dele, e
+  o cliente só completa número e complemento. A escolha do serviço (API dos Correios ou uma
+  intermediária) e o que fazer quando ele estiver fora do ar ficam para essa fase — o cliente
+  precisa continuar podendo digitar à mão.
+- **Região de entrega atrelada ao endereço.** Hoje, na entrega por região, o cliente escolhe a
+  região a cada pedido, inclusive quando usa um endereço salvo — que não guarda a região (Fase
+  10). O objetivo é o endereço já trazer a sua região, e o cliente não precisar escolher de novo.
+  **A usabilidade ainda vai ser pensada antes de implementar.** Pontos em aberto:
+  - como a região se liga ao endereço: escolhida uma vez e guardada nele, deduzida do bairro, ou
+    por faixa de CEP cadastrada pelo lojista;
+  - as regiões hoje são salvas por substituição do conjunto e mudam de id a cada edição do
+    lojista — guardar o id no endereço exige ids estáveis, ou guardar outra chave;
+  - o que acontece quando a região do endereço é desativada ou removida, e quando o bairro do
+    endereço não corresponde a nenhuma região;
+  - se o cliente pode discordar da região sugerida, e como o lojista fica sabendo.
 - Integração com Google Maps e Apple Maps
 - Geocoding e armazenamento de latitude/longitude
 - Seleção de endereço por pin no mapa
@@ -89,6 +108,7 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Lista de favoritos
 - Carrinho que expira: hoje ele fica no navegador até ser esvaziado ou enviado
 - Carrinho entre aparelhos, ligado ao cliente identificado
+- Checkout que lembra nome e telefone no aparelho, sem precisar digitar de novo
 
 ## Catálogo
 

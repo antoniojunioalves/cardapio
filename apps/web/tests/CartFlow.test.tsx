@@ -211,6 +211,30 @@ describe('carrinho', () => {
     expect(within(janela()).getByText('Subtotal').nextSibling).toHaveTextContent('R$ 0,00')
   })
 
+  it('"Continuar" leva ao checkout', async () => {
+    await abrirCardapio()
+    const dialogo = montarXSalada()
+    fireEvent.click(within(dialogo).getByRole('button', { name: /^Adicionar/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Ver carrinho/ }))
+
+    fireEvent.click(within(janela()).getByRole('button', { name: 'Continuar' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Finalizar pedido' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('abaixo do mínimo, "Continuar" fica desabilitado', async () => {
+    await abrirCardapio()
+    fireEvent.click(
+      within(abrirProduto('Açaí na tigela')).getByRole('button', { name: /^Adicionar/ }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Ver carrinho/ }))
+
+    expect(within(janela()).getByRole('button', { name: 'Continuar' })).toBeDisabled()
+  })
+
   it('com o estabelecimento fechado, o carrinho avisa', async () => {
     const fechado: CardapioPublico = {
       ...cardapioDoZe(),

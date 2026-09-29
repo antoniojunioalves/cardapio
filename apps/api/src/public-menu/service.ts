@@ -1,4 +1,3 @@
-import { NotFoundError } from '../lib/errors.js'
 import {
   ensureDeliverySettings,
   ensureSettings,
@@ -8,8 +7,7 @@ import {
 } from '../settings/repository.js'
 import { statusDoEstabelecimento, type StatusDoEstabelecimento } from '../settings/opening-hours.js'
 import { urlDaImagem, type StorageService } from '../storage/index.js'
-import { tenantContextFromPublicSlug } from '../tenant/context.js'
-import { findTenantBySlug } from '../tenant/repository.js'
+import { resolverEstabelecimentoPublico } from '../tenant/public.js'
 import { withTenant } from '../tenant/with-tenant.js'
 import { podeSerPedido } from './availability.js'
 import { carregarCardapio, type CardapioCarregado } from './repository.js'
@@ -110,30 +108,12 @@ export interface CardapioPublico {
   categories: CategoriaPublica[]
 }
 
-/**
- * O mesmo formato que o banco exige. Um slug fora dele não pode existir, então
- * responde 404 sem ir ao banco.
- */
-const FORMATO_DO_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
-
-/**
- * Estabelecimento inexistente e suspenso recebem **a mesma resposta**. Dizer
- * "suspenso" publicamente revelaria a situação comercial de um cliente da
- * plataforma para qualquer um que digitasse o endereço.
- */
-const naoEncontrado = () => new NotFoundError('Estabelecimento não encontrado.')
-
 export async function obterCardapioPublico(
   slug: string,
   storage: StorageService,
   agora: Date = new Date(),
 ): Promise<CardapioPublico> {
-  if (slug.length > 63 || !FORMATO_DO_SLUG.test(slug)) throw naoEncontrado()
-
-  const tenant = await findTenantBySlug(slug)
-  if (!tenant || tenant.status !== 'ACTIVE') throw naoEncontrado()
-
-  const context = tenantContextFromPublicSlug(tenant.id)
+  const { tenant, context } = await resolverEstabelecimentoPublico(slug)
 
   return withTenant(context, async (tx) => {
     const configuracoes = await ensureSettings(tx, context)

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
+import { CheckoutPage } from '@/pages/CheckoutPage'
 import { HomePage } from '@/pages/HomePage'
 import { MenuPage } from '@/pages/MenuPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -11,7 +12,8 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
  * `MemoryRouter` num endereço qualquer.
  *
  * `/:tenantSlug` casa com um segmento só, então `/lanchonete-do-ze` abre o
- * cardápio e `/lanchonete-do-ze/qualquer-coisa` cai no não encontrado. As
+ * cardápio, `/lanchonete-do-ze/checkout` finaliza o pedido e qualquer outro
+ * segundo segmento cai no não encontrado. As
  * rotas administrativas, quando vierem, ficam sob um prefixo próprio.
  */
 export function AppRoutes() {
@@ -19,6 +21,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/:tenantSlug" element={<MenuPage />} />
+      <Route path="/:tenantSlug/checkout" element={<CheckoutPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

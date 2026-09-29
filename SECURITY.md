@@ -103,10 +103,10 @@ mesmos testes se repetem. Recurso sem eles não é considerado pronto.
 O que **não** está implementado: 2FA, bloqueio de conta após N falhas e histórico de senhas.
 Estão no ROADMAP.
 
-### Clientes finais — Fase 10
+### Clientes finais — **em vigor**
 
-Conta é opcional: o cliente pode pedir sem cadastro. Quem cria conta usa telefone ou e-mail mais
-senha. OTP, WhatsApp, Google e Apple estão no ROADMAP.
+Não há conta de cliente no MVP: o cliente pede sem cadastro e é reconhecido pelo telefone (seção
+5). Conta com senha, OTP, WhatsApp, Google e Apple estão no ROADMAP.
 
 ---
 
@@ -137,17 +137,26 @@ conhecido por terceiros. Quem digitar o número de outra pessoa vê o endereço 
 Está no MVP porque a fricção de um cadastro completo a cada pedido custa conversão real a um
 estabelecimento pequeno. Mas é **dívida**, não desenho final.
 
-Mitigações desde já:
+Mitigações em vigor (`POST /api/v1/public/{tenantSlug}/customers/identify`):
 
-- O endereço recuperado é exibido para **confirmação**, nunca usado em silêncio.
-- A recuperação por telefone é registrada em auditoria.
-- Rate limiting no endpoint de consulta por telefone, para inviabilizar varredura.
+- **O endereço completo nunca é devolvido.** A resposta traz o primeiro nome e, de cada
+  endereço, rua, bairro e o número mascarado — `Rua dos Ipês, 4•• — Jardim Paulista`.
+  CEP, complemento, referência, sobrenome e o telefone não saem. O cliente escolhe o endereço pelo id,
+  e o servidor completa o pedido (Fase 11). Um teste procura na resposta cada um desses dados.
+- O endereço é exibido para **confirmação**, nunca usado em silêncio.
+- Toda identificação que encontra alguém é registrada em auditoria (`customer.identified`), com o
+  IP. Telefone desconhecido não é registrado, para não guardar o número de quem nunca foi cliente.
+- **Limite de 10 identificações por minuto por IP**, muito abaixo do global.
+- POST com o telefone no corpo, não na URL; resposta com `Cache-Control: no-store`.
+- Cliente é por estabelecimento: o mesmo telefone em outro estabelecimento é outro cliente.
+
+**O que ainda vaza:** o primeiro nome, a rua e o bairro de quem tem aquele telefone. E o limite é
+por IP e em memória — quem distribui a varredura entre muitos IPs passa por ele.
 
 Plano de quitação (ROADMAP, prioridade alta):
 
-1. OTP por WhatsApp ou SMS antes de revelar qualquer endereço.
-2. Enquanto o OTP não existe, exibir o endereço **mascarado** ("Rua das Flores, 1•• — Centro"),
-   revelando por inteiro só após confirmação.
+1. ~~Exibir o endereço **mascarado** enquanto o OTP não existe~~ — feito na Fase 10.
+2. OTP por WhatsApp ou SMS antes de revelar qualquer dado pessoal.
 
 ---
 
@@ -208,13 +217,13 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
 
 ## 8. Cabeçalhos, CORS e limites
 
-| Item             | Estado                                                                                                |
-| ---------------- | ----------------------------------------------------------------------------------------------------- |
-| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)                            |
-| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                                                      |
-| Rate limiting    | **Ativo** — limite global; limites estritos para login e consulta por telefone entram com essas rotas |
-| Documentação     | **Ativo** — `/docs` desabilitado em produção                                                          |
-| HTTPS            | Responsabilidade do ambiente de deploy                                                                |
+| Item             | Estado                                                                          |
+| ---------------- | ------------------------------------------------------------------------------- |
+| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)      |
+| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                                |
+| Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone |
+| Documentação     | **Ativo** — `/docs` desabilitado em produção                                    |
+| HTTPS            | Responsabilidade do ambiente de deploy                                          |
 
 O limite global conta na memória do processo. Com mais de uma instância em produção isso vira um
 limite por instância; um armazenamento compartilhado entra junto do deploy (ROADMAP).

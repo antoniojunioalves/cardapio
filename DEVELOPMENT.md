@@ -79,12 +79,14 @@ apps/api/src/
 ├── settings/      configurações, horários, entrega — domínio + repositório + serviço
 ├── storage/       StorageService, provider local, detecção de tipo, troca de imagem
 ├── catalog/       categorias, produtos, grupos de opção e combos
+├── customers/     cliente final: máscara, repositório, identificação por telefone
+├── public-menu/   cardápio público
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
-├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper
-├── features/      por domínio — menu/ (api, tipos, apresentação), cart/ (regras, store)
-├── pages/         composição de rotas — MenuPage, HomePage, NotFoundPage
+├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper, TextField
+├── features/      por domínio — menu/, cart/ (regras, store), checkout/ (schema, formulário)
+├── pages/         composição de rotas — MenuPage, CheckoutPage, HomePage, NotFoundPage
 ├── layouts/
 ├── theme/         tokens de design
 ├── services/      clientes HTTP
@@ -152,6 +154,20 @@ função de limpeza no `merge` do `persist` — veja `sanearCarrinhos` em
 React Hook Form + Zod. O schema é a única definição: tipo e validação saem dele. Mensagens de
 erro em português e voltadas à pessoa que está preenchendo — "Informe um telefone com DDD", não
 "invalid format".
+
+Campo que a API também valida usa o schema de `@repo/shared`, nunca uma cópia. Regra que depende
+do estabelecimento (região, forma aceita, troco) vai num schema montado com o cardápio — veja
+`criarSchemaDoCheckout`. Atenção ao Zod 4: o `superRefine` não roda quando um campo da base já
+falhou; para mostrar todos os erros de uma vez, deixe a base aceitar texto e valide tudo no
+`superRefine`. E a base precisa aceitar `null`: grupo de rádios sem nada marcado chega assim
+depois que o foco passa por ele, e um `z.string()` puro derruba a base inteira.
+
+### Código compartilhado entre API e web
+
+`packages/shared` guarda só o que os dois lados precisam validar igual. Ele é consumido pelo
+`dist`, então **depois de mudar algo nele, rode `pnpm --filter @repo/shared build`** (o
+`pnpm dev` compila uma vez ao subir, mas não acompanha mudanças). Regra que só um lado aplica
+fica nele — a máscara do endereço é do servidor.
 
 ---
 
