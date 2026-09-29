@@ -96,6 +96,7 @@ export function CheckoutPage() {
               const estado: EstadoDoPedidoEnviado = {
                 pedido,
                 estabelecimento: cardapio.establishment.name,
+                telefoneDeContato: cardapio.establishment.contactPhone,
               }
               // `replace`: o "voltar" não reabre um checkout já enviado.
               void navigate(`/${tenantSlug}/pedido-enviado`, { replace: true, state: estado })
