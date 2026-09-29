@@ -1,8 +1,8 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-29
-**Fase atual:** 10 — concluída, aguardando validação
-**Próxima:** Fase 11 — pedidos
+**Fase atual:** 11 — concluída, aguardando validação
+**Próxima:** Fase 12 — WhatsApp
 
 ---
 
@@ -22,8 +22,14 @@ conhecido, traz o primeiro nome e os endereços **mascarados** —, nome, entreg
 endereço, região, forma de pagamento, troco e observações, com a prévia da taxa e do total. O
 formulário valida com os mesmos schemas da API (`packages/shared`).
 
-**Ainda não existe:** o envio do pedido — o botão confere tudo e para aí, até a Fase 11 —; e
-nenhuma tela administrativa — o lojista ainda configura tudo pela API.
+**O pedido é enviado e recalculado no servidor.** `POST /api/v1/public/{tenantSlug}/orders`
+recebe só ids, quantidades e escolhas; preço, taxa, total, disponibilidade e horário são
+calculados de novo sobre a mesma montagem do cardápio público. O pedido guarda uma cópia de tudo,
+ganha número sequencial por estabelecimento, e o cliente vê a confirmação. O status avança pelas
+rotas do painel (`/api/v1/admin/orders`), com auditoria.
+
+**Ainda não existe:** a mensagem pelo WhatsApp (Fase 12), os pedidos chegando em tempo real
+(Fase 13) e qualquer tela administrativa — o lojista ainda usa a API.
 
 ---
 
@@ -44,7 +50,7 @@ nenhuma tela administrativa — o lojista ainda configura tudo pela API.
 | 8b  | Cardápio público — página no frontend                                                                               | ✅ Concluída |
 | 9   | Carrinho                                                                                                            | ✅ Concluída |
 | 10  | Customer e checkout                                                                                                 | ✅ Concluída |
-| 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ⬜           |
+| 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ✅ Concluída |
 | 12  | WhatsApp                                                                                                            | ⬜           |
 | 13  | WebSocket e pedidos em tempo real                                                                                   | ⬜           |
 | 14  | Limites por plano                                                                                                   | ⬜           |
@@ -57,102 +63,106 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 10 — concluída
+## Fase 11 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                             | Status |
-| --- | -------------------------------------------------------------------------------------------------- | ------ |
-| 1   | `packages/shared`: telefone brasileiro, schemas de endereço e da identificação                     | ✅     |
-| 2   | Tabelas `customers` e `customer_addresses`: RLS forçado, FK composta, telefone normalizado         | ✅     |
-| 3   | Resolução pública do slug extraída para `tenant/public.ts`, usada pelo cardápio e pelo cliente     | ✅     |
-| 4   | `POST /public/{slug}/customers/identify`: primeiro nome e endereços mascarados, auditado           | ✅     |
-| 5   | Limite de 10 identificações por minuto por IP                                                      | ✅     |
-| 6   | Seed: a mesma cliente em dois estabelecimentos, com dados diferentes                               | ✅     |
-| 7   | React Hook Form + Zod; `TextField` genérico com erro acessível                                     | ✅     |
-| 8   | Página `/{slug}/checkout`: dados, modalidade, endereço salvo ou novo, região, pagamento, troco     | ✅     |
-| 9   | Prévia de taxa e total; impedimentos: fechado, mínimo, itens com problema; "Continuar" no carrinho | ✅     |
-| 10  | Testes: 13 do shared, 18 da API, 16 de regra e 18 de tela no web                                   | ✅     |
-| 11  | CEP obrigatório e primeiro campo do endereço, sem consulta aos Correios ainda                      | ✅     |
+| #   | Tarefa                                                                                                                 | Status |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Montagem do cardápio público extraída para rodar dentro de uma transação (`montarCardapioPublico`)                     | ✅     |
+| 2   | Tabelas `orders`, `order_items`, `order_item_options`, `order_counters`, com RLS forçado                               | ✅     |
+| 3   | Contrato do pedido em `packages/shared`: corpo, problemas e resposta                                                   | ✅     |
+| 4   | Cálculo puro (`orders/pricing.ts`): aberto, modalidade, disponibilidade, opções, preço, mínimo, taxa, pagamento, troco | ✅     |
+| 5   | `POST /public/{slug}/orders`: recusa com todos os problemas (422), total diferente (409), idempotente, 10/min por IP   | ✅     |
+| 6   | Cliente criado no primeiro pedido; endereço novo guardado sem duplicar; endereço salvo só do dono do telefone          | ✅     |
+| 7   | Número sequencial por estabelecimento, sem repetir em pedidos simultâneos                                              | ✅     |
+| 8   | Status (`orders/status.ts`) e rotas do painel: listar, detalhar, mudar status com auditoria                            | ✅     |
+| 9   | Web: envio de verdade, problemas na tela, nova chave após recusa, confirmação, carrinho esvaziado                      | ✅     |
+| 10  | Testes: 15 de cálculo e status, 23 das rotas contra o banco, 7 novos de tela                                           | ✅     |
 
 ### Decisões desta fase
 
-**A identificação nunca devolve o endereço completo.** Devolve o primeiro nome e, de cada
-endereço, rua, bairro e o número mascarado — `Rua dos Ipês, 4•• — Jardim Paulista`. Complemento,
-referência, sobrenome e o próprio telefone não saem. O cliente escolhe o endereço pelo id, e a
-Fase 11 completa o pedido no servidor. É o passo 1 da quitação da dívida de SECURITY.md, feito
-já agora; a rua e o bairro ainda saem, e só o OTP resolve de vez.
+**O pedido é calculado sobre a mesma montagem do cardápio que o cliente recebe.** A montagem do
+`GET /menu` foi extraída para `montarCardapioPublico`, que roda dentro da transação do pedido.
+Categoria inativa, produto esgotado, combo com componente esgotado, região desativada e forma de
+pagamento desligada somem dali, e o pedido os recusa pela mesma razão. Duas montagens
+divergiriam cedo ou tarde.
 
-**A identificação é auditada quando encontra alguém**, com o IP. Telefone desconhecido não é
-registrado: guardaria o número de quem nunca foi cliente.
+**O navegador não manda preço.** O corpo traz ids, quantidades e escolhas; campos a mais são
+descartados pelo schema, e um teste manda preços inventados e confere que são ignorados.
 
-**Limite próprio: 10 identificações por minuto por IP**, contra varredura de endereços. Um cliente
-de verdade faz uma.
+**Total diferente do que o cliente viu → 409, e nada é gravado.** O navegador envia o total que
+mostrou (`expectedTotalInCents`). Se o lojista mudou um preço no meio, o cliente não é cobrado por
+um valor que não viu: a tela recarrega o cardápio e pede para conferir.
 
-**POST, não GET com o telefone na URL**: URL vai para log de acesso, histórico e `Referer`. E a
-resposta sai com `Cache-Control: no-store`.
+**Recusa com todos os problemas de uma vez (422)**, cada um com frase pronta para o cliente e,
+quando é de um item, o índice dele.
 
-**Cliente é por estabelecimento.** O mesmo telefone na lanchonete e na pizzaria são dois
-clientes, sem ligação — o dado serve a quem o coletou. O seed demonstra isso.
+**Idempotente.** O navegador gera uma chave por tentativa; repetir o envio (duplo clique, rede
+que caiu depois do commit) devolve o pedido já criado. Dois envios simultâneos com a mesma chave
+esbarram na restrição única, e o segundo devolve o do primeiro. Depois de uma recusa, a tela gera
+chave nova; depois de falha de rede, reusa a mesma.
 
-**Sem conta de cliente com senha no MVP.** SECURITY.md previa conta opcional com senha; o
-MVP.md não. Fica no ROADMAP — o telefone cobre o "já pedi aqui antes".
+**Número do pedido por uma tabela contadora**, incrementada com `INSERT ... ON CONFLICT DO
+UPDATE ... RETURNING` na transação do pedido. A linha fica travada até o commit — cinco pedidos
+simultâneos recebem cinco números — e o rollback devolve o número. Uma `SEQUENCE` seria global e
+não volta no rollback.
 
-**O cliente nasce no primeiro pedido (Fase 11).** Até lá, só os clientes do seed são encontrados.
+**O pedido é cópia, não referência.** Nome e telefone de quem pediu, endereço, região, forma de
+pagamento, preço de cada item com as opções, composição do combo. O item guarda o `productId`
+sem chave estrangeira: o produto pode sair do cardápio, o pedido fica. Um teste muda o produto
+depois do pedido e confere que o pedido não muda.
 
-**O endereço tem CEP, obrigatório e primeiro campo** — pedido na validação. Guardado só com os
-8 dígitos, com máscara `00000-000` no formulário. Ainda não consulta os Correios: o campo fica
-pronto para a busca do endereço pelo CEP, registrada no ROADMAP. A coluna é anulável só porque
-endereços gravados antes dela não têm CEP; todo endereço novo passa pelo schema, que o exige, e o
-seed completa os de demonstração. A identificação por telefone não devolve o CEP.
+**Endereço salvo só vale se for do dono do telefone** — o id vem do navegador. E a resposta do
+pedido não devolve endereço: com endereço salvo, devolvê-lo revelaria o que a identificação
+mascarou.
 
-**O endereço não guarda a região.** As regiões são salvas por substituição e mudam de id; a região
-é escolhida a cada pedido.
+**O cliente que já existe mantém o nome guardado**; o nome digitado fica no pedido. O telefone
+não prova quem digita, e um pedido não deve renomear o cliente de outra pessoa.
 
-**Criado o `packages/shared`**, como a ARCHITECTURE previa para quando houvesse schema usado
-dos dois lados: o telefone, o endereço e o contrato da identificação. O contrato do cardápio
-continua copiado no web — migrá-lo é mudança à parte.
+**Endereço novo igual a um salvo** (mesmo CEP, rua, número e complemento) não vira outra linha:
+o existente é marcado como usado.
 
-**Todas as regras do formulário rodam num passo só.** No Zod 4 o `superRefine` não roda quando
-um campo da base já falhou: a pessoa veria o erro do telefone e só depois os demais. A base aceita
-tudo como texto, e um teste exige os quatro erros de um formulário vazio de uma vez.
+**Status só avança** — pode pular etapas, nunca voltar. "Saiu para entrega" só em entrega;
+cancelar exige motivo, de qualquer status não final. A mudança só grava se o status ainda for o
+esperado: duas pessoas mexendo ao mesmo tempo, a segunda recebe 409.
 
-**Grupo de rádios sem nada marcado chega como `null`**, não como vazio: o `onBlur` do React Hook
-Form relê o valor do DOM, e basta o foco passar pelo grupo. Na validação isso mostrou o erro cru
-do Zod no pagamento e, pior, fez a base falhar e esconder as regras do endereço até o pagamento
-ser escolhido. A base do schema passou a ler `null` como vazio, e dois testes reproduzem o caso.
+**FK do pedido para o cliente com `NO ACTION`**, não `RESTRICT`: excluir o estabelecimento apaga
+tudo em cascata numa ordem que o PostgreSQL não garante, e `RESTRICT` checaria cedo demais.
+Excluir cliente com pedido continua recusado — há teste para os dois.
 
-**O endereço mais recente vem marcado**, e trocar o telefone some com os endereços do número
-anterior — a resposta vale só para o número que está no campo.
-
-**O botão "Fazer pedido" confere e para.** Mostra "Pedido conferido"; o envio é a Fase 11, e o
-formato que ela vai enviar (`DadosDoCheckout`) já sai pronto do formulário.
-
-**"Continuar" no carrinho fica desabilitado** com item indisponível ou abaixo do mínimo — isso
-se resolve no carrinho. Estabelecimento fechado deixa chegar ao checkout, que avisa e não envia.
+**A confirmação recebe o pedido pelo estado da navegação**, não pela URL: o número não vai para
+endereço público. Recarregada, a página diz que os detalhes não ficam guardados.
 
 ### Verificação executada
 
-| Verificação                                | Resultado                                                         |
-| ------------------------------------------ | ----------------------------------------------------------------- |
-| `pnpm typecheck` / `lint` / `build`        | zero erro                                                         |
-| `pnpm test`                                | **461 testes** (332 API + 116 web + 13 shared)                    |
-| Testes sensíveis à regra                   | sem máscara, sem limite e sem a trava do telefone: cada um cai    |
-| API rodando: preflight, identificação, 400 | CORS libera o POST; endereços mascarados; cada tenant a sua Maria |
-| Vite em dev resolve `@repo/shared`         | sim, pelo `dist` do pacote                                        |
-| Conferência visual no navegador            | a fazer na validação                                              |
+| Verificação                                | Resultado                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `pnpm typecheck` / `lint` / `build`        | zero erro                                                                      |
+| `pnpm test`                                | **506 testes** (370 API + 123 web + 13 shared)                                 |
+| Testes sensíveis à regra                   | sem o dono do endereço, sem a checagem de total, sem a chave nova: cada um cai |
+| API rodando: CORS, fechado, corpo inválido | POST liberado para a web; 422 com o motivo; 400                                |
+| Pedido criado com a API rodando            | não feito: os dois estabelecimentos do seed estavam fechados (15h)             |
+| Conferência visual no navegador            | a fazer na validação                                                           |
 
 ---
 
-## Fase 11 — próxima
+## Fase 12 — próxima
 
-O pedido: envio do checkout, validação e **recálculo completo no servidor** (preços, opções,
-disponibilidade, taxa, mínimo, horário), snapshot dos itens, criação ou atualização do cliente e
-do endereço, número sequencial por estabelecimento e status. Limpa o carrinho ao concluir.
+O WhatsApp: depois do pedido, abrir a conversa com o estabelecimento com a mensagem formatada —
+número do pedido, itens, opções, total, pagamento e endereço. **Cuidado herdado da Fase 11:** com
+endereço salvo, a mensagem não pode levar o endereço completo para o navegador de quem digitou o
+telefone; o formato da mensagem precisa ser decidido com isso em mente.
 
 ---
 
 ## Fases anteriores
+
+**Fase 10** entregou o cliente final e o checkout: identificação por telefone que devolve só o
+primeiro nome e endereços mascarados, com limite próprio e auditoria; CEP como primeiro campo do
+endereço; e o `packages/shared`, com os schemas que o formulário e a API aplicam igual. Na
+validação, um grupo de rádios sem nada marcado chegava como `null` e escondia os erros do
+endereço.
 
 **Fase 9** entregou a escolha de opções e o carrinho no navegador, um por estabelecimento. O item
 guarda escolhas e nunca preço: o carrinho é conferido contra o cardápio atual a cada exibição, e o
@@ -245,11 +255,12 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pendências conhecidas
 
-| Item                                                                          | Quando resolve                  |
-| ----------------------------------------------------------------------------- | ------------------------------- |
-| Rate limit conta em memória — vira limite por instância se houver mais de uma | Deploy                          |
-| Sem Dockerfile para API e web                                                 | Deploy                          |
-| Sem CI                                                                        | A definir                       |
-| Nenhuma rota HTTP expõe tenants ainda — a fase é de fundação                  | Fases 5 e 8                     |
-| Contrato do cardápio público copiado no web, fora do `packages/shared`        | Quando o contrato mudar de novo |
-| Checkout não lembra os dados no aparelho ao voltar ao cardápio                | ROADMAP                         |
+| Item                                                                                                          | Quando resolve                  |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Rate limit conta em memória — vira limite por instância se houver mais de uma                                 | Deploy                          |
+| Sem Dockerfile para API e web                                                                                 | Deploy                          |
+| Sem CI                                                                                                        | A definir                       |
+| Nenhuma rota HTTP expõe tenants ainda — a fase é de fundação                                                  | Fases 5 e 8                     |
+| Contrato do cardápio público copiado no web, fora do `packages/shared`                                        | Quando o contrato mudar de novo |
+| Checkout não lembra os dados no aparelho ao voltar ao cardápio                                                | ROADMAP                         |
+| CORS libera só GET, HEAD e POST (padrão do `@fastify/cors` 11) — o painel vai precisar de PATCH, PUT e DELETE | Quando o painel ganhar tela     |

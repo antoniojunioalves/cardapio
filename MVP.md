@@ -46,14 +46,14 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Carrinho persistido no navegador, com indicador de quantidade
 - [x] Checkout: telefone, nome, endereço, forma de pagamento, observações — _o envio é da Fase 11_
 - [x] Identificação do cliente por telefone (ver a dívida registrada em SECURITY.md)
-- [ ] Pedido validado e **recalculado no servidor**
+- [x] Pedido validado e **recalculado no servidor**
 - [ ] Abertura do WhatsApp do estabelecimento com a mensagem formatada
 
 ### Fundações não negociáveis
 
 - [ ] Isolamento entre tenants com RLS e testes que o comprovam
-- [ ] Preço, taxa, total e disponibilidade calculados sempre no backend
-- [ ] Snapshot dos dados do produto dentro do pedido
+- [x] Preço, taxa, total e disponibilidade calculados sempre no backend
+- [x] Snapshot dos dados do produto dentro do pedido
 - [ ] Validação com Zod em toda fronteira
 - [ ] Mobile-first e acessível
 
