@@ -9,6 +9,8 @@ import {
   businessHours,
   categories,
   comboItems,
+  customerAddresses,
+  customers,
   optionGroups,
   options,
   productOptionGroups,
@@ -98,6 +100,28 @@ const ESTABELECIMENTOS = [
     horarios: NOITE_ATRAVESSANDO_MEIA_NOITE,
     regioes: [] as { nome: string; taxaEmCentavos: number }[],
     pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD'],
+    clientes: [
+      {
+        nome: 'Maria Oliveira',
+        telefone: '5511987654321',
+        enderecos: [
+          {
+            rua: 'Rua dos Ipês',
+            numero: '450',
+            complemento: 'apto 12',
+            bairro: 'Jardim Paulista',
+            referencia: 'Portão azul',
+          },
+          {
+            rua: 'Avenida Brasil',
+            numero: '1200',
+            complemento: null,
+            bairro: 'Centro',
+            referencia: null,
+          },
+        ],
+      },
+    ],
     personalizacao: {
       grupos: [
         {
@@ -193,6 +217,23 @@ const ESTABELECIMENTOS = [
       { nome: 'Vila Nova', taxaEmCentavos: 1000 },
     ],
     pagamentos: ['CASH', 'PIX', 'CREDIT_CARD', 'MEAL_VOUCHER_VR'],
+    // O mesmo telefone da cliente da lanchonete, com outro nome e outro
+    // endereço: cada estabelecimento tem os seus clientes, sem ligação entre si.
+    clientes: [
+      {
+        nome: 'Maria O.',
+        telefone: '5511987654321',
+        enderecos: [
+          {
+            rua: 'Rua Vergueiro',
+            numero: '88',
+            complemento: null,
+            bairro: 'Vila Nova',
+            referencia: null,
+          },
+        ],
+      },
+    ],
     personalizacao: {
       grupos: [
         {
@@ -494,6 +535,52 @@ async function semearPersonalizacao(
   }
 }
 
+/**
+ * Clientes de demonstração, para a identificação por telefone no checkout ter
+ * quem encontrar. Em uso real o cliente nasce no primeiro pedido (Fase 11).
+ */
+async function semearClientes(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tenantId: string,
+  estabelecimento: Estabelecimento,
+): Promise<void> {
+  for (const cliente of estabelecimento.clientes) {
+    await tx
+      .insert(customers)
+      .values({ tenantId, name: cliente.nome, phone: cliente.telefone })
+      .onConflictDoNothing({ target: [customers.tenantId, customers.phone] })
+
+    const [salvo] = await tx
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.phone, cliente.telefone))
+      .limit(1)
+    if (!salvo) throw new Error(`cliente ${cliente.telefone} não foi criado`)
+
+    const jaTem = await tx
+      .select({ id: customerAddresses.id })
+      .from(customerAddresses)
+      .where(eq(customerAddresses.customerId, salvo.id))
+      .limit(1)
+    if (jaTem.length > 0) continue
+
+    // O primeiro da lista é o mais recente: aparece primeiro no checkout.
+    const agora = Date.now()
+    await tx.insert(customerAddresses).values(
+      cliente.enderecos.map((e, i) => ({
+        tenantId,
+        customerId: salvo.id,
+        street: e.rua,
+        number: e.numero,
+        complement: e.complemento,
+        neighborhood: e.bairro,
+        reference: e.referencia,
+        lastUsedAt: new Date(agora - i * 86_400_000),
+      })),
+    )
+  }
+}
+
 async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promise<void> {
   for (const estabelecimento of ESTABELECIMENTOS) {
     await db
@@ -551,6 +638,7 @@ async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promis
       await semearConfiguracoes(tx, tenant.id, estabelecimento)
       await semearCardapio(tx, tenant.id, estabelecimento)
       await semearPersonalizacao(tx, tenant.id, estabelecimento)
+      await semearClientes(tx, tenant.id, estabelecimento)
     })
 
     infraLogger.info(
