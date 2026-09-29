@@ -82,8 +82,8 @@ apps/api/src/
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
-├── components/    genéricos, sem regra de negócio
-├── features/      por domínio — menu/ tem api, tipos, apresentação e componentes
+├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper
+├── features/      por domínio — menu/ (api, tipos, apresentação), cart/ (regras, store)
 ├── pages/         composição de rotas — MenuPage, HomePage, NotFoundPage
 ├── layouts/
 ├── theme/         tokens de design
@@ -140,7 +140,12 @@ Detalhes em [ARCHITECTURE.md](ARCHITECTURE.md#63-temas).
 | Zustand        | carrinho, preferências locais, estado de UI persistente |
 | `useState`     | estado de um componente só                              |
 
-Resposta de API **não** vai para o Zustand.
+Resposta de API **não** vai para o Zustand. O carrinho mostra isso na prática: a store guarda só
+o que o cliente escolheu, e o preço sai do cardápio do TanStack Query na hora de mostrar.
+
+Store persistida trata o `localStorage` como entrada externa: passe o que volta de lá por uma
+função de limpeza no `merge` do `persist` — veja `sanearCarrinhos` em
+`apps/web/src/features/cart/cart.ts`.
 
 ### Formulários
 
@@ -277,7 +282,9 @@ você não souber a causa.
 ### Testando uma página
 
 Monte `AppRoutes` dentro de `MemoryRouter` e de um `QueryClient` novo por teste, e simule a API
-com `vi.stubGlobal('fetch', …)` — veja `apps/web/tests/MenuPage.test.tsx`. Regra de
+com `vi.stubGlobal('fetch', …)` — os helpers estão em `apps/web/tests/helpers/pagina.tsx`. Uma
+store do Zustand é global ao módulo: zere-a no `beforeEach` com `setState` e limpe o
+`localStorage`. Regra de
 apresentação vai para um módulo sem React e ganha teste unitário próprio.
 
 ### Expondo dados na área pública

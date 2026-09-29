@@ -42,8 +42,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Busca
 - [x] Navegação por categorias
 - [x] Cartões de produto com imagem, descrição, preço e disponibilidade
-- [ ] Seleção de opções e adicionais
-- [ ] Carrinho persistido no navegador, com indicador de quantidade
+- [x] Seleção de opções e adicionais
+- [x] Carrinho persistido no navegador, com indicador de quantidade
 - [ ] Checkout: telefone, nome, endereço, forma de pagamento, observações
 - [ ] Identificação do cliente por telefone (ver a dívida registrada em SECURITY.md)
 - [ ] Pedido validado e **recalculado no servidor**

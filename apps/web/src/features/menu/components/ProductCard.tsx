@@ -8,21 +8,38 @@ import type { ProdutoPublico } from '../types'
  *
  * Produto esgotado continua na lista, apagado e com o selo: se sumisse, o
  * cliente que voltou pelo X-Bacon de ontem acharia que o cardápio mudou.
- * A seleção de opções e o carrinho entram na Fase 9.
+ *
+ * O cartão inteiro abre o produto — esgotado também, para o cliente ver o que
+ * é. O botão fica no título, com o nome do produto como rótulo, e uma camada
+ * dele cobre o cartão: `<button>` não pode conter título nem parágrafo.
  */
-export function ProductCard({ produto }: { produto: ProdutoPublico }) {
+export function ProductCard({
+  produto,
+  aoAbrir,
+}: {
+  produto: ProdutoPublico
+  aoAbrir: () => void
+}) {
   const economia = economiaDoCombo(produto)
   const itens = descreverItensDoCombo(produto)
 
   return (
     <article
       aria-label={produto.name}
-      className={`flex gap-stack rounded-card bg-surface p-card shadow-card ${
+      className={`relative flex gap-stack rounded-card bg-surface p-card shadow-card focus-within:ring-2 focus-within:ring-primary hover:shadow-raised ${
         produto.isAvailable ? '' : 'opacity-60'
       }`}
     >
       <div className="min-w-0 flex-1">
-        <h3 className="text-body font-semibold text-content">{produto.name}</h3>
+        <h3 className="text-body font-semibold text-content">
+          <button
+            type="button"
+            onClick={aoAbrir}
+            className="text-left outline-none after:absolute after:inset-0 after:rounded-card"
+          >
+            {produto.name}
+          </button>
+        </h3>
 
         {itens && <p className="text-caption mt-1 text-content">{itens}</p>}
 

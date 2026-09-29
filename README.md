@@ -9,9 +9,9 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 8b concluída.** O cliente final já vê o cardápio: com `pnpm dev`, abra
-[localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze). A próxima fase é o
-carrinho. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 9 concluída.** O cliente final já vê o cardápio e monta o carrinho: com
+`pnpm dev`, abra [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze). A
+próxima fase é o checkout. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

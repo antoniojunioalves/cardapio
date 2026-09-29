@@ -1,47 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AppRoutes } from '../src/App'
-import type { CardapioPublico } from '../src/features/menu/types'
 import { cardapioDoZe } from './helpers/cardapio'
-
-type Resposta = { status: number; corpo: unknown } | 'falha-de-rede'
-
-function mockarApi(resposta: Resposta) {
-  const fetch = vi.fn(() =>
-    resposta === 'falha-de-rede'
-      ? Promise.reject(new Error('conexão recusada'))
-      : Promise.resolve({
-          ok: resposta.status < 400,
-          status: resposta.status,
-          json: () => Promise.resolve(resposta.corpo),
-        }),
-  )
-  vi.stubGlobal('fetch', fetch)
-  return fetch
-}
-
-function abrir(caminho: string) {
-  // Sem espera entre tentativas: o teste de falha de rede passaria segundos
-  // aguardando o backoff padrão.
-  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[caminho]}>
-        <AppRoutes />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-}
-
-async function abrirCardapio(cardapio: CardapioPublico = cardapioDoZe()) {
-  const fetch = mockarApi({ status: 200, corpo: cardapio })
-  abrir(`/${cardapio.establishment.slug}`)
-  await screen.findByRole('heading', { level: 1, name: cardapio.establishment.name })
-  return fetch
-}
+import { abrir, abrirCardapio, mockarApi } from './helpers/pagina'
 
 // O jsdom não implementa rolagem.
 const rolarAte = vi.fn()
@@ -57,7 +18,7 @@ afterEach(() => {
 
 describe('cardápio público', () => {
   it('busca o cardápio pelo slug da URL', async () => {
-    const fetch = await abrirCardapio()
+    const { fetch } = await abrirCardapio()
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/public/lanchonete-do-ze/menu'),
       expect.anything(),

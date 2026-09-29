@@ -1,8 +1,8 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-29
-**Fase atual:** 8b — concluída, aguardando validação
-**Próxima:** Fase 9 — carrinho
+**Fase atual:** 9 — concluída, aguardando validação
+**Próxima:** Fase 10 — customer e checkout
 
 ---
 
@@ -13,8 +13,12 @@ mobile-first mostra o estabelecimento, se está aberto e quando abre, as condiç
 busca, categorias e produtos com esgotados e combos. Os dados vêm de
 `GET /api/v1/public/{tenantSlug}/menu`.
 
-**Ainda não existe:** escolher opções, carrinho, checkout e pedidos; e nenhuma tela administrativa
-— o lojista ainda configura tudo pela API.
+**O cliente já monta o pedido.** Tocar num produto abre a janela dele: opções respeitando mínimo e
+máximo, quantidade e observação. O carrinho fica guardado no navegador, um por estabelecimento,
+com o indicador embaixo da tela e a prévia do subtotal e do pedido mínimo.
+
+**Ainda não existe:** checkout e pedidos; e nenhuma tela administrativa — o lojista ainda
+configura tudo pela API.
 
 ---
 
@@ -33,7 +37,7 @@ busca, categorias e produtos com esgotados e combos. Os dados vêm de
 | 7b  | Catálogo: grupos de opção, adicionais, remoções e combos                                                            | ✅ Concluída |
 | 8a  | Cardápio público — API                                                                                              | ✅ Concluída |
 | 8b  | Cardápio público — página no frontend                                                                               | ✅ Concluída |
-| 9   | Carrinho                                                                                                            | ⬜           |
+| 9   | Carrinho                                                                                                            | ✅ Concluída |
 | 10  | Customer e checkout                                                                                                 | ⬜           |
 | 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ⬜           |
 | 12  | WhatsApp                                                                                                            | ⬜           |
@@ -48,64 +52,89 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 8b — concluída
+## Fase 9 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                               | Status |
-| --- | ------------------------------------------------------------------------------------ | ------ |
-| 1   | TanStack Query e React Router; rotas `/`, `/:tenantSlug` e não encontrado            | ✅     |
-| 2   | Cliente HTTP com `ApiError` que preserva o status                                    | ✅     |
-| 3   | Regras de apresentação puras: preço, status, entrega, "a partir de", economia, busca | ✅     |
-| 4   | Cabeçalho com capa, logo, status e condições de entrega                              | ✅     |
-| 5   | Busca sem acento, categorias em faixa fixa, cartões com esgotado e combo             | ✅     |
-| 6   | Informações: horários, endereço, contato, formas de pagamento                        | ✅     |
-| 7   | Estados: carregando, não encontrado, erro com tentar de novo, cardápio vazio         | ✅     |
-| 8   | Testes: 18 de apresentação, 15 da página com a API simulada                          | ✅     |
+| #   | Tarefa                                                                                 | Status |
+| --- | -------------------------------------------------------------------------------------- | ------ |
+| 1   | Zustand 5.0.15                                                                         | ✅     |
+| 2   | Regra pura de escolha: rádio ou caixa, mínimo, máximo, esgotada, preço de exibição     | ✅     |
+| 3   | Carrinho puro: item sem preço, conferência contra o cardápio atual, subtotal, mínimo   | ✅     |
+| 4   | Store por estabelecimento com persistência e limpeza do que vem do `localStorage`      | ✅     |
+| 5   | `Sheet` e `QuantityStepper` genéricos em `components/`                                 | ✅     |
+| 6   | Janela do produto: grupos, "Falta escolher", quantidade, observação, botão com o preço | ✅     |
+| 7   | Barra "Ver carrinho" e painel do carrinho: linhas, problemas, mínimo, fechado          | ✅     |
+| 8   | Produto e carrinho abertos na URL (`?produto=`, `?carrinho`)                           | ✅     |
+| 9   | Testes: 19 de regra, 9 da store, 14 do fluxo na tela                                   | ✅     |
 
 ### Decisões desta fase
 
-**Nenhuma regra de negócio no navegador.** Aberto/fechado, disponibilidade e preço vêm prontos da
-API; a página só os transforma em texto. O pedido é validado de novo no servidor (Fase 11).
+**O item do carrinho não guarda preço.** Guarda produto, opções, quantidade e observação; o preço
+é recalculado contra o cardápio atual — que recarrega a cada minuto — toda vez que o carrinho
+aparece. Um preço guardado no navegador envelheceria quando o lojista o mudasse. O nome é
+guardado só para avisar quando o produto sai do cardápio.
 
-**Recarrega a cada minuto** enquanto a página está aberta, para o status não envelhecer na mesa do
-cliente. Um 404 não é repetido; falha de rede é.
+**O carrinho confere cada item contra o cardápio atual.** Produto que saiu, esgotou, opção que
+esgotou ou grupo obrigatório criado depois aparecem marcados, com "Remover", e ficam fora do
+subtotal. É a mesma pergunta que o servidor vai fazer na Fase 11; aqui é só para avisar antes.
 
-**"A partir de"** aparece quando um grupo obrigatório tem opção mais cara — o preço base é o do
-menor tamanho, e sem o aviso o cartão enganaria.
+**Um carrinho por estabelecimento**, com o slug como chave local. O estabelecimento do pedido
+será decidido pelo servidor, nunca por essa chave.
 
-**Produto esgotado aparece apagado, com selo**, em vez de sumir.
+**O que vem do `localStorage` é tratado como dado externo.** Item com formato errado é descartado
+sozinho; quantidade volta para 1–50 e observação para 140 caracteres; JSON corrompido vira
+carrinho vazio. O navegador é de quem o usa.
 
-**A faixa de categorias é filha direta do contêiner da página.** Na validação ela subia junto com a
-rolagem: estava dentro de um `<div>` da própria altura, e `sticky` só prende enquanto o pai está na
-tela. Um teste trava essa estrutura, já que o jsdom não calcula layout.
+**Obrigatório de uma escolha é rádio; o resto é caixa de marcar.** Num grupo opcional de uma
+escolha o cliente precisa poder desmarcar. Com o máximo atingido, as opções restantes ficam
+desabilitadas; opção esgotada aparece, mas não se marca.
 
-**O contrato da API está copiado** em `apps/web/src/features/menu/types.ts`. Ainda não há
-`packages/shared`; ele entra quando houver um segundo contrato compartilhado que justifique.
+**Nada vem pré-selecionado**, nem o tamanho de acréscimo zero: escolher por omissão é o jeito
+mais comum de o cliente receber o que não pediu.
 
-**Sem tema por estabelecimento ainda.** A arquitetura de tokens está pronta, mas o banco não guarda
-cores do estabelecimento; a página usa o tema do produto. Registrado no ROADMAP.
+**O mesmo produto com as mesmas escolhas e a mesma observação soma quantidade** em vez de virar
+outra linha; a ordem em que as opções foram tocadas não importa.
+
+**Produto e carrinho abertos moram na URL.** O "voltar" do celular fecha a janela em vez de sair
+do cardápio, e o link de um produto pode ser compartilhado. Aberta pela página, a janela fecha
+voltando no histórico; aberta por link, só perde o parâmetro.
+
+**Estabelecimento fechado não impede montar o carrinho** — o painel avisa. Se o envio é recusado
+fechado é decisão do checkout (Fase 10), com o servidor dando a palavra final.
+
+**O painel não tem botão de finalizar**: ele entra com o checkout, na Fase 10. A taxa de entrega
+também — depende do endereço.
+
+**Id do item não usa `crypto.randomUUID`**, que só existe em contexto seguro: o Vite aberto pelo
+IP da rede no celular, em http, não é.
 
 ### Verificação executada
 
-| Verificação                            | Resultado                                         |
-| -------------------------------------- | ------------------------------------------------- |
-| `pnpm typecheck` / `lint` / `build`    | zero erro                                         |
-| `pnpm test`                            | **352 testes** (314 API + 38 web)                 |
-| `pnpm dev`: web em `/lanchonete-do-ze` | 200; API com CORS para a origem da web e no-cache |
-| Conferência visual no navegador        | a fazer na validação                              |
+| Verificação                         | Resultado                                                |
+| ----------------------------------- | -------------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build` | zero erro                                                |
+| `pnpm test`                         | **394 testes** (314 API + 80 web)                        |
+| Teste sensível à regra              | tirar a trava do grupo obrigatório derruba o teste certo |
+| Classes novas no CSS do build       | todas geradas                                            |
+| Conferência visual no navegador     | a fazer na validação                                     |
 
 ---
 
-## Fase 9 — próxima
+## Fase 10 — próxima
 
-O carrinho: abrir o produto, escolher opções respeitando mínimo e máximo, quantidade e observação,
-e guardar no navegador (Zustand com persistência), com o indicador de itens. O preço exibido é
-calculado no navegador só para mostrar; quem cobra é o servidor, na Fase 11.
+O checkout: telefone, nome, endereço (ou retirada), região de entrega, forma de pagamento e
+observações, com a identificação do cliente por telefone e a dívida registrada em SECURITY.md.
+É onde entra o botão de finalizar do carrinho.
 
 ---
 
 ## Fases anteriores
+
+**Fase 8b** entregou a página do cardápio público em `/{tenantSlug}`, mobile-first, sem nenhuma
+regra de negócio no navegador e recarregando a cada minuto. Na validação a faixa de categorias
+não ficava presa ao rolar: estava num `<div>` da própria altura, e `sticky` só prende enquanto o
+pai está na tela.
 
 **Fase 8a** entregou a API do cardápio público: uma rota sem login que resolve o slug, com
 estabelecimento suspenso respondendo o mesmo 404 de um inexistente, resposta montada campo a
