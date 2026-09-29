@@ -9,9 +9,10 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 9 concluída.** O cliente final já vê o cardápio e monta o carrinho: com
-`pnpm dev`, abra [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze). A
-próxima fase é o checkout. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 10 concluída.** O cliente final já vê o cardápio, monta o carrinho e
+preenche o checkout: com `pnpm dev`, abra
+[localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze). A próxima fase é o
+envio do pedido, recalculado no servidor. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 
@@ -21,6 +22,9 @@ Depois de `pnpm db:seed`, dá para entrar com:
 | `pizzaria-da-esquina` | `ana@exemplo.com` | `cardapio123` |
 
 E o cardápio público, sem login: `curl http://localhost:3333/api/v1/public/lanchonete-do-ze/menu`.
+
+No checkout, o telefone **(11) 98765-4321** é de uma cliente de demonstração nos dois
+estabelecimentos, com endereços diferentes em cada um.
 
 ---
 
@@ -107,7 +111,8 @@ cardapio-online/
 │   ├── api/          Fastify — API HTTP
 │   └── web/          Vite + React — cardápio público e área administrativa
 ├── packages/
-│   └── config/       Identidade do produto + bases de tsconfig e eslint
+│   ├── config/       Identidade do produto + bases de tsconfig e eslint
+│   └── shared/       Regras e schemas Zod usados pela API e pela web
 ├── docker/
 │   └── postgres/     Scripts de inicialização do banco
 └── docs/             Documentação de apoio e specs de design
