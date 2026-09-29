@@ -80,13 +80,14 @@ apps/api/src/
 ├── storage/       StorageService, provider local, detecção de tipo, troca de imagem
 ├── catalog/       categorias, produtos, grupos de opção e combos
 ├── customers/     cliente final: máscara, repositório, identificação por telefone
+├── orders/        pedido: cálculo puro, status, repositório, serviço
 ├── public-menu/   cardápio público
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
 ├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper, TextField
-├── features/      por domínio — menu/, cart/ (regras, store), checkout/ (schema, formulário)
-├── pages/         composição de rotas — MenuPage, CheckoutPage, HomePage, NotFoundPage
+├── features/      por domínio — menu/, cart/ (regras, store), checkout/ (schema, envio)
+├── pages/         composição de rotas — MenuPage, CheckoutPage, OrderSentPage, HomePage…
 ├── layouts/
 ├── theme/         tokens de design
 ├── services/      clientes HTTP

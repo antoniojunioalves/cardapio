@@ -1,4 +1,4 @@
-import type { ClienteIdentificado } from '@repo/shared'
+import type { ClienteIdentificado, NovoPedidoEnviado, PedidoCriado } from '@repo/shared'
 import { useMutation } from '@tanstack/react-query'
 
 import { postJson } from '@/services/api'
@@ -20,5 +20,17 @@ export function identificarCliente(slug: string, phone: string): Promise<Cliente
 export function useIdentificacao(slug: string) {
   return useMutation({
     mutationFn: (phone: string) => identificarCliente(slug, phone),
+  })
+}
+
+export function enviarPedido(slug: string, pedido: NovoPedidoEnviado): Promise<PedidoCriado> {
+  return postJson<PedidoCriado>(`/api/v1/public/${encodeURIComponent(slug)}/orders`, pedido)
+}
+
+/** Envia o pedido. Não repete sozinho: quem decide tentar de novo é o cliente. */
+export function useEnviarPedido(slug: string) {
+  return useMutation({
+    mutationFn: (pedido: NovoPedidoEnviado) => enviarPedido(slug, pedido),
+    retry: false,
   })
 }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCarrinhoStore } from '../src/features/cart/store'
 import type { CardapioPublico } from '../src/features/menu/types'
 import { cardapioDoZe, produtoDoFixture } from './helpers/cardapio'
-import { abrir, mockarApiDoCheckout, type Resposta } from './helpers/pagina'
+import { abrir, mockarApiDoCheckout, PEDIDO_CRIADO, type Resposta } from './helpers/pagina'
 
 const ENDERECO_RECENTE = '00000000-0000-7000-8000-0000000000e1'
 const ENDERECO_ANTIGO = '00000000-0000-7000-8000-0000000000e2'
@@ -46,11 +46,16 @@ function encherCarrinho(cardapio: CardapioPublico, quantidade = 2) {
 }
 
 async function abrirCheckout(
-  opcoes: { cardapio?: CardapioPublico; quantidade?: number; identificacao?: Resposta } = {},
+  opcoes: {
+    cardapio?: CardapioPublico
+    quantidade?: number
+    identificacao?: Resposta
+    envios?: Resposta[]
+  } = {},
 ) {
   const cardapio = opcoes.cardapio ?? cardapioDoZe()
   encherCarrinho(cardapio, opcoes.quantidade ?? 2)
-  const fetch = mockarApiDoCheckout(cardapio, opcoes.identificacao)
+  const fetch = mockarApiDoCheckout(cardapio, opcoes.identificacao, opcoes.envios)
   abrir(`/${cardapio.establishment.slug}/checkout`)
   await screen.findByRole('heading', { level: 1, name: 'Finalizar pedido' })
   return { fetch, cardapio }
@@ -152,7 +157,7 @@ describe('checkout', () => {
     expect(await screen.findByText('Informe o CEP.')).toBeVisible()
   })
 
-  it('entrega em endereço novo fica conferida com o CEP', async () => {
+  it('entrega em endereço novo é enviada com o CEP', async () => {
     await abrirCheckout()
     informarTelefone('11912345678')
     escrever('Nome', 'João Souza')
@@ -164,10 +169,10 @@ describe('checkout', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Pix' }))
     fireEvent.click(botaoDeEnviar())
 
-    expect(await screen.findByText('Pedido conferido')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Pedido #42 recebido' })).toBeVisible()
   })
 
-  it('pedido completo por retirada fica conferido', async () => {
+  it('pedido completo por retirada é enviado', async () => {
     await abrirCheckout()
     informarTelefone('11987654321')
     escrever('Nome', 'Maria Oliveira')
@@ -175,7 +180,7 @@ describe('checkout', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Pix' }))
     fireEvent.click(botaoDeEnviar())
 
-    expect(await screen.findByText('Pedido conferido')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Pedido #42 recebido' })).toBeVisible()
   })
 })
 
@@ -201,6 +206,43 @@ describe('identificação por telefone', () => {
     expect(campo('Rua')).toBeVisible()
   })
 
+  it('telefone conhecido preenche o nome com o primeiro nome', async () => {
+    await abrirCheckout({ identificacao: MARIA })
+    informarTelefone('11987654321')
+
+    await waitFor(() => {
+      expect(campo('Nome')).toHaveValue('Maria')
+    })
+  })
+
+  it('não sobrescreve o nome que a pessoa já digitou', async () => {
+    await abrirCheckout({ identificacao: MARIA })
+    escrever('Nome', 'Maria Clara')
+    informarTelefone('11987654321')
+
+    await screen.findByText('Olá, Maria! Que bom te ver de novo.')
+    expect(campo('Nome')).toHaveValue('Maria Clara')
+  })
+
+  it('trocar o telefone tira o nome preenchido, mas não o editado', async () => {
+    await abrirCheckout({ identificacao: MARIA })
+    informarTelefone('11987654321')
+    await waitFor(() => {
+      expect(campo('Nome')).toHaveValue('Maria')
+    })
+
+    escrever('Telefone (WhatsApp)', '21999990000')
+    expect(campo('Nome')).toHaveValue('')
+
+    informarTelefone('11987654321')
+    await waitFor(() => {
+      expect(campo('Nome')).toHaveValue('Maria')
+    })
+    escrever('Nome', 'Maria Oliveira')
+    escrever('Telefone (WhatsApp)', '21999990000')
+    expect(campo('Nome')).toHaveValue('Maria Oliveira')
+  })
+
   it('sair do campo de novo com o mesmo telefone não busca outra vez', async () => {
     const { fetch } = await abrirCheckout({ identificacao: MARIA })
     informarTelefone('11987654321')
@@ -222,6 +264,12 @@ describe('identificação por telefone', () => {
     expect(screen.queryByText('Olá, Maria! Que bom te ver de novo.')).not.toBeInTheDocument()
     expect(screen.queryByRole('radiogroup', { name: 'Seus endereços' })).not.toBeInTheDocument()
     expect(campo('Rua')).toBeVisible()
+
+    // De volta ao número original: o endereço mais recente volta marcado, sem nova busca.
+    informarTelefone('11987654321')
+    expect(
+      await screen.findByRole('radio', { name: 'Rua dos Ipês, 4•• — Jardim Paulista' }),
+    ).toBeChecked()
   })
 
   it('telefone novo segue com o endereço em branco', async () => {
@@ -253,7 +301,7 @@ describe('identificação por telefone', () => {
     expect(campo('Nome')).toBeEnabled()
   })
 
-  it('entrega em endereço salvo fica conferida sem digitar endereço', async () => {
+  it('entrega em endereço salvo é enviada sem digitar endereço', async () => {
     await abrirCheckout({ identificacao: MARIA })
     informarTelefone('11987654321')
     await screen.findByText('Olá, Maria! Que bom te ver de novo.')
@@ -262,7 +310,7 @@ describe('identificação por telefone', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Pix' }))
     fireEvent.click(botaoDeEnviar())
 
-    expect(await screen.findByText('Pedido conferido')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Pedido #42 recebido' })).toBeVisible()
   })
 })
 
@@ -312,5 +360,150 @@ describe('regras do estabelecimento', () => {
     expect(alerta).toHaveTextContent('O estabelecimento está fechado agora.')
     expect(alerta).toHaveTextContent(/Faltam R\$\s2,00 para o pedido mínimo/)
     expect(botaoDeEnviar()).toBeDisabled()
+  })
+})
+
+/** Preenche um pedido de retirada, pago com Pix. */
+function preencherRetirada() {
+  informarTelefone('11987654321')
+  escrever('Nome', 'Maria Oliveira')
+  fireEvent.click(screen.getByRole('radio', { name: /Retirada no local/ }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Pix' }))
+}
+
+/** O corpo de cada envio de pedido que chegou à API simulada. */
+function enviosFeitos(fetch: ReturnType<typeof mockarApiDoCheckout>) {
+  return (
+    fetch.mock.calls
+      .filter(([url, init]) => init?.method === 'POST' && url.endsWith('/orders'))
+      // O `postJson` sempre envia o corpo como texto JSON.
+      .map(([, init]) => JSON.parse(init?.body as string) as Record<string, unknown>)
+  )
+}
+
+const RECUSADO: Resposta = {
+  status: 422,
+  corpo: {
+    error: {
+      code: 'ORDER_REJECTED',
+      message: 'O pedido não pôde ser aceito.',
+      details: {
+        problemas: [
+          {
+            tipo: 'PRODUTO_INDISPONIVEL',
+            itemIndex: 0,
+            mensagem: 'Açaí na tigela não está disponível agora.',
+          },
+        ],
+      },
+    },
+  },
+}
+
+describe('envio do pedido', () => {
+  it('envia só ids, quantidades e escolhas, com o total que o cliente viu', async () => {
+    const { fetch, cardapio } = await abrirCheckout()
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+    await screen.findByRole('heading', { name: 'Pedido #42 recebido' })
+
+    const [corpo] = enviosFeitos(fetch)
+    expect(corpo).toMatchObject({
+      customer: { phone: '5511987654321', name: 'Maria Oliveira' },
+      fulfillment: 'PICKUP',
+      address: null,
+      expectedTotalInCents: 3600,
+      items: [
+        {
+          productId: produtoDoFixture(cardapio, 'Açaí na tigela').id,
+          quantity: 2,
+          notes: null,
+          options: {},
+        },
+      ],
+    })
+    expect(String(corpo?.idempotencyKey)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    )
+    expect(JSON.stringify(corpo)).not.toMatch(/priceInCents|totalInCents"/)
+  })
+
+  it('depois do envio, confirma o pedido e esvazia o carrinho', async () => {
+    await abrirCheckout()
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+
+    expect(await screen.findByRole('heading', { name: 'Pedido #42 recebido' })).toBeVisible()
+    expect(screen.getByText('2x Açaí na tigela')).toBeVisible()
+    expect(screen.getByText(/Lanchonete do Zé já recebeu o seu pedido/)).toBeVisible()
+    expect(useCarrinhoStore.getState().carrinhos).toEqual({})
+  })
+
+  it('pedido recusado mostra os motivos, recarrega o cardápio e tenta com outra chave', async () => {
+    const { fetch } = await abrirCheckout({
+      envios: [RECUSADO, { status: 201, corpo: PEDIDO_CRIADO }],
+    })
+    const cardapiosAntes = fetch.mock.calls.filter(([, init]) => init?.method !== 'POST').length
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+
+    const alerta = await screen.findByText('O pedido não foi enviado')
+    expect(alerta.parentElement).toHaveTextContent('Açaí na tigela não está disponível agora.')
+    await waitFor(() => {
+      expect(fetch.mock.calls.filter(([, init]) => init?.method !== 'POST').length).toBeGreaterThan(
+        cardapiosAntes,
+      )
+    })
+
+    fireEvent.click(botaoDeEnviar())
+    await screen.findByRole('heading', { name: 'Pedido #42 recebido' })
+    const [primeiro, segundo] = enviosFeitos(fetch)
+    expect(segundo?.idempotencyKey).not.toBe(primeiro?.idempotencyKey)
+  })
+
+  it('preço que mudou pede para conferir o novo total', async () => {
+    await abrirCheckout({
+      envios: [
+        {
+          status: 409,
+          corpo: {
+            error: { code: 'PRICE_CHANGED', message: 'mudou', details: { totalInCents: 4000 } },
+          },
+        },
+      ],
+    })
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+
+    expect(
+      await screen.findByText(/Os valores mudaram desde que você abriu o cardápio/),
+    ).toBeVisible()
+  })
+
+  it('falha de rede deixa tentar de novo com a mesma chave, sem duplicar o pedido', async () => {
+    const { fetch } = await abrirCheckout({
+      envios: ['falha-de-rede', { status: 201, corpo: PEDIDO_CRIADO }],
+    })
+    preencherRetirada()
+    fireEvent.click(botaoDeEnviar())
+    expect(await screen.findByText(/Não conseguimos enviar o pedido/)).toBeVisible()
+
+    fireEvent.click(botaoDeEnviar())
+    await screen.findByRole('heading', { name: 'Pedido #42 recebido' })
+    const [primeiro, segundo] = enviosFeitos(fetch)
+    expect(segundo?.idempotencyKey).toBe(primeiro?.idempotencyKey)
+  })
+})
+
+describe('confirmação', () => {
+  it('aberta sem o pedido (recarregada), diz que os detalhes não ficam guardados', () => {
+    mockarApiDoCheckout(cardapioDoZe())
+    abrir('/lanchonete-do-ze/pedido-enviado')
+
+    expect(screen.getByText(/Os detalhes do pedido não ficam guardados nesta página/)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Voltar ao cardápio' })).toHaveAttribute(
+      'href',
+      '/lanchonete-do-ze',
+    )
   })
 })

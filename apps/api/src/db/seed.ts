@@ -80,6 +80,16 @@ const NOITE_ATRAVESSANDO_MEIA_NOITE = [2, 3, 4, 5, 6, 0].map((dia) => ({
   fecha: '02:00',
 }))
 
+/**
+ * Horário comercial, das 08:00 às 18:00, todos os dias. Existe para haver
+ * sempre um estabelecimento aberto durante o dia, para testar pedidos.
+ */
+const HORARIO_COMERCIAL = [0, 1, 2, 3, 4, 5, 6].map((dia) => ({
+  dia,
+  abre: '08:00',
+  fecha: '18:00',
+}))
+
 /** Almoço e jantar, de segunda a sábado: dois intervalos no mesmo dia. */
 const ALMOCO_E_JANTAR = [1, 2, 3, 4, 5, 6].flatMap((dia) => [
   { dia, abre: '11:00', fecha: '14:30' },
@@ -288,6 +298,81 @@ const ESTABELECIMENTOS = [
       {
         categoria: 'Bebidas',
         produtos: [{ nome: 'Refrigerante 2 L', descricao: 'Garrafa.', preco: 1400 }],
+      },
+    ],
+  },
+  {
+    slug: 'padaria-pao-quente',
+    name: 'Padaria Pão Quente',
+    plano: 'FREE',
+    dono: { nome: 'Bia Proprietária', email: 'bia@exemplo.com' },
+    descricao: 'Pães, salgados e café. Todos os dias, das 8h às 18h.',
+    whatsapp: '5511999990003',
+    pedidoMinimoEmCentavos: 1500,
+    modoDeTaxa: 'FIXED' as const,
+    taxaFixaEmCentavos: 400,
+    horarios: HORARIO_COMERCIAL,
+    regioes: [] as { nome: string; taxaEmCentavos: number }[],
+    pagamentos: ['CASH', 'PIX', 'DEBIT_CARD'],
+    clientes: [
+      {
+        nome: 'Maria Oliveira',
+        telefone: '5511987654321',
+        enderecos: [
+          {
+            cep: '01452000',
+            rua: 'Rua dos Ipês',
+            numero: '450',
+            complemento: 'apto 12',
+            bairro: 'Jardim Paulista',
+            referencia: 'Portão azul',
+          },
+        ],
+      },
+    ],
+    personalizacao: {
+      grupos: [
+        {
+          nome: 'Tipo de pão',
+          descricao: null,
+          min: 1,
+          max: 1,
+          opcoes: [
+            ['Pão francês', 0],
+            ['Pão integral', 100],
+          ],
+          produtos: ['Misto quente'],
+        },
+      ],
+      combos: [
+        {
+          nome: 'Café da manhã',
+          descricao: 'Misto quente e café coado.',
+          preco: 1500,
+          itens: [
+            ['Misto quente', 1],
+            ['Café coado', 1],
+          ],
+        },
+      ],
+    },
+    cardapio: [
+      {
+        categoria: 'Salgados',
+        produtos: [
+          { nome: 'Coxinha', descricao: 'De frango com catupiry.', preco: 700 },
+          { nome: 'Pão de queijo', descricao: 'Porção com 5 unidades.', preco: 800 },
+          { nome: 'Misto quente', descricao: 'Presunto e queijo na chapa.', preco: 1200 },
+        ],
+      },
+      {
+        categoria: 'Bebidas',
+        produtos: [
+          { nome: 'Café coado', descricao: '200 ml.', preco: 500 },
+          { nome: 'Suco de laranja', descricao: '300 ml.', preco: 900 },
+          // Esgotado de propósito, como na lanchonete.
+          { nome: 'Cappuccino', descricao: '200 ml.', preco: 1000, esgotado: true },
+        ],
       },
     ],
   },

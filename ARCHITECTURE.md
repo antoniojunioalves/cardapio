@@ -740,6 +740,46 @@ alguém. A resolução do slug é a mesma do cardápio, em `src/tenant/public.ts
 
 ---
 
+### 8.10 Pedidos
+
+`POST /api/v1/public/{tenantSlug}/orders` cria o pedido. O corpo (`novoPedidoSchema`, em
+`packages/shared`) traz ids, quantidades, escolhas, os dados do checkout e o total que o
+cliente viu — **nenhum preço**.
+
+**O cálculo usa a montagem do cardápio público.** `montarCardapioPublico` (8.8) roda dentro da
+transação do pedido, e `orders/pricing.ts`, um módulo puro, recalcula sobre ela: aberto,
+modalidade, disponibilidade, opções, preço, pedido mínimo, taxa, forma de pagamento e troco.
+Assim o que o cardápio mostra e o que o pedido aceita saem da mesma regra. O cálculo devolve
+todos os problemas de uma vez (422, `ORDER_REJECTED`); total diferente do visto responde 409
+(`PRICE_CHANGED`) sem gravar nada.
+
+**Tudo é copiado para o pedido** (4.4): cliente, endereço, região, pagamento e valores em
+`orders`; nome, tipo, preço unitário já com opções, quantidade e composição do combo em
+`order_items`; grupo, opção e acréscimo em `order_item_options`. O item guarda o `productId` sem
+chave estrangeira — o produto pode sair do cardápio, o pedido fica.
+
+**Número por estabelecimento** (4.2) numa tabela contadora (`order_counters`), incrementada com
+`INSERT ... ON CONFLICT DO UPDATE ... RETURNING` na transação do pedido: a linha trava até o
+commit, então pedidos simultâneos não repetem número, e o rollback o devolve. Uma `SEQUENCE` seria
+global, e não volta no rollback.
+
+**Idempotência:** a chave gerada no navegador é única por estabelecimento; repetir o envio
+devolve o pedido já criado, inclusive quando dois envios chegam juntos.
+
+**Cliente e endereço:** o cliente nasce no primeiro pedido; o existente mantém o nome guardado.
+O checkout preenche o nome com o primeiro nome da identificação; quando o pedido chega com
+exatamente esse primeiro nome, o pedido registra o nome completo guardado (`nomeDoPedido`).
+Endereço salvo só vale se for do dono do telefone; endereço novo igual a um salvo reaproveita o
+existente.
+
+**Status** (`orders/status.ts`): `RECEIVED → ACCEPTED → PREPARING → READY → OUT_FOR_DELIVERY →
+COMPLETED`, só avançando, podendo pular etapas; `OUT_FOR_DELIVERY` só em entrega; `CANCELLED`
+de qualquer status não final, com motivo. A atualização só grava se o status ainda for o lido
+(`WHERE status = de`), e a mudança vai para a auditoria. As rotas do painel
+(`/api/v1/admin/orders`) listam, detalham e mudam o status; a tela é das próximas fases.
+
+---
+
 ## 9. Frontend
 
 ### 9.1 Divisão de estado
@@ -769,12 +809,13 @@ src/
 
 ### 9.3 Rotas e dados
 
-| Rota                    | Página                                                 |
-| ----------------------- | ------------------------------------------------------ |
-| `/`                     | verificação do ambiente, até existir página do produto |
-| `/:tenantSlug`          | cardápio público                                       |
-| `/:tenantSlug/checkout` | finalizar pedido                                       |
-| qualquer outra          | não encontrado                                         |
+| Rota                          | Página                                                 |
+| ----------------------------- | ------------------------------------------------------ |
+| `/`                           | verificação do ambiente, até existir página do produto |
+| `/:tenantSlug`                | cardápio público                                       |
+| `/:tenantSlug/checkout`       | finalizar pedido                                       |
+| `/:tenantSlug/pedido-enviado` | confirmação do pedido                                  |
+| qualquer outra                | não encontrado                                         |
 
 No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
 faz o "voltar" do celular fechar a janela em vez de sair do cardápio.
@@ -817,8 +858,13 @@ carrinho do Zustand, e monta o formulário com React Hook Form + Zod.
 - **Todas as regras rodam num passo só**, para a pessoa ver todos os erros de uma vez: no Zod 4 o
   `superRefine` não roda depois de uma falha na base, então a base aceita texto e o
   `superRefine` valida tudo.
-- A saída do schema é `DadosDoCheckout` — o formato que a Fase 11 vai enviar. Endereço salvo vai
-  só pelo id.
+- A saída do schema é `DadosDoCheckout`; `montarPedido` junta a ele os itens do carrinho e o
+  total visto. Endereço salvo vai só pelo id.
+- **Envio:** uma chave de idempotência por tentativa — reusada depois de falha de rede, trocada
+  depois de recusa (422/409), quando a tela também recarrega o cardápio. Aceito o pedido, a
+  página vai para `/:tenantSlug/pedido-enviado` com `replace` (o "voltar" não reabre o checkout)
+  e o carrinho é esvaziado. O pedido chega à confirmação pelo estado da navegação, nunca pela
+  URL.
 - Taxa e total são **prévia**; fechado, abaixo do mínimo e item com problema impedem o envio,
   com o motivo na tela. Quem decide é o servidor.
 - A identificação é mutação, não consulta: dado pessoal fora do cache, uma chamada por telefone,

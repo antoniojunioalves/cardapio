@@ -120,6 +120,20 @@
       "when": 1790691180258,
       "tag": "0016_cep_do_endereco",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790705324393,
+      "tag": "0017_pedidos",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790705332669,
+      "tag": "0018_force_rls_pedidos",
+      "breakpoints": true
     }
   ]
 }

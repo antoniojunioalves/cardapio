@@ -44,7 +44,12 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Autenticação em dois fatores para usuários administrativos
 - Bloqueio temporário de conta após N tentativas falhas — hoje há apenas o limite por IP
 - Histórico de senhas, para impedir reuso da anterior
-- Conta de cliente final com senha — hoje o cliente é reconhecido só pelo telefone
+- **Conta de cliente final, com os dados completos no checkout.** Hoje o cliente é reconhecido só
+  pelo telefone, e por isso o checkout mostra apenas o primeiro nome e os endereços mascarados
+  (SECURITY.md, seção 5): telefone não prova quem está digitando. Com o cliente **logado na
+  própria conta**, a identidade está provada, e o checkout deve trazer tudo preenchido e visível —
+  nome completo, endereços completos (CEP, rua, número, complemento, referência) para conferir e
+  editar. O comportamento mascarado continua valendo para quem pede sem login.
 - Papéis personalizados por estabelecimento — hoje OWNER, ADMIN e STAFF são globais
 - Painel da plataforma para o Super Admin — hoje existe só a estrutura de dados
 

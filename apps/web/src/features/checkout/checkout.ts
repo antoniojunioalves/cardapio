@@ -4,12 +4,15 @@ import {
   telefoneSchema,
   textoOpcional,
   type Endereco,
+  type NovoPedidoEnviado,
+  type ProblemaDoPedido,
 } from '@repo/shared'
 import { z } from 'zod'
 
-import type { LinhaDoCarrinho, ResumoDoCarrinho } from '@/features/cart/cart'
+import type { ItemDoCarrinho, LinhaDoCarrinho, ResumoDoCarrinho } from '@/features/cart/cart'
 import { descreverStatus } from '@/features/menu/presentation'
 import type { CardapioPublico, EntregaPublica } from '@/features/menu/types'
+import { ApiError } from '@/services/api'
 import { formatarPreco, lerReais } from '@/utils/money'
 
 /**
@@ -264,4 +267,76 @@ export const VALORES_INICIAIS: ValoresDoCheckout = {
   paymentMethodId: '',
   changeFor: '',
   notes: '',
+}
+
+/**
+ * O corpo de `POST /orders`: o formulário conferido mais os itens do carrinho.
+ *
+ * Nenhum preço vai junto — só ids, quantidades e escolhas. O total vai como
+ * `expectedTotalInCents`: é o que o cliente viu, e o servidor recusa o pedido
+ * se o total dele for outro.
+ */
+export function montarPedido(
+  dados: DadosDoCheckout,
+  itens: readonly ItemDoCarrinho[],
+  totalEmCentavos: number,
+  idempotencyKey: string,
+): NovoPedidoEnviado {
+  return {
+    idempotencyKey,
+    customer: { phone: dados.phone, name: dados.name },
+    fulfillment: dados.fulfillment,
+    address: dados.address,
+    deliveryRegionId: dados.deliveryRegionId,
+    paymentMethodId: dados.paymentMethodId,
+    changeForInCents: dados.changeForInCents,
+    notes: dados.notes,
+    items: itens.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantidade,
+      notes: item.observacao || null,
+      options: Object.fromEntries(
+        Object.entries(item.selecao)
+          .filter(([, ids]) => ids.length > 0)
+          .map(([grupo, ids]) => [grupo, [...ids]]),
+      ),
+    })),
+    expectedTotalInCents: totalEmCentavos,
+  }
+}
+
+export interface FalhaNoEnvio {
+  mensagens: string[]
+  /** O cardápio mudou (item, preço, região…): vale recarregá-lo e gerar outra chave. */
+  cardapioMudou: boolean
+}
+
+/** Traduz o erro do envio em frases para o cliente. */
+export function descreverFalhaNoEnvio(erro: unknown): FalhaNoEnvio {
+  if (erro instanceof ApiError && erro.code === 'ORDER_REJECTED') {
+    const detalhes = erro.details as { problemas?: ProblemaDoPedido[] } | undefined
+    const mensagens = (detalhes?.problemas ?? []).map((p) => p.mensagem)
+    return {
+      mensagens: mensagens.length > 0 ? mensagens : [erro.message],
+      cardapioMudou: true,
+    }
+  }
+  if (erro instanceof ApiError && erro.code === 'PRICE_CHANGED') {
+    return {
+      mensagens: [
+        'Os valores mudaram desde que você abriu o cardápio. Confira o novo total e envie de novo.',
+      ],
+      cardapioMudou: true,
+    }
+  }
+  if (erro instanceof ApiError && erro.status === 429) {
+    return {
+      mensagens: ['Muitas tentativas seguidas. Aguarde um minuto e envie de novo.'],
+      cardapioMudou: false,
+    }
+  }
+  return {
+    mensagens: ['Não conseguimos enviar o pedido. Confira a sua conexão e tente de novo.'],
+    cardapioMudou: false,
+  }
 }

@@ -193,7 +193,8 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
 
 ### Área pública — **em vigor**
 
-`GET /api/v1/public/{tenantSlug}/menu` é a única rota sem login. O que a protege:
+As rotas sem login são o cardápio (`GET .../menu`), a identificação por telefone (seção 5) e o
+envio do pedido (`POST .../orders`). O que as protege:
 
 - **O tenant vem só do slug**, traduzido para id pelo servidor. Um token de outro estabelecimento
   enviado junto é ignorado — há teste para isso.
@@ -215,15 +216,38 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
   o preço calculado do zero no servidor. A chave do carrinho (o slug) não escolhe o
   estabelecimento do pedido.
 
+### Envio do pedido — **em vigor**
+
+O corpo de `POST .../orders` é tratado como **entrada hostil**:
+
+- **Nenhum preço vem do navegador.** O corpo traz ids, quantidades e escolhas; campos a mais são
+  descartados. Tudo é recalculado sobre a montagem do cardápio público, dentro da transação do
+  pedido: produto de outro estabelecimento, de categoria inativa, esgotado ou excluído é recusado
+  como inexistente; opção precisa ser do grupo, do produto, disponível, sem repetição, dentro do
+  mínimo e do máximo.
+- **O total que o cliente viu é conferido, não usado.** Diferente do calculado, o pedido é
+  recusado (409) e nada é gravado.
+- **Endereço salvo só vale se for do dono do telefone.** Sem isso, um id de endereço bastaria
+  para pedir no endereço de outra pessoa. A resposta do pedido não traz o endereço.
+- **Um pedido não renomeia o cliente**: o cliente existente mantém o nome guardado, e o nome
+  digitado fica só no pedido.
+- **Idempotência** pela chave gerada no navegador, garantida por restrição única no banco.
+- **10 envios por minuto por IP.**
+- Estabelecimento suspenso ou inexistente responde o mesmo 404.
+
+Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
+exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
+cancelamento.
+
 ## 8. Cabeçalhos, CORS e limites
 
-| Item             | Estado                                                                          |
-| ---------------- | ------------------------------------------------------------------------------- |
-| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)      |
-| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                                |
-| Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone |
-| Documentação     | **Ativo** — `/docs` desabilitado em produção                                    |
-| HTTPS            | Responsabilidade do ambiente de deploy                                          |
+| Item             | Estado                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)                           |
+| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                                                     |
+| Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone e no envio de pedido |
+| Documentação     | **Ativo** — `/docs` desabilitado em produção                                                         |
+| HTTPS            | Responsabilidade do ambiente de deploy                                                               |
 
 O limite global conta na memória do processo. Com mais de uma instância em produção isso vira um
 limite por instância; um armazenamento compartilhado entra junto do deploy (ROADMAP).
