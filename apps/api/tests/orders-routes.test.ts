@@ -457,6 +457,18 @@ describe('endereço salvo', () => {
     expect(problemasDe(resposta.body).map((p) => p.tipo)).toEqual(['ENDERECO_INVALIDO'])
   })
 
+  it('só o primeiro nome (o que o checkout preenche) vira o nome completo guardado no pedido', async () => {
+    await criar()
+    const criado = await criar(pedido({ customer: { phone: TELEFONE, name: 'Maria' } }))
+
+    const [gravado] = await naLanchonete((tx) =>
+      tx.select().from(orders).where(eq(orders.number, criado.number)),
+    )
+    expect(gravado?.customerName).toBe('Maria Oliveira')
+    // A resposta ao navegador não leva o nome guardado.
+    expect(JSON.stringify(criado)).not.toContain('Oliveira')
+  })
+
   it('cliente que já existe mantém o nome guardado; o pedido guarda o nome digitado', async () => {
     const criado = await criar(pedido({ customer: { phone: TELEFONE, name: 'Outro Nome' } }))
 

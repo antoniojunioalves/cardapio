@@ -1,6 +1,7 @@
 import type { NovoPedido, PedidoCriado, ProblemaDoPedido } from '@repo/shared'
 
 import { recordAudit } from '../audit/record.js'
+import { primeiroNome } from '../customers/masking.js'
 import {
   buscarClientePorTelefone,
   buscarEnderecoDoCliente,
@@ -146,7 +147,7 @@ export async function criarPedido(
         number: await proximoNumero(tx, context.tenantId),
         idempotencyKey: entrada.idempotencyKey,
         customerId: clienteId,
-        customerName: entrada.customer.name,
+        customerName: nomeDoPedido(cliente?.name ?? null, entrada.customer.name),
         customerPhone: entrada.customer.phone,
         fulfillment: entrada.fulfillment,
         addressPostalCode: endereco?.postalCode || null,
@@ -203,6 +204,20 @@ export async function criarPedido(
     }
     throw error
   }
+}
+
+/**
+ * O nome que o pedido registra.
+ *
+ * A identificação por telefone só revela o primeiro nome, e é com ele que o
+ * checkout preenche o campo. Se o nome enviado é exatamente esse primeiro
+ * nome, o pedido registra o nome completo guardado — a cozinha vê "Maria
+ * Oliveira", e o navegador nunca recebeu o sobrenome. Qualquer outro nome
+ * digitado vale como está.
+ */
+export function nomeDoPedido(nomeGuardado: string | null, nomeEnviado: string): string {
+  if (nomeGuardado && nomeEnviado === primeiroNome(nomeGuardado)) return nomeGuardado
+  return nomeEnviado
 }
 
 async function apresentarCriado(tx: TenantTransaction, pedido: Order): Promise<PedidoCriado> {

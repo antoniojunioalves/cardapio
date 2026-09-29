@@ -3,6 +3,7 @@ import {
   mascararCepDigitado,
   mascararTelefoneDigitado,
   normalizarTelefone,
+  type ClienteIdentificado,
   type PedidoCriado,
 } from '@repo/shared'
 import { useQueryClient } from '@tanstack/react-query'
@@ -124,15 +125,38 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo, aoEnviado }: Chec
     schemaAtual.current = schema
   })
 
+  // O nome que a identificação preencheu, para tirá-lo se o telefone mudar —
+  // mas só se a pessoa não o tiver editado.
+  const nomePreenchido = useRef<string | null>(null)
+
+  /** Marca o endereço mais recente e preenche o nome, a partir da identificação. */
+  function aplicarIdentificacao(resposta: ClienteIdentificado, telefone: string) {
+    if (!resposta.cliente || normalizarTelefone(form.getValues('phone')) !== telefone) return
+
+    // O endereço mais recente já vem escolhido; a pessoa confere e troca.
+    const recente = resposta.cliente.enderecos[0]
+    if (recente) setValue('savedAddressId', recente.id)
+
+    // Só o primeiro nome: é o que a identificação revela. O servidor completa
+    // com o nome guardado ao gravar o pedido. O que a pessoa já digitou não é
+    // sobrescrito.
+    if (form.getValues('name').trim() === '') {
+      nomePreenchido.current = resposta.cliente.primeiroNome
+      setValue('name', resposta.cliente.primeiroNome, { shouldValidate: formState.isSubmitted })
+    }
+  }
+
   function buscarCliente() {
-    if (!telefoneAtual || identificacao.variables === telefoneAtual) return
+    if (!telefoneAtual) return
+    // Voltou para um número já consultado: reaplica a resposta que já temos,
+    // sem outra requisição.
+    if (identificacao.variables === telefoneAtual) {
+      if (identificacao.isSuccess) aplicarIdentificacao(identificacao.data, telefoneAtual)
+      return
+    }
     identificacao.mutate(telefoneAtual, {
       onSuccess: (resposta) => {
-        // O endereço mais recente já vem escolhido; a pessoa confere e troca.
-        const recente = resposta.cliente?.enderecos[0]
-        if (recente && normalizarTelefone(form.getValues('phone')) === telefoneAtual) {
-          setValue('savedAddressId', recente.id)
-        }
+        aplicarIdentificacao(resposta, telefoneAtual)
       },
     })
   }
@@ -190,6 +214,13 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo, aoEnviado }: Chec
                 field.onChange(mascarado)
                 if (normalizarTelefone(mascarado) !== identificacao.variables) {
                   setValue('savedAddressId', '')
+                  if (
+                    nomePreenchido.current !== null &&
+                    form.getValues('name') === nomePreenchido.current
+                  ) {
+                    setValue('name', '')
+                  }
+                  nomePreenchido.current = null
                 }
               }}
               onBlur={() => {

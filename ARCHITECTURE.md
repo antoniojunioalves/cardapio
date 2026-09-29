@@ -767,6 +767,8 @@ global, e não volta no rollback.
 devolve o pedido já criado, inclusive quando dois envios chegam juntos.
 
 **Cliente e endereço:** o cliente nasce no primeiro pedido; o existente mantém o nome guardado.
+O checkout preenche o nome com o primeiro nome da identificação; quando o pedido chega com
+exatamente esse primeiro nome, o pedido registra o nome completo guardado (`nomeDoPedido`).
 Endereço salvo só vale se for do dono do telefone; endereço novo igual a um salvo reaproveita o
 existente.
 

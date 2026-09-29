@@ -120,6 +120,13 @@ mascarou.
 **O cliente que já existe mantém o nome guardado**; o nome digitado fica no pedido. O telefone
 não prova quem digita, e um pedido não deve renomear o cliente de outra pessoa.
 
+**O nome vem preenchido com o primeiro nome** quando o telefone é conhecido — pedido na
+validação. Só o primeiro, porque é o que a identificação revela. Se o nome enviado é exatamente
+esse primeiro nome, o servidor grava no pedido o nome completo guardado: a cozinha vê "Maria
+Oliveira", e o navegador nunca recebe o sobrenome. O que a pessoa já digitou não é sobrescrito, e
+trocar o telefone tira o nome preenchido (mas não um editado). Voltar ao número já consultado
+reaplica a resposta sem nova busca.
+
 **Endereço novo igual a um salvo** (mesmo CEP, rua, número e complemento) não vira outra linha:
 o existente é marcado como usado.
 
@@ -139,7 +146,7 @@ endereço público. Recarregada, a página diz que os detalhes não ficam guarda
 | Verificação                                | Resultado                                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------------ |
 | `pnpm typecheck` / `lint` / `build`        | zero erro                                                                      |
-| `pnpm test`                                | **506 testes** (370 API + 123 web + 13 shared)                                 |
+| `pnpm test`                                | **510 testes** (371 API + 126 web + 13 shared)                                 |
 | Testes sensíveis à regra                   | sem o dono do endereço, sem a checagem de total, sem a chave nova: cada um cai |
 | API rodando: CORS, fechado, corpo inválido | POST liberado para a web; 422 com o motivo; 400                                |
 | Pedido criado com a API rodando            | não feito: os dois estabelecimentos do seed estavam fechados (15h)             |

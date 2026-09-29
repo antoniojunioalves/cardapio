@@ -206,6 +206,43 @@ describe('identificação por telefone', () => {
     expect(campo('Rua')).toBeVisible()
   })
 
+  it('telefone conhecido preenche o nome com o primeiro nome', async () => {
+    await abrirCheckout({ identificacao: MARIA })
+    informarTelefone('11987654321')
+
+    await waitFor(() => {
+      expect(campo('Nome')).toHaveValue('Maria')
+    })
+  })
+
+  it('não sobrescreve o nome que a pessoa já digitou', async () => {
+    await abrirCheckout({ identificacao: MARIA })
+    escrever('Nome', 'Maria Clara')
+    informarTelefone('11987654321')
+
+    await screen.findByText('Olá, Maria! Que bom te ver de novo.')
+    expect(campo('Nome')).toHaveValue('Maria Clara')
+  })
+
+  it('trocar o telefone tira o nome preenchido, mas não o editado', async () => {
+    await abrirCheckout({ identificacao: MARIA })
+    informarTelefone('11987654321')
+    await waitFor(() => {
+      expect(campo('Nome')).toHaveValue('Maria')
+    })
+
+    escrever('Telefone (WhatsApp)', '21999990000')
+    expect(campo('Nome')).toHaveValue('')
+
+    informarTelefone('11987654321')
+    await waitFor(() => {
+      expect(campo('Nome')).toHaveValue('Maria')
+    })
+    escrever('Nome', 'Maria Oliveira')
+    escrever('Telefone (WhatsApp)', '21999990000')
+    expect(campo('Nome')).toHaveValue('Maria Oliveira')
+  })
+
   it('sair do campo de novo com o mesmo telefone não busca outra vez', async () => {
     const { fetch } = await abrirCheckout({ identificacao: MARIA })
     informarTelefone('11987654321')
@@ -227,6 +264,12 @@ describe('identificação por telefone', () => {
     expect(screen.queryByText('Olá, Maria! Que bom te ver de novo.')).not.toBeInTheDocument()
     expect(screen.queryByRole('radiogroup', { name: 'Seus endereços' })).not.toBeInTheDocument()
     expect(campo('Rua')).toBeVisible()
+
+    // De volta ao número original: o endereço mais recente volta marcado, sem nova busca.
+    informarTelefone('11987654321')
+    expect(
+      await screen.findByRole('radio', { name: 'Rua dos Ipês, 4•• — Jardim Paulista' }),
+    ).toBeChecked()
   })
 
   it('telefone novo segue com o endereço em branco', async () => {
