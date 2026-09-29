@@ -9,10 +9,9 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 8a concluída.** O catálogo está completo na API, e o **cardápio público** já
-responde sem login em `GET /api/v1/public/{tenantSlug}/menu` — estabelecimento, aberto/fechado,
-entrega, pagamento e produtos com disponibilidade calculada. A próxima fase é a página que o
-cliente final vai ver. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status atual: Fase 8b concluída.** O cliente final já vê o cardápio: com `pnpm dev`, abra
+[localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze). A próxima fase é o
+carrinho. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

@@ -717,7 +717,7 @@ estabelecimento, status, horários, entrega, formas de pagamento e cardápio.
 
 ## 9. Frontend
 
-### 6.1 Divisão de estado
+### 9.1 Divisão de estado
 
 | Ferramenta     | Responsabilidade                                                  |
 | -------------- | ----------------------------------------------------------------- |
@@ -727,7 +727,7 @@ estabelecimento, status, horários, entrega, formas de pagamento e cardápio.
 A separação evita o erro comum de tratar resposta de API como estado global, que leva a cache
 manual, invalidação manual e dados velhos na tela.
 
-### 6.2 Organização
+### 9.2 Organização
 
 ```
 src/
@@ -742,7 +742,23 @@ src/
 `components/` é escrito para poder ser extraído como biblioteca própria: nada ali importa de
 `features/`. Componente com regra de negócio mora em `features/<nome>/components/`.
 
-### 6.3 Temas
+### 9.3 Rotas e dados
+
+| Rota           | Página                                                 |
+| -------------- | ------------------------------------------------------ |
+| `/`            | verificação do ambiente, até existir página do produto |
+| `/:tenantSlug` | cardápio público                                       |
+| qualquer outra | não encontrado                                         |
+
+`/:tenantSlug` casa com um segmento só; as rotas administrativas, quando vierem, ficam sob um
+prefixo próprio para nunca colidirem com um slug.
+
+Os dados do cardápio passam pelo TanStack Query (`features/menu/api.ts`), com recarga a cada
+minuto — status e esgotados mudam sozinhos. As regras de apresentação ficam em
+`features/menu/presentation.ts`, sem React, e são testadas como funções puras. **Nenhuma decide
+negócio**: aberto, disponível e preço chegam prontos da API.
+
+### 9.4 Temas
 
 Os **valores** vivem em CSS custom properties, em
 [`apps/web/src/theme/tokens.css`](apps/web/src/theme/tokens.css), dentro do bloco `@theme` do
@@ -765,7 +781,8 @@ sem rebuild e sem bundle por tenant. `applyTenantTheme()` faz isso e permite sob
 a camada semântica: deixar um tenant redefinir a paleta inteira abriria espaço para combinações
 ilegíveis.
 
-Não há editor de temas, apenas a arquitetura que torna um possível sem tocar em componentes.
+Não há editor de temas, apenas a arquitetura que torna um possível sem tocar em componentes. O
+cardápio público ainda usa o tema do produto: o banco não guarda cores por estabelecimento.
 
 ---
 

@@ -1,19 +1,20 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-09-28
-**Fase atual:** 8a — concluída, aguardando validação
-**Próxima:** Fase 8b — página do cardápio público
+**Atualizado em:** 2026-09-29
+**Fase atual:** 8b — concluída, aguardando validação
+**Próxima:** Fase 9 — carrinho
 
 ---
 
 ## Estado atual
 
-**O cardápio público existe na API.** `GET /api/v1/public/{tenantSlug}/menu` devolve, sem login, o
-estabelecimento, se está aberto agora, as condições de entrega, as formas de pagamento e o
-cardápio com grupos de opção e combos — com a disponibilidade já calculada.
+**O cliente final já vê o cardápio.** Em `/{tenantSlug}` — `/lanchonete-do-ze` — a página
+mobile-first mostra o estabelecimento, se está aberto e quando abre, as condições de entrega,
+busca, categorias e produtos com esgotados e combos. Os dados vêm de
+`GET /api/v1/public/{tenantSlug}/menu`.
 
-**Ainda não existe:** nenhuma tela para o cliente final, carrinho e pedidos. A Fase 8b é a
-primeira em que o cliente final verá alguma coisa.
+**Ainda não existe:** escolher opções, carrinho, checkout e pedidos; e nenhuma tela administrativa
+— o lojista ainda configura tudo pela API.
 
 ---
 
@@ -31,7 +32,7 @@ primeira em que o cliente final verá alguma coisa.
 | 7a  | Catálogo: categorias e produtos                                                                                     | ✅ Concluída |
 | 7b  | Catálogo: grupos de opção, adicionais, remoções e combos                                                            | ✅ Concluída |
 | 8a  | Cardápio público — API                                                                                              | ✅ Concluída |
-| 8b  | Cardápio público — página no frontend                                                                               | ⬜ Próxima   |
+| 8b  | Cardápio público — página no frontend                                                                               | ✅ Concluída |
 | 9   | Carrinho                                                                                                            | ⬜           |
 | 10  | Customer e checkout                                                                                                 | ⬜           |
 | 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ⬜           |
@@ -47,69 +48,69 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 8a — concluída
-
-A Fase 8 foi dividida em duas a pedido do Junio: **8a**, a API pública, e **8b**, a página.
+## Fase 8b — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                  | Status |
-| --- | --------------------------------------------------------------------------------------- | ------ |
-| 1   | Regra pura de disponibilidade: produto, componente do combo, grupo obrigatório esgotado | ✅     |
-| 2   | Leitura do cardápio em cinco consultas fixas, sem uma por produto                       | ✅     |
-| 3   | Resolução pelo slug: inexistente, suspenso e formato impossível respondem o mesmo 404   | ✅     |
-| 4   | Resposta montada campo a campo, com schema de resposta como segunda barreira            | ✅     |
-| 5   | `GET /api/v1/public/{tenantSlug}/menu`, sem login, com `Cache-Control: no-cache`        | ✅     |
-| 6   | Testes: 10 da regra de disponibilidade, 24 da rota                                      | ✅     |
-| 7   | ROADMAP: preço de combo parametrizável (fixo, percentual ou valor) por estabelecimento  | ✅     |
+| #   | Tarefa                                                                               | Status |
+| --- | ------------------------------------------------------------------------------------ | ------ |
+| 1   | TanStack Query e React Router; rotas `/`, `/:tenantSlug` e não encontrado            | ✅     |
+| 2   | Cliente HTTP com `ApiError` que preserva o status                                    | ✅     |
+| 3   | Regras de apresentação puras: preço, status, entrega, "a partir de", economia, busca | ✅     |
+| 4   | Cabeçalho com capa, logo, status e condições de entrega                              | ✅     |
+| 5   | Busca sem acento, categorias em faixa fixa, cartões com esgotado e combo             | ✅     |
+| 6   | Informações: horários, endereço, contato, formas de pagamento                        | ✅     |
+| 7   | Estados: carregando, não encontrado, erro com tentar de novo, cardápio vazio         | ✅     |
+| 8   | Testes: 18 de apresentação, 15 da página com a API simulada                          | ✅     |
 
-### Duas divergências do escopo original, deliberadas
+### Decisões desta fase
 
-**Adicionais e remoções são grupos de opção**, e não uma tabela `product_addons`. A estrutura é a
-mesma — lista de escolhas com preço e limite de seleções —, e uma tabela à parte daria ao cálculo
-do pedido duas regras em vez de uma.
+**Nenhuma regra de negócio no navegador.** Aberto/fechado, disponibilidade e preço vêm prontos da
+API; a página só os transforma em texto. O pedido é validado de novo no servidor (Fase 11).
 
-**Uma rota só**, com cabeçalho, status, entrega, pagamento e cardápio. É o que a página precisa
-para desenhar a primeira tela; dividir em várias chamadas atrasaria a primeira pintura no celular.
+**Recarrega a cada minuto** enquanto a página está aberta, para o status não envelhecer na mesa do
+cliente. Um 404 não é repetido; falha de rede é.
 
-**Suspenso responde igual a inexistente.** "Suspenso" revelaria a situação comercial de um cliente
-da plataforma a qualquer um que digitasse o endereço.
+**"A partir de"** aparece quando um grupo obrigatório tem opção mais cara — o preço base é o do
+menor tamanho, e sem o aviso o cartão enganaria.
 
-**Disponibilidade calculada no servidor, em três níveis:** o produto esgotado; o combo com um
-componente esgotado; e o produto cujo grupo obrigatório não tem mais opções suficientes — "todos os
-tamanhos acabaram". Adicional opcional esgotado não tira o lanche do cardápio. Produto
-indisponível **aparece marcado**, em vez de sumir, para o cliente não achar que o cardápio mudou.
+**Produto esgotado aparece apagado, com selo**, em vez de sumir.
 
-**Categoria inativa some com os produtos; categoria ativa sem produto também some.**
+**A faixa de categorias é filha direta do contêiner da página.** Na validação ela subia junto com a
+rolagem: estava dentro de um `<div>` da própria altura, e `sticky` só prende enquanto o pai está na
+tela. Um teste trava essa estrutura, já que o jsdom não calcula layout.
 
-**WhatsApp e telefone de contato são públicos**, porque o pedido será enviado para esse número. O
-e-mail de contato e a pausa manual (`isAcceptingOrders`) não saem — a pausa aparece como status
-`PAUSADO`.
+**O contrato da API está copiado** em `apps/web/src/features/menu/types.ts`. Ainda não há
+`packages/shared`; ele entra quando houver um segundo contrato compartilhado que justifique.
 
-**Sem cache.** Aberto/fechado e esgotado mudam de um minuto para o outro; guardar a resposta
-mostraria a lanchonete aberta depois de fechar. Cache de borda com invalidação está no ROADMAP.
+**Sem tema por estabelecimento ainda.** A arquitetura de tokens está pronta, mas o banco não guarda
+cores do estabelecimento; a página usa o tema do produto. Registrado no ROADMAP.
 
 ### Verificação executada
 
-| Verificação                         | Resultado                                              |
-| ----------------------------------- | ------------------------------------------------------ |
-| `pnpm typecheck` / `lint` / `build` | zero erro                                              |
-| `pnpm test`                         | **318 testes** (314 API + 4 web)                       |
-| Cardápio do seed pela rota real     | 4 categorias, combo com avulso R$ 46,90, suco esgotado |
-| Slug inexistente                    | 404                                                    |
+| Verificação                            | Resultado                                         |
+| -------------------------------------- | ------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build`    | zero erro                                         |
+| `pnpm test`                            | **352 testes** (314 API + 38 web)                 |
+| `pnpm dev`: web em `/lanchonete-do-ze` | 200; API com CORS para a origem da web e no-cache |
+| Conferência visual no navegador        | a fazer na validação                              |
 
 ---
 
-## Fase 8b — próxima
+## Fase 9 — próxima
 
-A página do cardápio em `/{tenantSlug}`, mobile-first: cabeçalho com logo, capa e status
-aberto/fechado, taxa e pedido mínimo, busca, categorias horizontais e cartões de produto com
-disponibilidade. Primeira fase com roteamento no frontend e com o tema do estabelecimento aplicado.
-Seleção de opções e carrinho ficam para a Fase 9.
+O carrinho: abrir o produto, escolher opções respeitando mínimo e máximo, quantidade e observação,
+e guardar no navegador (Zustand com persistência), com o indicador de itens. O preço exibido é
+calculado no navegador só para mostrar; quem cobra é o servidor, na Fase 11.
 
 ---
 
 ## Fases anteriores
+
+**Fase 8a** entregou a API do cardápio público: uma rota sem login que resolve o slug, com
+estabelecimento suspenso respondendo o mesmo 404 de um inexistente, resposta montada campo a
+campo e disponibilidade calculada no servidor — combo com componente esgotado e grupo
+obrigatório sem opções ficam indisponíveis.
 
 **Fase 7b** entregou grupos de opção reutilizáveis — tamanho, adicionais e remoções num modelo
 só — e combos como produtos do tipo `COMBO`, divergindo de propósito do escopo original. Grupo

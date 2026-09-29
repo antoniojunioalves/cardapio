@@ -197,6 +197,8 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
   taxa e formas de pagamento habilitadas. **Não expõe:** e-mail de contato, regiões inativas,
   formas desabilitadas, categorias inativas.
 - Vale o limite global de requisições.
+- **A página no navegador não decide nada**: status, disponibilidade e preço exibidos são
+  informativos. O pedido é validado e recalculado no servidor (Fase 11).
 
 ## 8. Cabeçalhos, CORS e limites
 

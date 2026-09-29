@@ -142,6 +142,8 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Autosserviço de cadastro de estabelecimento
 - Subdomínio por tenant — `tenant.dominio.com`
 - Domínio próprio do tenant
+- Cores do estabelecimento no cardápio público: guardar o tema em `tenant_settings`, devolvê-lo
+  na rota pública e aplicá-lo com `applyTenantTheme()` _(os tokens já suportam; falta o dado)_
 - Editor visual de temas _(a arquitetura já existe; falta a interface)_
 - Horário de funcionamento 24 horas sem interrupção — hoje se escreve 00:00–23:59
 - Isolamento físico opcional para tenants de plano CUSTOM — banco dedicado, trocando apenas a
