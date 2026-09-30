@@ -1,4 +1,4 @@
-import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify'
+import type { FastifyReply, FastifyRequest, onRequestAsyncHookHandler } from 'fastify'
 
 import { ForbiddenError, UnauthorizedError } from '../lib/errors.js'
 import { tenantContextFromUser, type TenantContext } from '../tenant/context.js'
@@ -26,7 +26,7 @@ function extrairToken(request: FastifyRequest): string | null {
  * O tenant vem do token assinado por nós, nunca de cabeçalho, corpo ou query.
  * O `tenantContextFromUser` deixa essa origem registrada.
  */
-const authenticate: preHandlerAsyncHookHandler = async (request: FastifyRequest) => {
+const authenticate: onRequestAsyncHookHandler = async (request: FastifyRequest) => {
   const token = extrairToken(request)
   if (!token) throw new UnauthorizedError('Autenticação necessária.')
 
@@ -42,7 +42,7 @@ const authenticate: preHandlerAsyncHookHandler = async (request: FastifyRequest)
   request.currentUser = usuario
 }
 
-function authorize(...required: readonly string[]): preHandlerAsyncHookHandler {
+function authorize(...required: readonly string[]): onRequestAsyncHookHandler {
   return (request: FastifyRequest, _reply: FastifyReply) => {
     const usuario = request.currentUser
 
@@ -72,9 +72,15 @@ function authorize(...required: readonly string[]): preHandlerAsyncHookHandler {
  * encontraria usuário e o erro pareceria de sessão, não de configuração.
  * Devolvendo a cadeia pronta, a ordem não é uma decisão de quem usa.
  *
- *     app.get('/produtos', { preHandler: requireAuth('products:read') }, handler)
+ *     app.get('/produtos', { onRequest: requireAuth('products:read') }, handler)
+ *
+ * **Sempre em `onRequest`, nunca em `preHandler`.** O Fastify valida o corpo
+ * antes do `preHandler`: ali, quem não está logado receberia 400 com o
+ * formato esperado da rota — e o servidor leria o corpo de quem nem se
+ * identificou. Em `onRequest`, o 401 vem antes de tudo. O teste
+ * `route-guard.test.ts` confere toda rota do painel.
  */
-export function requireAuth(...permissions: readonly string[]): preHandlerAsyncHookHandler[] {
+export function requireAuth(...permissions: readonly string[]): onRequestAsyncHookHandler[] {
   return permissions.length > 0 ? [authenticate, authorize(...permissions)] : [authenticate]
 }
 

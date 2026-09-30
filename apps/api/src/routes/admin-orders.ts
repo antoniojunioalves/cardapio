@@ -148,7 +148,7 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(pedidoSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth('orders:read'),
+      onRequest: requireAuth('orders:read'),
     },
     async (request) =>
       (
@@ -170,7 +170,7 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
         response: { 200: pedidoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('orders:read'),
+      onRequest: requireAuth('orders:read'),
     },
     async (request) => apresentar(await obterPedido(tenantContextOf(request), request.params.id)),
   )
@@ -193,7 +193,7 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
         response: { 200: pedidoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('orders:update'),
+      onRequest: requireAuth('orders:update'),
     },
     async (request) =>
       apresentar(

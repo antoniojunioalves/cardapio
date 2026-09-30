@@ -100,7 +100,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(grupoSchema) },
         security: seguranca,
       },
-      preHandler: LER,
+      onRequest: LER,
     },
     async (request) => listarGrupos(tenantContextOf(request)),
   )
@@ -117,7 +117,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 201: grupoSchema },
         security: seguranca,
       },
-      preHandler: ALTERAR,
+      onRequest: ALTERAR,
     },
     async (request, reply) => {
       const criado = await criarGrupo(
@@ -139,7 +139,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: grupoSchema },
         security: seguranca,
       },
-      preHandler: LER,
+      onRequest: LER,
     },
     async (request) => obterGrupo(tenantContextOf(request), request.params.id),
   )
@@ -157,7 +157,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: grupoSchema },
         security: seguranca,
       },
-      preHandler: ALTERAR,
+      onRequest: ALTERAR,
     },
     async (request) =>
       atualizarGrupo(
@@ -179,7 +179,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 204: z.null() },
         security: seguranca,
       },
-      preHandler: ALTERAR,
+      onRequest: ALTERAR,
     },
     async (request, reply) => {
       await excluirGrupo(tenantContextOf(request), currentUser(request).id, request.params.id)
@@ -199,7 +199,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(grupoSchema) },
         security: seguranca,
       },
-      preHandler: LER,
+      onRequest: LER,
     },
     async (request) => listarGruposDoProduto(tenantContextOf(request), request.params.id),
   )
@@ -221,7 +221,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(grupoSchema) },
         security: seguranca,
       },
-      preHandler: ALTERAR,
+      onRequest: ALTERAR,
     },
     async (request) =>
       definirGruposDoProduto(
@@ -246,7 +246,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: composicaoSchema },
         security: seguranca,
       },
-      preHandler: LER,
+      onRequest: LER,
     },
     async (request) => obterComposicao(tenantContextOf(request), request.params.id),
   )
@@ -277,7 +277,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         response: { 200: composicaoSchema },
         security: seguranca,
       },
-      preHandler: ALTERAR,
+      onRequest: ALTERAR,
     },
     async (request) =>
       definirComposicao(

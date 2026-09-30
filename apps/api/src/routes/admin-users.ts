@@ -53,7 +53,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(usuarioSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth('users:read'),
+      onRequest: requireAuth('users:read'),
     },
     async (request) => (await listarUsuarios(tenantContextOf(request))).map(apresentar),
   )
@@ -76,7 +76,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
         response: { 201: usuarioSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('users:create'),
+      onRequest: requireAuth('users:create'),
     },
     async (request, reply) => {
       const criado = await criarUsuario(
@@ -103,7 +103,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
         response: { 200: usuarioSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('users:update'),
+      onRequest: requireAuth('users:update'),
     },
     async (request) =>
       apresentar(
@@ -128,7 +128,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
         response: { 200: usuarioSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('users:delete'),
+      onRequest: requireAuth('users:delete'),
     },
     async (request) =>
       apresentar(
@@ -150,7 +150,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
         response: { 200: usuarioSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('users:delete'),
+      onRequest: requireAuth('users:delete'),
     },
     async (request) =>
       apresentar(

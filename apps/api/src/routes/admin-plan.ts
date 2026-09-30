@@ -35,7 +35,7 @@ export function adminPlanRoutes(instance: FastifyInstance): void {
         response: { 200: usoSchema },
         security: [{ bearerAuth: [] }],
       },
-      preHandler: requireAuth(),
+      onRequest: requireAuth(),
     },
     async (request) => {
       const context = tenantContextOf(request)

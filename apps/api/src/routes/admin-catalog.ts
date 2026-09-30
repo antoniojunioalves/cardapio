@@ -119,7 +119,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(categoriaSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth('categories:read'),
+      onRequest: requireAuth('categories:read'),
     },
     async (request) =>
       (await listarCategorias(tenantContextOf(request))).map((c) =>
@@ -139,7 +139,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 201: categoriaSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('categories:create'),
+      onRequest: requireAuth('categories:create'),
     },
     async (request, reply) => {
       const criada = await criarCategoria(
@@ -163,7 +163,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(categoriaSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth('categories:update'),
+      onRequest: requireAuth('categories:update'),
     },
     async (request) =>
       (
@@ -186,7 +186,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: categoriaSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('categories:update'),
+      onRequest: requireAuth('categories:update'),
     },
     async (request) =>
       apresentarCategoria(
@@ -211,7 +211,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: semConteudo,
         security: seguranca,
       },
-      preHandler: requireAuth('categories:delete'),
+      onRequest: requireAuth('categories:delete'),
     },
     async (request, reply) => {
       await excluirCategoria(
@@ -236,7 +236,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: categoriaSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('categories:update'),
+      onRequest: requireAuth('categories:update'),
     },
     async (request) =>
       apresentarCategoria(
@@ -261,7 +261,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: categoriaSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('categories:update'),
+      onRequest: requireAuth('categories:update'),
     },
     async (request) =>
       apresentarCategoria(
@@ -287,7 +287,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(produtoSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth('products:read'),
+      onRequest: requireAuth('products:read'),
     },
     async (request) =>
       (await listarProdutos(tenantContextOf(request), request.query)).map((p) =>
@@ -305,7 +305,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: produtoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('products:read'),
+      onRequest: requireAuth('products:read'),
     },
     async (request) =>
       apresentarProduto(await obterProduto(tenantContextOf(request), request.params.id), storage),
@@ -323,7 +323,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 201: produtoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('products:create'),
+      onRequest: requireAuth('products:create'),
     },
     async (request, reply) => {
       const criado = await criarProduto(
@@ -346,7 +346,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: produtoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('products:update'),
+      onRequest: requireAuth('products:update'),
     },
     async (request) =>
       apresentarProduto(
@@ -370,7 +370,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: semConteudo,
         security: seguranca,
       },
-      preHandler: requireAuth('products:delete'),
+      onRequest: requireAuth('products:delete'),
     },
     async (request, reply) => {
       await excluirProduto(
@@ -395,7 +395,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: produtoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('products:update'),
+      onRequest: requireAuth('products:update'),
     },
     async (request) =>
       apresentarProduto(
@@ -420,7 +420,7 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         response: { 200: produtoSchema },
         security: seguranca,
       },
-      preHandler: requireAuth('products:update'),
+      onRequest: requireAuth('products:update'),
     },
     async (request) =>
       apresentarProduto(
