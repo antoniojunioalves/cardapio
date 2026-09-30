@@ -48,7 +48,7 @@ mudança simplesmente não acontece e o sintoma é um erro de permissão inexpli
 | `pnpm build`        | Build de produção                                                 |
 | `pnpm format`       | Prettier, escrevendo                                              |
 | `pnpm format:check` | Prettier, só conferindo                                           |
-| `pnpm db:up`        | Sobe o PostgreSQL                                                 |
+| `pnpm db:up`        | Sobe o PostgreSQL e o Mailpit (e-mails em http://localhost:8025)  |
 | `pnpm db:down`      | Derruba os containers, preservando o volume                       |
 | `pnpm db:reset`     | Apaga o volume e recria — necessário ao alterar scripts de init   |
 | `pnpm db:generate`  | Gera migration a partir do schema; não toca no banco              |
@@ -71,7 +71,14 @@ e a do web disputam memória, e no WSL o processo já foi derrubado por isso (c�
 
 ## CI
 
-Cada PR e cada commit na `main` rodam o `.github/workflows/ci.yml` no GitHub Actions:
+> **Desligado por enquanto.** O workflow foi tirado do repositório para agilizar os merges e volta
+> na Fase 28, antes de colocar o sistema no ar. O conteúdo está guardado em
+> `CI_PARA_IMPLEMENTAR_DEPOIS.txt`: para religar, recrie `.github/workflows/ci.yml` com ele (a primeira linha
+> diz onde) e confira se as actions fixadas ainda são as versões atuais — ver "Atualizar uma
+> action", abaixo. Até lá, `pnpm verify` é a verificação.
+
+Com o workflow no lugar, cada PR e cada commit na `main` rodam o `.github/workflows/ci.yml` no
+GitHub Actions:
 formatação, typecheck, lint, testes e build — os passos do `pnpm verify`, separados para o GitHub
 mostrar qual falhou. O PostgreSQL sobe pelo mesmo `docker-compose.yml` do desenvolvimento, e os
 scripts de `docker/postgres/init/` criam as roles e o banco de testes do zero a cada execução.
@@ -348,6 +355,37 @@ grava o arquivo novo, atualiza o banco, e só depois do commit apaga o antigo.
 
 Em desenvolvimento os arquivos ficam em `apps/api/uploads/`, fora do git. Nos testes, num
 diretório temporário do sistema.
+
+### Enviando um e-mail
+
+Monte a mensagem num módulo puro (`src/signup/messages.ts` é o modelo) e envie com
+`enviarSemDerrubar` (`src/email/index.ts`) **depois** do commit da transação — nunca dentro dela:
+um rollback não desfaz um e-mail enviado. `enviarSemDerrubar` registra a falha no log e devolve
+`false`, em vez de lançar: o que a transação gravou continua valendo, e quem chamou decide o que
+dizer à pessoa.
+
+Duas regras do conteúdo:
+
+- **Só texto, sem HTML** (`MensagemDeEmail` nem tem campo para isso).
+- **E-mail para um endereço digitado por terceiros não repete texto livre** vindo de fora — nome
+  de estabelecimento, nome de pessoa. Senão a rota vira um jeito de mandar qualquer texto, pelo
+  nosso remetente, para qualquer endereço (SECURITY.md, "Cadastro de estabelecimento").
+
+Em desenvolvimento, os e-mails vão para o Mailpit (`pnpm db:up`): abra http://localhost:8025 para
+ver o que a API enviou. Nos testes, `EMAIL_DRIVER=memory` (no `vitest.config.ts`) guarda tudo na
+memória — a instância `email` é um `MemoryEmailProvider`, com a caixa em `enviados`,
+`limpar()` entre os testes e `falharOsProximos(n)` para simular o servidor fora do ar.
+
+### Criando um estabelecimento
+
+Pelo mesmo caminho do cadastro: `criarEstabelecimento` (`src/signup/service.ts`), dentro de um
+`withTenant` aberto com `tenantContextFromSignup(await novoIdDeEstabelecimento())`. Ele grava o
+estabelecimento, a assinatura e o dono com o papel OWNER numa transação; o seed faz assim.
+
+Precisa do plano e do papel no banco: rode `seedPlans()` e `seedRbac()` antes — o `beforeAll` de
+`tests/signup-routes.test.ts` é o modelo. A fixture `criarTenantComUsuario` continua separada de
+propósito: ela cria papéis próprios de cada teste e nenhum plano, que é o que a maioria dos testes
+precisa provar.
 
 ### Acessando dados de um tenant
 

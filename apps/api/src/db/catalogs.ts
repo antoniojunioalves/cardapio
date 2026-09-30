@@ -20,3 +20,35 @@ export const FORMAS_DE_PAGAMENTO = [
   { code: 'MEAL_VOUCHER_VA', name: 'VA', kind: 'MEAL_VOUCHER', sortOrder: 80 },
   { code: 'OTHER', name: 'Outra forma', kind: 'OTHER', sortOrder: 999 },
 ] as const
+
+/**
+ * Planos da plataforma e o que cada um libera (Fase 14).
+ *
+ * O cadastro pela página inicial assina sempre o `FREE` — sem ele no banco, o
+ * cadastro responde "indisponível" em vez de criar estabelecimento sem plano.
+ */
+export const PLANOS = [
+  {
+    code: 'FREE',
+    name: 'Gratuito',
+    description: 'Para começar: cardápio digital e pedidos pelo WhatsApp.',
+    sortOrder: 0,
+    features: [
+      { key: 'maxOrdersPerMonth', isEnabled: true, limitValue: 100 },
+      { key: 'maxUsers', isEnabled: true, limitValue: 2 },
+      { key: 'reports', isEnabled: false, limitValue: null },
+    ],
+  },
+  {
+    code: 'PREMIUM',
+    name: 'Premium',
+    description: 'Sem teto de pedidos, com relatórios e usuários ilimitados.',
+    sortOrder: 100,
+    features: [
+      // limitValue nulo significa ilimitado — zero seria um limite de verdade.
+      { key: 'maxOrdersPerMonth', isEnabled: true, limitValue: null },
+      { key: 'maxUsers', isEnabled: true, limitValue: null },
+      { key: 'reports', isEnabled: true, limitValue: null },
+    ],
+  },
+] as const

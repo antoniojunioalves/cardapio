@@ -12,7 +12,7 @@ import { UnauthorizedError } from '../lib/errors.js'
  * cookie `httpOnly`, que o JavaScript da página não lê — um script injetado
  * não tem como roubá-lo.
  */
-const sessaoSchema = z.object({
+export const sessaoSchema = z.object({
   accessToken: z.string(),
   user: z.object({
     id: z.uuid(),
@@ -59,7 +59,8 @@ function tokenDaRequisicao(request: FastifyRequest<{ Body: z.infer<typeof refres
   return request.cookies[COOKIE_DE_SESSAO] ?? request.body?.refreshToken ?? ''
 }
 
-function responderSessao(reply: FastifyReply, sessao: Session) {
+/** Grava o refresh token no cookie e devolve o resto da sessão. O cadastro usa o mesmo. */
+export function responderSessao(reply: FastifyReply, sessao: Session) {
   void reply.setCookie(COOKIE_DE_SESSAO, sessao.refreshToken, opcoesDoCookie)
   return { accessToken: sessao.accessToken, user: sessao.user }
 }

@@ -3,7 +3,14 @@ import { check, pgEnum, pgTable, varchar } from 'drizzle-orm/pg-core'
 
 import { primaryId, timestamps } from './shared.js'
 
-export const tenantStatus = pgEnum('tenant_status', ['ACTIVE', 'SUSPENDED'])
+/**
+ * - `ACTIVE`: publicado — o cardápio atende pelo endereço.
+ * - `SUSPENDED`: bloqueado pela plataforma.
+ * - `PENDING`: cadastrado pela página e aguardando a confirmação do e-mail do
+ *   dono. O painel funciona; o cardápio responde o mesmo 404 de um endereço
+ *   inexistente até a confirmação.
+ */
+export const tenantStatus = pgEnum('tenant_status', ['ACTIVE', 'SUSPENDED', 'PENDING'])
 
 /**
  * Um tenant é um estabelecimento de alimentação.

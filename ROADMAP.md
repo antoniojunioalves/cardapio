@@ -43,6 +43,10 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Convite de usuário por e-mail — hoje o dono define a senha inicial, e a pessoa a troca depois
   (Fase 25)
 - Transferência da posse do estabelecimento (papel `OWNER`)
+- Troca do próprio e-mail, com nova confirmação — o link de confirmação (Fase 17) vale só para o
+  e-mail ao qual foi enviado, então a troca já nasce protegida; falta a funcionalidade
+- Captcha no cadastro, se aparecer abuso — hoje há limite por IP, campo-armadilha e o cardápio só
+  vai ao ar depois da confirmação do e-mail (Fase 17)
 
 - OTP por SMS e WhatsApp
 - Login via WhatsApp
@@ -237,7 +241,7 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Armazenamento compartilhado para o rate limit (Redis) — hoje o contador vive na memória do
   processo, o que vira um limite por instância assim que houver mais de uma. A Fase 28 decide se
   já é preciso
-- Deploy contínuo (CD) — o CI existe desde a Fase 16
+- Deploy contínuo (CD) — o CI foi escrito na Fase 16 e volta na Fase 28
 - Atualização automática das actions do CI e das dependências (Dependabot ou Renovate) — hoje
   as actions, fixadas pelo commit, são atualizadas à mão (DEVELOPMENT.md, "CI")
 - Métricas e tracing distribuído

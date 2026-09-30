@@ -15,6 +15,7 @@ import { registerRateLimit } from './plugins/rate-limit.js'
 import { registerUploads } from './plugins/uploads.js'
 import { adminCatalogRoutes } from './routes/admin-catalog.js'
 import { adminCustomizationRoutes } from './routes/admin-customization.js'
+import { adminEmailConfirmationRoutes } from './routes/admin-email-confirmation.js'
 import { adminImageRoutes } from './routes/admin-images.js'
 import { adminOrderRoutes } from './routes/admin-orders.js'
 import { adminPlanRoutes } from './routes/admin-plan.js'
@@ -25,6 +26,7 @@ import { healthRoutes } from './routes/health.js'
 import { publicCustomerRoutes } from './routes/public-customers.js'
 import { publicMenuRoutes } from './routes/public-menu.js'
 import { publicOrderRoutes } from './routes/public-orders.js'
+import { publicSignupRoutes } from './routes/public-signup.js'
 import { registerRealtime } from './realtime/plugin.js'
 
 export interface BuildAppOptions {
@@ -104,9 +106,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(adminOrderRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminUserRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminPlanRoutes, { prefix: '/api/v1/admin' })
+  await instance.register(adminEmailConfirmationRoutes, { prefix: '/api/v1/admin' })
   await instance.register(publicMenuRoutes, { prefix: '/api/v1/public' })
   await instance.register(publicCustomerRoutes, { prefix: '/api/v1/public' })
   await instance.register(publicOrderRoutes, { prefix: '/api/v1/public' })
+  await instance.register(publicSignupRoutes, { prefix: '/api/v1/public' })
 
   await registerRealtime(instance)
 

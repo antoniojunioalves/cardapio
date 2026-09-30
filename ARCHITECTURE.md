@@ -182,12 +182,18 @@ Um `tenantId` que chegue no corpo, na query string ou num header é **ignorado**
 
 ### 2.7 Como um TenantContext nasce
 
-Não existe construtor genérico. Há duas funções, e cada uma nomeia uma origem legítima:
+Não existe construtor genérico. Há quatro funções, e cada uma nomeia uma origem legítima:
 
 ```ts
 tenantContextFromUser(tenantId) // área administrativa: do vínculo do usuário no banco
 tenantContextFromPublicSlug(tenantId) // área pública: do tenantSlug da URL, já resolvido
+tenantContextFromToken(tenantId) // refresh token e link de confirmação: do prefixo do token
+tenantContextFromSignup(tenantId) // cadastro: o estabelecimento que está sendo criado
 ```
+
+As duas últimas entraram na Fase 17. A de token nomeia o que a renovação de sessão já fazia (ela
+usava a de slug público); a de cadastro existe porque ali não há tenant anterior de onde tirar o
+contexto — o id é gerado pelo banco antes da transação que cria o estabelecimento (6.8).
 
 A ausência de um `tenantContextFrom(qualquerCoisa)` é o ponto. Para usar um `tenantId` vindo do
 corpo da requisição seria preciso inventar uma terceira função e batizá-la de algo como
@@ -514,6 +520,44 @@ mundo, inclusive para ela mesma: um usuário incapaz de se autenticar.
 
 De quebra, fica impossível um usuário de tenant virar super admin por um UPDATE descuidado numa
 coluna booleana.
+
+No MVP, o Super Admin não cria estabelecimentos: o cadastro é aberto, pela página inicial (6.8), e
+a plataforma modera por comando — suspender, reativar, trocar o plano (Fase 19). A tabela fica para
+o painel da plataforma, no ROADMAP.
+
+### 6.8 Cadastro de estabelecimento
+
+Aberto, no plano gratuito, sem pagamento (Fase 17). É o primeiro passo da visão de produto — landing
+page, escolher o plano, assinar, cadastrar-se e usar na hora —, e a parte paga fica no ROADMAP.
+
+**Uma transação só.** `criarEstabelecimento` (`signup/service.ts`) grava o estabelecimento, a
+assinatura do FREE, o dono e o papel OWNER; o cadastro acrescenta, na mesma transação, o aceite
+dos termos, o link de confirmação e a sessão. Para isso o id do estabelecimento é pedido ao banco
+(`select uuidv7()`) **antes** da transação: o contexto nasce dele, e a tabela `tenants` — sem RLS —
+aceita o insert dentro do contexto. Falhou qualquer passo, não sobra estabelecimento pela metade. O
+seed usa a mesma função; as configurações continuam nascendo sob demanda (`ensureSettings`).
+
+**`PENDING` até a confirmação.** O estabelecimento nasce com um terceiro status. O painel funciona
+na hora; o cardápio público — que só aceita `ACTIVE` — responde o mesmo 404 de um endereço
+inexistente, e com ele a identificação por telefone e o envio de pedido. Confirmar o e-mail do dono
+leva a `ACTIVE`; a confirmação só sai de `PENDING`, então um link guardado não desfaz uma suspensão.
+
+**O link de confirmação** segue o desenho do refresh token: `{tenantId}.{256 bits}`, só o hash no
+banco (`email_verification_tokens`, com RLS), o prefixo como dica de roteamento. Vale 48 horas e
+uma vez; o segundo clique responde "já confirmado". O token vai no **fragmento** do link
+(`/confirmar-email#token=…`), que o navegador não envia ao servidor nem repassa como `Referer`. O
+reenvio vai sempre para quem cadastrou — é a confirmação dele que publica —, com um minuto entre
+envios, contado no banco.
+
+**Os e-mails saem depois do commit**, por `enviarSemDerrubar`: se a transação falhasse, nenhum
+e-mail teria saído sobre um cadastro inexistente; se o servidor de e-mail falhar, o cadastro vale e
+o painel oferece o reenvio. O `EmailService` segue o desenho do storage: uma interface, o provider
+escolhido num lugar só (`EMAIL_DRIVER`) — SMTP no Mailpit em desenvolvimento e no provedor em
+produção, memória nos testes.
+
+**Endereços reservados** (`SLUGS_RESERVADOS`, em `packages/shared`): o web atende `/:tenantSlug` no
+mesmo nível das páginas do produto (`/cadastro`, `/termos`), e a API pública tem `/signup` ao lado de
+`/:tenantSlug`. Um estabelecimento num desses endereços ficaria inacessível.
 
 ### 6.7 Auditoria
 
@@ -1100,6 +1144,9 @@ desenvolvimento isso nunca aparece, porque o banco já existe.
 Os passos do CI são os do `pnpm verify`, e o `pnpm test` roda um pacote por vez, como no CI. As
 duas diferenças que sobram — o fuso (UTC no GitHub) e o banco criado do zero — estão no
 DEVELOPMENT.md, com o comando que reproduz cada uma.
+
+O workflow foi desligado depois da Fase 16, para agilizar os merges, e está guardado em
+`CI_PARA_IMPLEMENTAR_DEPOIS.txt` até a Fase 28.
 
 ### Pacote compartilhado só quando há o que compartilhar
 

@@ -9,7 +9,11 @@ import {
   users,
 } from '../db/schema/index.js'
 import { ForbiddenError, UnauthorizedError } from '../lib/errors.js'
-import { tenantContextFromPublicSlug, type TenantContext } from '../tenant/context.js'
+import {
+  tenantContextFromPublicSlug,
+  tenantContextFromToken,
+  type TenantContext,
+} from '../tenant/context.js'
 import { findTenantBySlug } from '../tenant/repository.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
 import { hashPassword, verifyPassword, wastePasswordTime } from './password.js'
@@ -47,7 +51,12 @@ async function loadPermissions(tx: TenantTransaction, userId: string): Promise<s
   return [...new Set(linhas.map((linha) => linha.code))].sort()
 }
 
-async function emitirSessao(
+/**
+ * Abre uma sessão para o usuário, dentro da transação de quem chama. O login e
+ * a renovação usam; o cadastro também, para quem se cadastra já entrar no
+ * painel — se a transação do cadastro falhar, a sessão some junto.
+ */
+export async function emitirSessao(
   tx: TenantTransaction,
   context: TenantContext,
   usuario: { id: string; name: string; email: string },
@@ -163,7 +172,7 @@ export async function refreshSession(refreshToken: string): Promise<Session> {
   const tenantId = parseRefreshTokenTenant(refreshToken)
   if (!tenantId) throw new UnauthorizedError('Sessão inválida.')
 
-  const context = tenantContextFromPublicSlug(tenantId)
+  const context = tenantContextFromToken(tenantId)
   const tokenHash = hashRefreshToken(refreshToken)
 
   const resultado = await withTenant(context, async (tx) => {
@@ -236,7 +245,7 @@ export async function logout(refreshToken: string): Promise<void> {
   const tenantId = parseRefreshTokenTenant(refreshToken)
   if (!tenantId) return
 
-  const context = tenantContextFromPublicSlug(tenantId)
+  const context = tenantContextFromToken(tenantId)
 
   await withTenant(context, async (tx) => {
     await tx
