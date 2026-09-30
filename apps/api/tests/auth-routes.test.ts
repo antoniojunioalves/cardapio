@@ -12,6 +12,7 @@ import {
   permissaoDe,
   removerTenantDeTeste,
   SENHA_PADRAO,
+  sessaoDe,
   type TenantDeTeste,
 } from './helpers/fixtures.js'
 
@@ -36,7 +37,6 @@ function entrar(corpo: Record<string, unknown>) {
 
 interface RespostaSessao {
   accessToken: string
-  refreshToken: string
   user: { id: string; tenantId: string; email: string; permissions: string[] }
 }
 
@@ -50,7 +50,7 @@ describe('POST /api/v1/auth/login', () => {
 
     expect(resposta.statusCode).toBe(200)
 
-    const sessao = resposta.json<RespostaSessao>()
+    const sessao = sessaoDe<RespostaSessao>(resposta)
     expect(sessao.user).toMatchObject({ id: fixture.userId, tenantId: fixture.tenantId })
     expect(sessao.user.permissions).toEqual([
       permissaoDe(fixture, 'orders:update'),
@@ -178,9 +178,9 @@ describe('GET /api/v1/auth/me', () => {
   })
 
   it('devolve o usuário autenticado e suas permissões', async () => {
-    const { accessToken } = (
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
-    ).json<RespostaSessao>()
+    const { accessToken } = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
 
     const resposta = await app.inject({
       method: 'GET',
@@ -195,9 +195,9 @@ describe('GET /api/v1/auth/me', () => {
 
 describe('renovação de sessão', () => {
   it('rotaciona: o token antigo para de valer e o novo funciona', async () => {
-    const primeira = (
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
-    ).json<RespostaSessao>()
+    const primeira = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
 
     const renovada = await app.inject({
       method: 'POST',
@@ -206,7 +206,7 @@ describe('renovação de sessão', () => {
     })
 
     expect(renovada.statusCode).toBe(200)
-    const nova = renovada.json<RespostaSessao>()
+    const nova = sessaoDe<RespostaSessao>(renovada)
     expect(nova.refreshToken).not.toBe(primeira.refreshToken)
 
     const comNovo = await app.inject({
@@ -218,21 +218,21 @@ describe('renovação de sessão', () => {
   })
 
   it('reapresentar um token já rotacionado derruba todas as sessões do usuário', async () => {
-    const sessaoA = (
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
-    ).json<RespostaSessao>()
-    const sessaoB = (
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
-    ).json<RespostaSessao>()
+    const sessaoA = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
+    const sessaoB = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
 
     // Rotaciona a sessão A normalmente.
-    const rotacionada = (
+    const rotacionada = sessaoDe<RespostaSessao>(
       await app.inject({
         method: 'POST',
         url: '/api/v1/auth/refresh',
         payload: { refreshToken: sessaoA.refreshToken },
-      })
-    ).json<RespostaSessao>()
+      }),
+    )
 
     // Alguém reapresenta o token antigo: ou é cópia roubada, ou o legítimo
     // usando um token que já devia ter sido descartado. Não há como saber
@@ -262,9 +262,9 @@ describe('renovação de sessão', () => {
 
 describe('POST /api/v1/auth/logout', () => {
   it('revoga o refresh token e é idempotente', async () => {
-    const sessao = (
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
-    ).json<RespostaSessao>()
+    const sessao = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
 
     const saida = await app.inject({
       method: 'POST',
@@ -293,9 +293,9 @@ describe('POST /api/v1/auth/logout', () => {
 
 describe('o banco nunca guarda o refresh token em claro', () => {
   it('guarda apenas o hash', async () => {
-    const sessao = (
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
-    ).json<RespostaSessao>()
+    const sessao = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
 
     const linhas = await withTenant(tenantContextFromUser(fixture.tenantId), (tx) =>
       tx.select({ tokenHash: refreshTokens.tokenHash }).from(refreshTokens),
@@ -328,5 +328,65 @@ describe('limite de tentativas de login', () => {
     expect(codigos.at(-1)).toBe(429)
 
     await comLimite.close()
+  })
+})
+
+describe('refresh token em cookie', () => {
+  it('vai só no cookie httpOnly e SameSite=Strict, restrito às rotas de autenticação', async () => {
+    const resposta = await entrar({
+      tenantSlug: fixture.slug,
+      email: fixture.email,
+      password: SENHA_PADRAO,
+    })
+
+    expect(resposta.json()).not.toHaveProperty('refreshToken')
+    const cookie = resposta.cookies.find((c) => c.name === 'refresh_token')
+    expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/api/v1/auth' })
+    expect(cookie?.value.startsWith(`${fixture.tenantId}.`)).toBe(true)
+  })
+
+  it('a renovação funciona só com o cookie, e troca o cookie', async () => {
+    const primeira = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
+
+    const renovada = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      cookies: { refresh_token: primeira.refreshToken },
+    })
+
+    expect(renovada.statusCode).toBe(200)
+    expect(renovada.json()).not.toHaveProperty('refreshToken')
+    const novo = renovada.cookies.find((c) => c.name === 'refresh_token')?.value
+    expect(novo).toBeTruthy()
+    expect(novo).not.toBe(primeira.refreshToken)
+  })
+
+  it('sem cookie e sem corpo, a renovação é recusada', async () => {
+    const resposta = await app.inject({ method: 'POST', url: '/api/v1/auth/refresh' })
+    expect(resposta.statusCode).toBe(401)
+  })
+
+  it('o logout revoga e apaga o cookie', async () => {
+    const sessao = sessaoDe<RespostaSessao>(
+      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+    )
+
+    const saida = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/logout',
+      cookies: { refresh_token: sessao.refreshToken },
+    })
+
+    expect(saida.statusCode).toBe(204)
+    const apagado = saida.cookies.find((c) => c.name === 'refresh_token')
+    expect(apagado?.value).toBe('')
+    const depois = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      cookies: { refresh_token: sessao.refreshToken },
+    })
+    expect(depois.statusCode).toBe(401)
   })
 })

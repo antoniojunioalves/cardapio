@@ -137,3 +137,15 @@ export function permissaoDe(fixture: TenantDeTeste, codigo: string): string {
   const sufixoDoTenant = fixture.slug.replace('teste-', '')
   return `${codigo}#${sufixoDoTenant}`
 }
+
+/**
+ * A sessão devolvida pelo login ou pela renovação, com o refresh token lido do
+ * cookie — ele não vem mais no corpo da resposta.
+ */
+export function sessaoDe<T extends object>(resposta: {
+  json: <R>() => R
+  cookies: { name: string; value: string }[]
+}): T & { refreshToken: string } {
+  const cookie = resposta.cookies.find((c) => c.name === 'refresh_token')
+  return { ...resposta.json<T>(), refreshToken: cookie?.value ?? '' }
+}

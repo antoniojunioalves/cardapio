@@ -7,14 +7,15 @@ import { ApiError, requisitar } from '@/services/api'
  * A sessão do painel do estabelecimento.
  *
  * - O **token de acesso** (15 minutos) fica só na memória da página.
- * - O **refresh token** (30 dias) fica no `localStorage`, para o tablet da
- *   cozinha continuar logado depois de recarregar. É uma dívida registrada em
- *   SECURITY.md: um script injetado na página poderia lê-lo. A rotação com
- *   detecção de reuso limita o estrago; o lugar certo é um cookie `httpOnly`
- *   (ROADMAP).
+ * - O **refresh token** (30 dias) fica num cookie `httpOnly` que a API define:
+ *   o JavaScript da página não o vê, e um script injetado não tem como
+ *   roubá-lo. As chamadas de autenticação mandam o cookie
+ *   (`credentials: 'include'`); as demais, não.
+ * - No `localStorage` fica só o que não é segredo: o slug e quem está logado,
+ *   para o painel saber que há sessão a renovar depois de recarregar.
  *
- * A sessão é de **um** estabelecimento: o slug fica junto, e o painel de outro
- * slug pede login de novo.
+ * A sessão é de **um** estabelecimento: abrir o painel de outro slug pede
+ * login de novo.
  */
 
 export interface UsuarioDoPainel {
@@ -26,13 +27,11 @@ export interface UsuarioDoPainel {
 
 interface RespostaDeSessao {
   accessToken: string
-  refreshToken: string
   user: UsuarioDoPainel & { tenantId: string }
 }
 
 interface EstadoDaSessao {
   slug: string | null
-  refreshToken: string | null
   usuario: UsuarioDoPainel | null
   accessToken: string | null
   guardar: (slug: string, resposta: RespostaDeSessao) => void
@@ -43,13 +42,11 @@ export const useSessaoStore = create<EstadoDaSessao>()(
   persist(
     (set) => ({
       slug: null,
-      refreshToken: null,
       usuario: null,
       accessToken: null,
       guardar: (slug, resposta) => {
         set({
           slug,
-          refreshToken: resposta.refreshToken,
           accessToken: resposta.accessToken,
           usuario: {
             id: resposta.user.id,
@@ -60,18 +57,34 @@ export const useSessaoStore = create<EstadoDaSessao>()(
         })
       },
       encerrar: () => {
-        set({ slug: null, refreshToken: null, usuario: null, accessToken: null })
+        set({ slug: null, usuario: null, accessToken: null })
       },
     }),
     {
-      name: 'sessao-do-painel',
-      version: 1,
+      // Nome novo: a versão anterior guardava o refresh token aqui, e ele não
+      // deve ser lido de volta.
+      name: 'painel',
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       // O token de acesso nunca vai para o navegador guardado.
-      partialize: (s) => ({ slug: s.slug, refreshToken: s.refreshToken, usuario: s.usuario }),
+      partialize: (s) => ({ slug: s.slug, usuario: s.usuario }),
     },
   ),
 )
+
+/**
+ * Até a Fase 14, o refresh token ficava no `localStorage`, na chave
+ * `sessao-do-painel`. A chave nova não o lê, mas o antigo continuaria ali, ao
+ * alcance de um script injetado. Apagado ao carregar o painel.
+ */
+export function apagarSessaoAntiga(): void {
+  try {
+    localStorage.removeItem('sessao-do-painel')
+  } catch {
+    /* navegador sem localStorage: não há o que apagar */
+  }
+}
+apagarSessaoAntiga()
 
 const sessao = () => useSessaoStore.getState()
 
@@ -79,19 +92,17 @@ export async function entrar(slug: string, email: string, senha: string): Promis
   const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/login', {
     method: 'POST',
     body: { tenantSlug: slug, email, password: senha },
+    comCookie: true,
   })
   sessao().guardar(slug, resposta)
 }
 
 export async function sair(): Promise<void> {
-  const { refreshToken } = sessao()
   sessao().encerrar()
-  if (refreshToken) {
-    // Revoga no servidor; se falhar, a sessão local já acabou de qualquer jeito.
-    await requisitar('/api/v1/auth/logout', { method: 'POST', body: { refreshToken } }).catch(
-      () => undefined,
-    )
-  }
+  // Revoga no servidor e apaga o cookie; se falhar, a sessão local já acabou.
+  await requisitar('/api/v1/auth/logout', { method: 'POST', comCookie: true }).catch(
+    () => undefined,
+  )
 }
 
 let renovacaoEmAndamento: Promise<string> | null = null
@@ -100,17 +111,17 @@ let renovacaoEmAndamento: Promise<string> | null = null
  * Troca o refresh token por um token de acesso novo.
  *
  * Uma renovação por vez: o painel faz várias chamadas ao mesmo tempo, e duas
- * renovações simultâneas apresentariam o mesmo refresh token duas vezes — o
- * servidor entenderia como roubo e revogaria todas as sessões.
+ * renovações simultâneas apresentariam o mesmo cookie duas vezes — o servidor
+ * entenderia como roubo e revogaria todas as sessões.
  */
 export function renovarSessao(): Promise<string> {
   renovacaoEmAndamento ??= (async () => {
-    const { refreshToken, slug } = sessao()
-    if (!refreshToken || !slug) throw new ApiError(401, 'Sessão encerrada.')
+    const { slug } = sessao()
+    if (!slug) throw new ApiError(401, 'Sessão encerrada.')
     try {
       const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/refresh', {
         method: 'POST',
-        body: { refreshToken },
+        comCookie: true,
       })
       sessao().guardar(slug, resposta)
       return resposta.accessToken

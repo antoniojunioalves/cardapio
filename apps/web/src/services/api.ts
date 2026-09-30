@@ -54,6 +54,8 @@ export interface Requisicao {
   body?: unknown
   /** Token de acesso do painel, enviado como `Authorization: Bearer`. */
   token?: string
+  /** Envia os cookies — só as rotas de autenticação precisam (o refresh token). */
+  comCookie?: boolean
   signal?: AbortSignal
 }
 
@@ -68,6 +70,7 @@ export async function requisitar<T>(caminho: string, requisicao: Requisicao = {}
     ...(Object.keys(headers).length > 0 && { headers }),
     ...(requisicao.body !== undefined && { body: JSON.stringify(requisicao.body) }),
     ...(requisicao.signal && { signal: requisicao.signal }),
+    ...(requisicao.comCookie && { credentials: 'include' as const }),
   })
   if (response.status === 204) return undefined as T
   return lerResposta<T>(response)
