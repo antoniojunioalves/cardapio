@@ -173,14 +173,22 @@ com `settings:update`; o atendente nem consulta.
 **A página de verificação do ambiente saiu.** A sonda de saúde no web só servia a ela; o teste da
 troca de tema em tempo de execução, que ela demonstrava, virou teste das próprias funções de tema.
 
+**Na validação, a senha do cadastro ganhou regras** (pedido do Junio): pelo menos 8 caracteres,
+uma letra maiúscula, uma minúscula e um caractere especial — letra com ou sem acento; especial é
+o que não é letra, número nem espaço. As regras moram em `REGRAS_DA_SENHA` (`packages/shared`): o
+schema recusa cada uma com a própria mensagem, e a tela as lista marcadas enquanto a pessoa digita.
+A criação de usuários do painel ainda pede só os 8 caracteres; a mesma regra chega lá na Fase 25.
+Os exemplos de senha da coleção do Postman mudaram — importe de novo.
+
 ### Verificação executada
 
-| Verificação                      | Resultado                                                                                                                              |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm verify`                    | **674 testes** (463 API + 187 web + 24 shared); formatação, typecheck, lint e build                                                    |
-| Clone limpo, `--frozen-lockfile` | os mesmos 674 testes, formatação, typecheck, lint e build                                                                              |
-| Testes sensíveis à regra         | cadastro sem `credentials`, token que fica no endereço, nome que sobrescreve o endereço editado, aviso para quem não pode: cada um cai |
-| Página no navegador              | a fazer na validação                                                                                                                   |
+| Verificação                           | Resultado                                                                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                         | **674 testes** (463 API + 187 web + 24 shared); formatação, typecheck, lint e build                                                    |
+| Clone limpo, `--frozen-lockfile`      | os mesmos 674 testes, formatação, typecheck, lint e build                                                                              |
+| Depois do ajuste da senha (validação) | `pnpm verify`: **680 testes** (463 API + 189 web + 28 shared)                                                                          |
+| Testes sensíveis à regra              | cadastro sem `credentials`, token que fica no endereço, nome que sobrescreve o endereço editado, aviso para quem não pode: cada um cai |
+| Página no navegador                   | a fazer na validação                                                                                                                   |
 
 ---
 
@@ -229,6 +237,10 @@ vazio**, como faria alguém que nunca viu o sistema.
   política de scripts de instalação do pnpm 10 (DEVELOPMENT.md).
 - Testes: foto com GPS sai sem EXIF; foto grande sai reduzida; PNG transparente continua
   transparente.
+- **Limite do plano gratuito — decidido pelo Junio (validação da Fase 18): 20 produtos**, cada um
+  com a sua imagem, contra abuso do cadastro aberto. Um recurso novo do plano (`maxProducts`), na
+  infraestrutura de limites da Fase 14. Falta decidir as categorias, que também aceitam imagem:
+  sem limite, o abuso passaria por elas.
 
 ### Fase 21 — Estrutura do painel e configuração do estabelecimento
 
@@ -253,6 +265,8 @@ vazio**, como faria alguém que nunca viu o sistema.
 
 - Tela de usuários sobre a API da Fase 14.
 - Cada pessoa troca a própria senha, e o dono redefine a de um atendente.
+- As regras de senha do cadastro (`REGRAS_DA_SENHA`, Fase 18) passam a valer para toda senha do
+  painel: criação de usuário, troca e redefinição.
 - "Esqueci minha senha" por e-mail, com o envio da Fase 17 — e o mesmo desenho do link de
   confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link.
 
@@ -437,7 +451,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Suspender não derruba as sessões abertas — o middleware não olha o status do estabelecimento                                                                      | Fase 19                                  |
-| Limite de produtos ou de armazenamento no plano gratuito, contra abuso do cadastro aberto                                                                         | A decidir — sugestão: com a Fase 20      |
+| Limite do plano gratuito: 20 produtos (decidido); categorias, a decidir                                                                                           | Fase 20                                  |
 | CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
 | Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |
 | Rate limit conta em memória — vira limite por instância se houver mais de uma                                                                                     | Fase 28, se houver mais de uma instância |

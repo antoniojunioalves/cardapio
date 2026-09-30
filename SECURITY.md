@@ -280,6 +280,10 @@ estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por i
   estabelecimento novo: o mesmo e-mail pode cadastrar outro, e a resposta nunca diz "já existe".
 - **Limites:** 10 cadastros por hora por IP, um campo-armadilha que só robô preenche, endereços
   reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
+- **Senha forte no cadastro:** pelo menos 8 caracteres, com letra maiúscula, minúscula e caractere
+  especial (`REGRAS_DA_SENHA`, a mesma lista na API e na tela). Guardada com argon2id, como
+  sempre. A criação de usuários do painel ainda pede só os 8 caracteres — a mesma regra chega lá
+  na Fase 25.
 - **O aceite dos termos vai para a auditoria**, com a versão aceita e o IP. Versão diferente da
   atual é recusada: ninguém aceita um texto que não viu.
 - **Tudo numa transação**, e os e-mails só depois do commit. Sem o plano gratuito no banco, o
