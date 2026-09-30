@@ -11,12 +11,12 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 ### Plataforma
 
 - [ ] Super Admin cria tenants (estrutura mínima, sem painel completo)
-- [ ] Modelo de planos preparado — `plans`, `plan_features`, `subscriptions` — sem cobrança
+- [x] Modelo de planos preparado — `plans`, `plan_features`, `subscriptions` — sem cobrança
 
 ### Administração do estabelecimento
 
 - [x] Login de usuário administrativo
-- [ ] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF`
+- [x] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF` — _pela API; sem tela ainda_
 - [ ] Configuração do estabelecimento: nome, logo, descrição, contato, WhatsApp
 - [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia
 - [ ] Taxa de entrega: valor fixo ou por região
