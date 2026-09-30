@@ -47,7 +47,7 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Checkout: telefone, nome, endereço, forma de pagamento, observações — _o envio é da Fase 11_
 - [x] Identificação do cliente por telefone (ver a dívida registrada em SECURITY.md)
 - [x] Pedido validado e **recalculado no servidor**
-- [ ] Abertura do WhatsApp do estabelecimento com a mensagem formatada
+- [x] Abertura do WhatsApp do estabelecimento com a mensagem formatada
 
 ### Fundações não negociáveis
 

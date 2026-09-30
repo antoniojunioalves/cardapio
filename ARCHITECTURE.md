@@ -778,6 +778,19 @@ de qualquer status não final, com motivo. A atualização só grava se o status
 (`WHERE status = de`), e a mudança vai para a auditoria. As rotas do painel
 (`/api/v1/admin/orders`) listam, detalham e mudam o status; a tela é das próximas fases.
 
+### 8.11 Mensagem do WhatsApp
+
+`orders/whatsapp.ts`, um módulo puro, monta a mensagem do pedido — número, itens com opções,
+observações e composição do combo, valores, entrega ou retirada, pagamento com troco, cliente — e
+o link `https://wa.me/{número}?text=…`. A criação do pedido a guarda em `orders.whatsapp_message`
+e a devolve na resposta (`whatsapp: { url, message }`); o reenvio com a mesma chave devolve o
+mesmo texto.
+
+A mensagem passa pelo navegador e pelo WhatsApp de quem pediu, então só leva o que essa pessoa
+pode ver: endereço salvo **mascarado**, endereço digitado completo, e o nome digitado. Na
+confirmação, o envio é um link que a pessoa toca — abrir sozinho depois da resposta da rede seria
+bloqueado pelo navegador.
+
 ---
 
 ## 9. Frontend

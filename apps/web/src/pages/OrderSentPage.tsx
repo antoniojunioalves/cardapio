@@ -8,6 +8,8 @@ import { formatarPreco } from '@/utils/money'
 export interface EstadoDoPedidoEnviado {
   pedido: PedidoCriado
   estabelecimento: string
+  /** Para quando não há WhatsApp: o cliente ainda tem como falar com a loja. */
+  telefoneDeContato: string | null
 }
 
 function lerEstado(estado: unknown): EstadoDoPedidoEnviado | null {
@@ -52,7 +54,7 @@ export function OrderSentPage() {
     )
   }
 
-  const { pedido, estabelecimento } = estado
+  const { pedido, estabelecimento, telefoneDeContato } = estado
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-section-y px-page-x py-section-y">
@@ -65,6 +67,34 @@ export function OrderSentPage() {
             : ' Avisaremos quando estiver pronto para retirar.'}
         </p>
       </div>
+
+      {/*
+       * Um link, e não uma abertura automática: o navegador bloqueia janelas
+       * abertas depois de esperar a resposta da rede — o toque precisa ser da
+       * pessoa. `noopener`: a aba do WhatsApp não ganha acesso a esta.
+       */}
+      {pedido.whatsapp.url ? (
+        <div className="flex flex-col gap-2 text-center">
+          <a
+            href={pedido.whatsapp.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-body rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover"
+          >
+            Enviar pedido pelo WhatsApp
+          </a>
+          <p className="text-caption text-content-muted">
+            A mensagem já vai pronta. Envie para o estabelecimento ver o seu pedido agora.
+          </p>
+        </div>
+      ) : (
+        <p className="text-body rounded-control bg-surface p-card text-center text-content-muted shadow-card">
+          O pedido já foi registrado.
+          {telefoneDeContato
+            ? ` Se precisar falar com o estabelecimento, o telefone é ${telefoneDeContato}.`
+            : ''}
+        </p>
+      )}
 
       <section
         aria-labelledby="itens-do-pedido"

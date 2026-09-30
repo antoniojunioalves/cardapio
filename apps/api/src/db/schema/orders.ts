@@ -103,6 +103,13 @@ export const orders = pgTable(
     deliveryFeeInCents: integer().notNull(),
     totalInCents: integer().notNull(),
 
+    /**
+     * A mensagem do WhatsApp como foi entregue ao cliente (`orders/whatsapp.ts`).
+     * Guardada para o reenvio com a mesma chave devolver o mesmo texto — ela
+     * depende de coisas que o pedido não guarda, como o endereço ter sido
+     * escolhido da lista (sai mascarado) ou digitado (sai completo).
+     */
+    whatsappMessage: text(),
     cancellationReason: varchar({ length: 280 }),
     statusChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     ...timestamps,

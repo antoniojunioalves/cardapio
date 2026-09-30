@@ -9,12 +9,12 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 11 concluída.** O cliente final já vê o cardápio, monta o carrinho e envia
-o pedido, recalculado no servidor: com `pnpm dev`, abra
+**Status atual: Fase 12 concluída.** O cliente final já vê o cardápio, monta o carrinho, envia o
+pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
 de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a sábado) ou a
-`padaria-pao-quente` (das 08:00 às 18:00, todos os dias). A próxima fase é a mensagem pelo
-WhatsApp. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+`padaria-pao-quente` (das 08:00 às 18:00, todos os dias). A próxima fase são os pedidos em tempo
+real no painel. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

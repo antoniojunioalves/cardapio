@@ -134,6 +134,13 @@
       "when": 1790705332669,
       "tag": "0018_force_rls_pedidos",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790717037019,
+      "tag": "0019_mensagem_do_whatsapp",
+      "breakpoints": true
     }
   ]
 }

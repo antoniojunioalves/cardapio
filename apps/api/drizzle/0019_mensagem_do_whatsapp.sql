@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "whatsapp_message" text;
