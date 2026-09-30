@@ -75,6 +75,29 @@ const envSchema = z.object({
 
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().min(1).default('1 minute'),
+
+  /**
+   * Ligue **só** quando a API estiver atrás de um proxy reverso (nginx, load
+   * balancer) que reescreve o `X-Forwarded-For`. Desligado atrás de um proxy,
+   * todo cliente aparece com o IP do proxy e os limites por IP viram um limite
+   * único, dividido por todo mundo. Ligado **sem** proxy, qualquer cliente
+   * escolhe o próprio IP mandando o cabeçalho — e escapa dos limites.
+   */
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((valor) => valor === 'true'),
+
+  /**
+   * Tamanho máximo de um corpo JSON, em bytes. O maior pedido legítimo — 50
+   * itens com opções — fica bem abaixo; acima disso é engano ou abuso. O
+   * upload de imagem tem limite próprio (`UPLOAD_MAX_BYTES`).
+   */
+  JSON_BODY_LIMIT_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(64 * 1024),
 })
 
 export type Env = z.infer<typeof envSchema>

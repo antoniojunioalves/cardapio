@@ -15,7 +15,16 @@ export const loggerOptions: LoggerOptions = {
   level: isTest ? 'silent' : env.LOG_LEVEL,
   // Nenhuma credencial ou token pode cair no log.
   redact: {
-    paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'res.headers["set-cookie"]',
+      '*.password',
+      '*.passwordHash',
+      '*.token',
+      '*.accessToken',
+      '*.refreshToken',
+    ],
     censor: '[REDACTED]',
   },
   ...(isDevelopment && {

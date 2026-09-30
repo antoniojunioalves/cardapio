@@ -98,6 +98,14 @@ describe('envio', () => {
     expect(logoUrl).toMatch(/\/uploads\/tenants\/.+\/logo\/[0-9a-f-]+\.png$/)
   })
 
+  it('uma foto de verdade, maior que o limite do corpo JSON, continua passando', async () => {
+    // O limite de 64 KB é do JSON; o upload tem o seu (UPLOAD_MAX_BYTES). Se um
+    // valesse para o outro, toda foto de celular seria recusada.
+    const foto = Uint8Array.from([...PNG, ...new Uint8Array(300 * 1024)])
+    const resposta = await enviar('cover', foto)
+    expect(resposta.statusCode, resposta.body).toBe(200)
+  })
+
   it('guarda o arquivo dentro do prefixo do próprio estabelecimento', async () => {
     const { logoUrl } = (await enviar('logo', PNG)).json<Configuracoes>()
 
