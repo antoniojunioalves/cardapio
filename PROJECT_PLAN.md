@@ -200,6 +200,12 @@ o sistema ainda não está no ar. As fases 18 a 28 fecham essa distância.
   cliente, retenção e eliminação de dados, checkout que lembra os dados no aparelho, o
   acompanhamento do pedido pelo cliente (o Junio vai pensar em como fazer) e o robô no WhatsApp.
 
+### Em toda fase
+
+- **Rota nova ou alterada: regenerar a coleção do Postman** (`pnpm postman`) e avisar no relatório
+  para importar de novo. O teste `tests/postman.test.ts` não deixa esquecer: falha com a coleção
+  desatualizada ou com rota de corpo sem exemplo. Como fazer: DEVELOPMENT.md, "Postman".
+
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
 
@@ -423,6 +429,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | E-mail a terceiros sem texto digitado               | Senão o cadastro vira jeito de mandar qualquer texto pelo nosso remetente |
 | Token de confirmação no fragmento do link           | O fragmento não chega ao servidor nem vaza por `Referer`                  |
 | E-mails só depois do commit                         | Rollback não desfaz e-mail enviado                                        |
+| Coleção do Postman gerada da OpenAPI                | Rota nova entra sozinha; o teste cobra exemplo e arquivo em dia           |
 
 ---
 

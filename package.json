@@ -23,6 +23,7 @@
     "db:generate": "pnpm --filter @repo/api db:generate",
     "db:migrate": "pnpm --filter @repo/api db:migrate",
     "db:seed": "pnpm --filter @repo/api db:seed",
+    "postman": "pnpm --filter @repo/api postman",
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {

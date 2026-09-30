@@ -36,6 +36,11 @@ export interface BuildAppOptions {
   rateLimit?: boolean
   /** Recebe cada rota registrada — é o inventário que o teste-guarda de rotas confere. */
   aoRegistrarRota?: (rota: RouteOptions) => void
+  /**
+   * Desligado, a aplicação sobe sem o canal ao vivo — que conecta ao banco no
+   * `ready`. É o que deixa `pnpm postman` gerar a coleção sem o banco de pé.
+   */
+  tempoReal?: boolean
 }
 
 /**
@@ -112,7 +117,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await instance.register(publicOrderRoutes, { prefix: '/api/v1/public' })
   await instance.register(publicSignupRoutes, { prefix: '/api/v1/public' })
 
-  await registerRealtime(instance)
+  if (options.tempoReal !== false) await registerRealtime(instance)
 
   return instance
 }

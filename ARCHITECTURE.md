@@ -388,6 +388,13 @@ que é o problema crônico de OpenAPI mantido à mão.
 A interface em `/docs` fica desabilitada em produção. Não é uma brecha expor o mapa da API, mas
 entrega de graça o trabalho de descobrir rotas e formatos.
 
+A **coleção do Postman** (`apps/api/postman/`) sai dessa mesma especificação, por `pnpm postman`:
+rota nova entra sozinha, e só o que a especificação não sabe — corpos de exemplo com valores que
+fazem sentido, e os scripts que guardam token e ids — é escrito à mão, em
+`src/postman/exemplos.ts`. Um teste confere que o arquivo do repositório é o que o gerador produz
+hoje e que cada exemplo passa na validação da própria rota: a coleção não tem como ficar para
+trás sem o `pnpm verify` acusar.
+
 ### 5.2 Nada que venha do frontend é confiável
 
 O backend recalcula, a partir dos seus próprios dados: preço, disponibilidade, validade das

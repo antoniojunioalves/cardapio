@@ -82,6 +82,7 @@ Depois disso:
 - API — <http://localhost:3333/health>
 - Documentação da API — <http://localhost:3333/docs>
 - E-mails enviados pela API (Mailpit) — <http://localhost:8025>
+- Coleção do Postman com todas as rotas — [apps/api/postman/](apps/api/postman/README.md)
 
 O `.env` é obrigatório: a API não sobe sem `DATABASE_URL`. Um valor padrão apontaria em silêncio
 para o banco errado, o que é pior do que falhar na inicialização.
@@ -105,6 +106,7 @@ para o banco errado, o que é pior do que falhar na inicialização.
 | `pnpm db:generate`  | Gera migration a partir do schema Drizzle                       |
 | `pnpm db:migrate`   | Aplica as migrations no banco                                   |
 | `pnpm db:seed`      | Popula dados de demonstração (idempotente)                      |
+| `pnpm postman`      | Regenera a coleção do Postman a partir das rotas                |
 
 Para rodar num pacote só: `pnpm --filter @repo/api test`
 

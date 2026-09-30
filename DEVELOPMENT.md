@@ -38,22 +38,23 @@ mudança simplesmente não acontece e o sintoma é um erro de permissão inexpli
 
 ## Comandos
 
-| Comando             | Efeito                                                            |
-| ------------------- | ----------------------------------------------------------------- |
-| `pnpm dev`          | API e web em watch, em paralelo                                   |
-| `pnpm verify`       | format:check → typecheck → lint → test → build — o mesmo que o CI |
-| `pnpm typecheck`    | TypeScript em todos os pacotes                                    |
-| `pnpm lint`         | ESLint com informação de tipos                                    |
-| `pnpm test`         | Vitest em todos os pacotes, um por vez — **exige `pnpm db:up`**   |
-| `pnpm build`        | Build de produção                                                 |
-| `pnpm format`       | Prettier, escrevendo                                              |
-| `pnpm format:check` | Prettier, só conferindo                                           |
-| `pnpm db:up`        | Sobe o PostgreSQL e o Mailpit (e-mails em http://localhost:8025)  |
-| `pnpm db:down`      | Derruba os containers, preservando o volume                       |
-| `pnpm db:reset`     | Apaga o volume e recria — necessário ao alterar scripts de init   |
-| `pnpm db:generate`  | Gera migration a partir do schema; não toca no banco              |
-| `pnpm db:migrate`   | Aplica as migrations, com a role que tem DDL                      |
-| `pnpm db:seed`      | Três estabelecimentos e dois planos de demonstração; idempotente  |
+| Comando             | Efeito                                                                 |
+| ------------------- | ---------------------------------------------------------------------- |
+| `pnpm dev`          | API e web em watch, em paralelo                                        |
+| `pnpm verify`       | format:check → typecheck → lint → test → build — o mesmo que o CI      |
+| `pnpm typecheck`    | TypeScript em todos os pacotes                                         |
+| `pnpm lint`         | ESLint com informação de tipos                                         |
+| `pnpm test`         | Vitest em todos os pacotes, um por vez — **exige `pnpm db:up`**        |
+| `pnpm build`        | Build de produção                                                      |
+| `pnpm format`       | Prettier, escrevendo                                                   |
+| `pnpm format:check` | Prettier, só conferindo                                                |
+| `pnpm db:up`        | Sobe o PostgreSQL e o Mailpit (e-mails em http://localhost:8025)       |
+| `pnpm db:down`      | Derruba os containers, preservando o volume                            |
+| `pnpm db:reset`     | Apaga o volume e recria — necessário ao alterar scripts de init        |
+| `pnpm db:generate`  | Gera migration a partir do schema; não toca no banco                   |
+| `pnpm db:migrate`   | Aplica as migrations, com a role que tem DDL                           |
+| `pnpm db:seed`      | Três estabelecimentos e dois planos de demonstração; idempotente       |
+| `pnpm postman`      | Regenera a coleção do Postman a partir das rotas; não precisa do banco |
 
 Num pacote só:
 
@@ -124,6 +125,25 @@ docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest
 ```
 
 ---
+
+## Postman
+
+A coleção de todas as rotas fica em `apps/api/postman/api.postman_collection.json` — como
+importar e usar está no `README.md` ao lado dela. Ela é **gerada** da descrição OpenAPI da API
+por `pnpm postman`; não edite o JSON à mão.
+
+**Criou ou mudou uma rota:**
+
+1. Rota com corpo JSON? Escreva o exemplo em `apps/api/src/postman/exemplos.ts`, com valores que
+   passem na validação — os que mudam configuração repetem os dados do seed. Se a rota cria algo
+   ou lista algo que outras usam, acrescente o script que guarda o id (`depois`).
+2. Parâmetro `:id` de um recurso novo? Acrescente o recurso em `VARIAVEL_DO_RECURSO`
+   (`src/postman/colecao.ts`) — o gerador falha dizendo qual.
+3. `pnpm postman`, e faça o commit do JSON junto com a rota.
+4. No relatório da fase, avise para importar a coleção de novo.
+
+O teste `tests/postman.test.ts` cobra os passos 1 a 3: falha com o arquivo desatualizado, com rota
+de corpo sem exemplo, com exemplo que a própria rota recusaria e com variável não declarada.
 
 ## Estrutura
 
