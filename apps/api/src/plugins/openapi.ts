@@ -33,11 +33,18 @@ export async function registerOpenApi(instance: FastifyInstance): Promise<void> 
         { name: 'Infraestrutura', description: 'Sondas de saúde e prontidão' },
         { name: 'Autenticação', description: 'Sessão de usuários administrativos' },
         {
+          name: 'Cadastro',
+          description: 'Cadastro aberto de estabelecimento e confirmação do e-mail do dono',
+        },
+        {
           name: 'Configurações',
           description: 'Estabelecimento, horários, entrega e formas de pagamento',
         },
         { name: 'Catálogo', description: 'Categorias e produtos' },
         { name: 'Personalização', description: 'Grupos de opção, adicionais, remoções e combos' },
+        { name: 'Pedidos', description: 'Pedidos do estabelecimento e mudança de status' },
+        { name: 'Usuários', description: 'Usuários do painel e seus papéis' },
+        { name: 'Plano', description: 'Plano do estabelecimento e uso do mês' },
         {
           name: 'Cardápio público',
           description: 'Área sem login, resolvida pelo slug do estabelecimento',

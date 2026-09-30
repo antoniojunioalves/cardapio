@@ -4,3 +4,5 @@ build
 coverage
 .turbo
 pnpm-lock.yaml
+# Gerada por `pnpm postman`; o teste postman.test.ts confere o conteúdo
+apps/api/postman/*.json

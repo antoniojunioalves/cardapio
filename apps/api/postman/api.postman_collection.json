@@ -1,0 +1,2187 @@
+{
+  "info": {
+    "_postman_id": "6f1d2c9e-8a47-4b5e-9c3d-2e7f41a0b8d5",
+    "name": "API — Cardápio Online",
+    "description": "Gerada por `pnpm postman` a partir das rotas da API — **não edite à mão**: a próxima geração\ndesfaz. Corpos de exemplo e scripts ficam em `apps/api/src/postman/exemplos.ts`.\n\n**Para começar:** `pnpm db:up` e `pnpm dev`, e rode **Autenticação → Autentica um usuário\nadministrativo**. O login usa `tenantSlug`, `email` e `password` das variáveis da coleção —\npor padrão, a Lanchonete do Zé do seed — e guarda o token em `accessToken`, que as rotas do\npainel já usam.\n\n**Ids:** as listagens guardam o primeiro id (`categoryId`, `productId`…) e as criações guardam\no id criado. As rotas seguintes já apontam para ele.\n\n**Pedido público:** rode antes o cardápio do estabelecimento, que escolhe um produto e calcula\no total. O estabelecimento precisa estar aberto — a `padaria-pao-quente` abre das 08:00 às 18:00.\n\n**Cadastro:** cadastrar troca `tenantSlug`, `email`, `password` e `accessToken` para o\nestabelecimento criado; confirmar o e-mail busca o link no Mailpit sozinho.\n\n**Tempo real** não cabe numa coleção: no Postman, New → WebSocket, conecte em\n`ws://localhost:3333/api/v1/admin/orders/stream` e envie\n`{\"type\": \"auth\", \"token\": \"<accessToken>\"}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3333",
+      "description": "Endereço da API."
+    },
+    {
+      "key": "mailpitUrl",
+      "value": "http://localhost:8025",
+      "description": "Caixa de e-mail de desenvolvimento, lida pelo \"Confirmar e-mail\"."
+    },
+    {
+      "key": "tenantSlug",
+      "value": "lanchonete-do-ze",
+      "description": "Estabelecimento das rotas públicas e do login. O cadastro troca para o criado."
+    },
+    {
+      "key": "email",
+      "value": "ze@exemplo.com",
+      "description": "Login do painel (seed)."
+    },
+    {
+      "key": "password",
+      "value": "cardapio123",
+      "description": "Senha do painel (seed)."
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "description": "Preenchido pelo login, renovação e cadastro."
+    },
+    {
+      "key": "confirmationToken",
+      "value": "",
+      "description": "Preenchido do Mailpit pelo \"Confirmar e-mail\"."
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "description": "Primeira categoria listada, ou a criada."
+    },
+    {
+      "key": "categoryIdsJson",
+      "value": "[]",
+      "description": "Todas as categorias, para reordenar."
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "description": "Primeiro produto listado, ou o criado."
+    },
+    {
+      "key": "comboId",
+      "value": "",
+      "description": "Primeiro combo listado."
+    },
+    {
+      "key": "comboComponentId",
+      "value": "",
+      "description": "Produto simples para compor o combo."
+    },
+    {
+      "key": "optionGroupId",
+      "value": "",
+      "description": "Primeiro grupo de opção listado, ou o criado."
+    },
+    {
+      "key": "paymentMethodId",
+      "value": "",
+      "description": "Forma de pagamento listada."
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "description": "Pedido mais recente do painel."
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "description": "Primeiro usuário que não é o dono, ou o criado."
+    },
+    {
+      "key": "menuProductId",
+      "value": "",
+      "description": "Produto escolhido pelo cardápio para o pedido."
+    },
+    {
+      "key": "orderQuantity",
+      "value": "1",
+      "description": "Quantidade que atinge o pedido mínimo."
+    },
+    {
+      "key": "orderTotalInCents",
+      "value": "0",
+      "description": "Total calculado pelo cardápio."
+    },
+    {
+      "key": "fulfillment",
+      "value": "PICKUP",
+      "description": "Retirada, se o estabelecimento aceita."
+    },
+    {
+      "key": "orderAddressJson",
+      "value": "null",
+      "description": "Endereço do pedido, em JSON."
+    },
+    {
+      "key": "deliveryRegionIdJson",
+      "value": "null",
+      "description": "Região de entrega, em JSON."
+    }
+  ],
+  "item": [
+    {
+      "name": "Infraestrutura",
+      "description": "Sondas de saúde e prontidão",
+      "item": [
+        {
+          "name": "Liveness — o processo está de pé",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Readiness — dá para atender tráfego",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Autenticação",
+      "description": "Sessão de usuários administrativos",
+      "item": [
+        {
+          "name": "Autentica um usuário administrativo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sessao = pm.response.json();",
+                  "if (pm.response.code < 300 && sessao.accessToken) pm.collectionVariables.set('accessToken', sessao.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Guarda o token em `accessToken`; o refresh token fica no cookie, que o Postman guarda sozinho."
+          }
+        },
+        {
+          "name": "Renova a sessão, rotacionando o refresh token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sessao = pm.response.json();",
+                  "if (pm.response.code < 300 && sessao.accessToken) pm.collectionVariables.set('accessToken', sessao.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Sem corpo: o refresh token vai no cookie guardado pelo login."
+          }
+        },
+        {
+          "name": "Encerra a sessão, revogando o refresh token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 204) pm.collectionVariables.set('accessToken', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Sem corpo: revoga o refresh token do cookie."
+          }
+        },
+        {
+          "name": "Dados do usuário autenticado e suas permissões",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastro",
+      "description": "Cadastro aberto de estabelecimento e confirmação do e-mail do dono",
+      "item": [
+        {
+          "name": "Se o cadastro já foi confirmado, e para qual e-mail vai o link",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/email-confirmation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "email-confirmation"
+              ]
+            },
+            "description": "`PENDING` enquanto o cardápio espera a confirmação do e-mail de quem cadastrou o estabelecimento; `CONFIRMED` depois — e para estabelecimento que não passou pelo cadastro da página."
+          }
+        },
+        {
+          "name": "Envia um novo link de confirmação ao dono do estabelecimento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/email-confirmation/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "email-confirmation",
+                "resend"
+              ]
+            },
+            "description": "Vai para o e-mail de quem cadastrou o estabelecimento, seja quem for que peça. Um minuto entre envios (429 `RESEND_TOO_SOON`); já confirmado responde 409 `ALREADY_CONFIRMED`."
+          }
+        },
+        {
+          "name": "Cadastra um estabelecimento no plano gratuito",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cadastro = pm.response.json();",
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('accessToken', cadastro.accessToken);",
+                  "  pm.collectionVariables.set('tenantSlug', cadastro.establishment.slug);",
+                  "  pm.collectionVariables.set('email', cadastro.user.email);",
+                  "  pm.collectionVariables.set('password', 'senha-do-teste-123');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"establishmentName\": \"Minha Lanchonete de Teste\",\n  \"slug\": \"teste-{{$timestamp}}\",\n  \"ownerName\": \"Dono de Teste\",\n  \"email\": \"dono-{{$timestamp}}@exemplo.com\",\n  \"password\": \"senha-do-teste-123\",\n  \"termsVersion\": \"2026-09-30\",\n  \"timezone\": \"America/Sao_Paulo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "signup"
+              ]
+            },
+            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). O cardápio nasce `PENDING`: responde 404 até o dono confirmar o e-mail pelo link enviado. Endereço em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
+          }
+        },
+        {
+          "name": "Se um endereço de cardápio está livre para o cadastro",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/signup/slug-availability?slug=minha-lanchonete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "signup",
+                "slug-availability"
+              ],
+              "query": [
+                {
+                  "key": "slug",
+                  "value": "minha-lanchonete"
+                }
+              ]
+            },
+            "description": "Sempre 200: um endereço fora do formato ou reservado volta como indisponível, com o motivo em `reason`, para o formulário mostrar enquanto a pessoa digita."
+          }
+        },
+        {
+          "name": "Confirma o e-mail pelo link e publica o cardápio",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const mailpit = pm.collectionVariables.get('mailpitUrl');",
+                  "const para = pm.collectionVariables.get('email');",
+                  "pm.sendRequest(mailpit + '/api/v1/messages', (erro, resposta) => {",
+                  "  if (erro) return console.warn('Mailpit fora do ar: cole o token do link em confirmationToken.');",
+                  "  const mensagem = resposta.json().messages.find(",
+                  "    (m) => m.To.some((t) => t.Address === para) && m.Subject.startsWith('Confirme seu e-mail'),",
+                  "  );",
+                  "  if (!mensagem) return console.warn('Nenhum e-mail de confirmação para ' + para + ' no Mailpit.');",
+                  "  pm.sendRequest(mailpit + '/api/v1/message/' + mensagem.ID, (erro2, detalhe) => {",
+                  "    const achado = !erro2 && /#token=(\\S+)/.exec(detalhe.json().Text);",
+                  "    if (achado) pm.collectionVariables.set('confirmationToken', achado[1]);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{confirmationToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/signup/confirm-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "signup",
+                "confirm-email"
+              ]
+            },
+            "description": "Sem autenticação: o link pode ser aberto em outro aparelho. O token vem do fragmento do link, no corpo — nunca na URL. Um segundo uso do mesmo link responde `ALREADY_CONFIRMED`. Link inválido ou expirado responde 400.\n\nBusca sozinho, no Mailpit, o último link de confirmação enviado para `email`. Sem o Mailpit, cole em `confirmationToken` o que vem depois de `#token=` no link."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configurações",
+      "description": "Estabelecimento, horários, entrega e formas de pagamento",
+      "item": [
+        {
+          "name": "Configurações do estabelecimento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "settings"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Altera as configurações do estabelecimento",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Hambúrgueres artesanais e porções. Da terça ao domingo, até tarde.\",\n  \"whatsappPhone\": \"5511999990001\",\n  \"prepTimeMinMinutes\": 20,\n  \"prepTimeMaxMinutes\": 40,\n  \"minimumOrderInCents\": 2000,\n  \"isAcceptingOrders\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "settings"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Horário de funcionamento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/business-hours",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "business-hours"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Substitui o horário da semana inteira",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intervalos\": [\n    {\n      \"dayOfWeek\": 2,\n      \"opensAt\": \"18:00\",\n      \"closesAt\": \"02:00\"\n    },\n    {\n      \"dayOfWeek\": 3,\n      \"opensAt\": \"18:00\",\n      \"closesAt\": \"02:00\"\n    },\n    {\n      \"dayOfWeek\": 4,\n      \"opensAt\": \"18:00\",\n      \"closesAt\": \"02:00\"\n    },\n    {\n      \"dayOfWeek\": 5,\n      \"opensAt\": \"18:00\",\n      \"closesAt\": \"02:00\"\n    },\n    {\n      \"dayOfWeek\": 6,\n      \"opensAt\": \"18:00\",\n      \"closesAt\": \"02:00\"\n    },\n    {\n      \"dayOfWeek\": 0,\n      \"opensAt\": \"18:00\",\n      \"closesAt\": \"02:00\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/business-hours",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "business-hours"
+              ]
+            },
+            "description": "Substituição, e não edição por intervalo: é assim que uma grade semanal é editada de verdade. Um intervalo cujo fechamento é menor que a abertura atravessa a meia-noite.\n\nSubstitui a semana inteira. O exemplo é o horário da Lanchonete do Zé: 18:00 às 02:00, terça a domingo. Num estabelecimento de teste, para pedir a qualquer hora, use `\"opensAt\": \"00:00\", \"closesAt\": \"23:59\"` nos sete dias (0 a 6)."
+          }
+        },
+        {
+          "name": "Configuração de entrega e regiões",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "delivery"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Salva entrega e regiões numa transação só",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"configuracao\": {\n    \"deliveryEnabled\": true,\n    \"pickupEnabled\": true,\n    \"feeMode\": \"FIXED\",\n    \"fixedFeeInCents\": 500,\n    \"estimatedMinMinutes\": 30,\n    \"estimatedMaxMinutes\": 60\n  },\n  \"regioes\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/delivery",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "delivery"
+              ]
+            },
+            "description": "Substitui a configuração e as regiões. Para taxa por região: `feeMode: \"BY_REGION\"` e `regioes: [{ \"name\": \"Centro\", \"feeInCents\": 500 }]`."
+          }
+        },
+        {
+          "name": "Formas de pagamento disponíveis e quais estão habilitadas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const lista = pm.response.json();",
+                  "if (Array.isArray(lista) && lista.length > 0) pm.collectionVariables.set('paymentMethodId', lista[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/payment-methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "payment-methods"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Habilita, desabilita e ordena as formas de pagamento",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"formas\": [\n    {\n      \"paymentMethodId\": \"{{paymentMethodId}}\",\n      \"isEnabled\": true,\n      \"sortOrder\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/payment-methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "payment-methods"
+              ]
+            },
+            "description": "Rode antes \"Formas de pagamento disponíveis e quais estão habilitadas\", que guarda `paymentMethodId`."
+          }
+        },
+        {
+          "name": "Se o estabelecimento está aberto agora",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "status"
+              ]
+            },
+            "description": "Calculado no fuso do estabelecimento. É esta a resposta que vale — o relógio do navegador do cliente não é confiável."
+          }
+        },
+        {
+          "name": "Envia o logo do estabelecimento",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/settings/logo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "settings",
+                "logo"
+              ]
+            },
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+          }
+        },
+        {
+          "name": "Remove o logo do estabelecimento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/settings/logo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "settings",
+                "logo"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Envia a capa do estabelecimento",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/settings/cover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "settings",
+                "cover"
+              ]
+            },
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+          }
+        },
+        {
+          "name": "Remove a capa do estabelecimento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/settings/cover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "settings",
+                "cover"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catálogo",
+      "description": "Categorias e produtos",
+      "item": [
+        {
+          "name": "Categorias, na ordem de exibição",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categorias = pm.response.json();",
+                  "if (Array.isArray(categorias) && categorias.length > 0) {",
+                  "  pm.collectionVariables.set('categoryId', categorias[0].id);",
+                  "  pm.collectionVariables.set('categoryIdsJson', JSON.stringify(categorias.map((c) => c.id)));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Cria uma categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set('categoryId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sobremesas {{$timestamp}}\",\n  \"description\": \"Doces da casa\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories"
+              ]
+            },
+            "description": "Sem `sortOrder`, entra no fim da lista. O nome é único sem diferenciar maiúsculas.\n\nO nome é único no estabelecimento; o `{{$timestamp}}` evita repetir ao rodar de novo."
+          }
+        },
+        {
+          "name": "Reordena as categorias",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": {{categoryIdsJson}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories/order",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories",
+                "order"
+              ]
+            },
+            "description": "Recebe a lista **completa** de ids, na ordem desejada. Uma lista parcial é recusada: deixaria as ausentes intercaladas com a ordem antiga.\n\nPrecisa de todas as categorias: rode antes \"Categorias, na ordem de exibição\". Reordene a lista à vontade."
+          }
+        },
+        {
+          "name": "Altera uma categoria",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Doces da casa, feitos no dia\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{categoryId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Exclui uma categoria vazia",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{categoryId}}"
+                }
+              ]
+            },
+            "description": "Com produtos dentro, responde 409 em vez de levá-los junto."
+          }
+        },
+        {
+          "name": "Envia a imagem da categoria",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories/:id/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories",
+                ":id",
+                "image"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{categoryId}}"
+                }
+              ]
+            },
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+          }
+        },
+        {
+          "name": "Remove a imagem da categoria",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/categories/:id/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "categories",
+                ":id",
+                "image"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{categoryId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Produtos, opcionalmente de uma categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const produtos = pm.response.json();",
+                  "if (Array.isArray(produtos) && produtos.length > 0) {",
+                  "  pm.collectionVariables.set('productId', produtos[0].id);",
+                  "  const combo = produtos.find((p) => p.type === 'COMBO');",
+                  "  const simples = produtos.find((p) => p.type === 'SIMPLE');",
+                  "  if (combo) pm.collectionVariables.set('comboId', combo.id);",
+                  "  if (simples) pm.collectionVariables.set('comboComponentId', simples.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Cria um produto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set('productId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"name\": \"Pudim de leite\",\n  \"description\": \"Fatia generosa, com calda de caramelo.\",\n  \"priceInCents\": 1290,\n  \"isAvailable\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products"
+              ]
+            },
+            "description": "O preço é em **centavos inteiros**: R$ 25,90 é `2590`. Sem `sortOrder`, entra no fim da categoria."
+          }
+        },
+        {
+          "name": "Um produto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Altera um produto — inclusive preço e disponibilidade",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priceInCents\": 1390,\n  \"isAvailable\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Exclui um produto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Envia a imagem do produto",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id",
+                "image"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+          }
+        },
+        {
+          "name": "Remove a imagem do produto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id",
+                "image"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Personalização",
+      "description": "Grupos de opção, adicionais, remoções e combos",
+      "item": [
+        {
+          "name": "Grupos de opção, com as opções de cada um",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const lista = pm.response.json();",
+                  "if (Array.isArray(lista) && lista.length > 0) pm.collectionVariables.set('optionGroupId', lista[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/option-groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "option-groups"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Cria um grupo de opções",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set('optionGroupId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Calda extra\",\n  \"description\": \"Escolha até 2\",\n  \"minSelections\": 0,\n  \"maxSelections\": 2,\n  \"options\": [\n    {\n      \"name\": \"Chocolate\",\n      \"priceDeltaInCents\": 300\n    },\n    {\n      \"name\": \"Doce de leite\",\n      \"priceDeltaInCents\": 300\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/option-groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "option-groups"
+              ]
+            },
+            "description": "Tamanho, adicionais e remoções são todos grupos — muda o mínimo e o máximo. `isRequired` é derivado de `minSelections >= 1`. O grupo é reutilizável: crie \"Adicionais\" uma vez e ligue a vários produtos."
+          }
+        },
+        {
+          "name": "Um grupo de opções",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/option-groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "option-groups",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{optionGroupId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Altera o grupo e as opções dele",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Calda extra\",\n  \"description\": \"Escolha até 2\",\n  \"minSelections\": 0,\n  \"maxSelections\": 2,\n  \"options\": [\n    {\n      \"name\": \"Chocolate\",\n      \"priceDeltaInCents\": 300\n    },\n    {\n      \"name\": \"Doce de leite\",\n      \"priceDeltaInCents\": 350\n    },\n    {\n      \"name\": \"Morango\",\n      \"priceDeltaInCents\": 350\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/option-groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "option-groups",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{optionGroupId}}"
+                }
+              ]
+            },
+            "description": "Opções com `id` são alteradas, sem `id` são criadas, e as ausentes são removidas. A alteração vale para todos os produtos que usam o grupo.\n\nOpção sem `id` é criada; para manter uma opção existente, mande o `id` dela."
+          }
+        },
+        {
+          "name": "Exclui um grupo que nenhum produto usa",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/option-groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "option-groups",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{optionGroupId}}"
+                }
+              ]
+            },
+            "description": "Em uso, responde 409 em vez de tirá-lo dos produtos em silêncio."
+          }
+        },
+        {
+          "name": "Grupos de opção de um produto, na ordem de exibição",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id/option-groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id",
+                "option-groups"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Define os grupos de opção do produto",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupIds\": [\n    \"{{optionGroupId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id/option-groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id",
+                "option-groups"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": "Substitui a lista inteira, na ordem em que o cliente verá os grupos.\n\nSubstitui os grupos do produto, na ordem da lista."
+          }
+        },
+        {
+          "name": "Componentes de um combo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id/combo-items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id",
+                "combo-items"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{comboId}}"
+                }
+              ]
+            },
+            "description": "`precoAvulsoEmCentavos` é quanto custariam os itens separados; `todosDisponiveis` é falso se algum componente estiver esgotado."
+          }
+        },
+        {
+          "name": "Define os componentes de um combo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"{{comboComponentId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/:id/combo-items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                ":id",
+                "combo-items"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{comboId}}"
+                }
+              ]
+            },
+            "description": "Só para produtos do tipo COMBO. Um combo não pode conter outro combo.\n\nO produto do caminho precisa ser um combo. \"Produtos, opcionalmente de uma categoria\" guarda `comboId` e `comboComponentId`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pedidos",
+      "description": "Pedidos do estabelecimento e mudança de status",
+      "item": [
+        {
+          "name": "Pedidos, do mais recente para o mais antigo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const lista = pm.response.json();",
+                  "if (Array.isArray(lista) && lista.length > 0) pm.collectionVariables.set('orderId', lista[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "RECEIVED",
+                  "disabled": true
+                },
+                {
+                  "key": "before",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Paginação por número: para a página seguinte, envie `before` com o menor número recebido."
+          }
+        },
+        {
+          "name": "Um pedido, com itens, endereço e pagamento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{orderId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Muda o status do pedido",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACCEPTED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{orderId}}"
+                }
+              ]
+            },
+            "description": "O status só avança — pode pular etapas, nunca voltar. `OUT_FOR_DELIVERY` só para entrega. Cancelar exige `reason`. Uma mudança feita por outra pessoa no meio responde 409 (`ORDER_CHANGED`).\n\nO status só avança. Para cancelar: `{ \"status\": \"CANCELLED\", \"reason\": \"Cliente desistiu\" }`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usuários",
+      "description": "Usuários do painel e seus papéis",
+      "item": [
+        {
+          "name": "Usuários do estabelecimento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const usuarios = pm.response.json();",
+                  "const outro = Array.isArray(usuarios) && usuarios.find((u) => u.role?.code !== 'OWNER');",
+                  "if (outro) pm.collectionVariables.set('userId', outro.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Cria um usuário",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set('userId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Atendente de Teste\",\n  \"email\": \"atendente-{{$timestamp}}@exemplo.com\",\n  \"password\": \"senha-do-atendente\",\n  \"role\": \"STAFF\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            },
+            "description": "Com senha inicial, que o dono repassa à pessoa — ainda não há envio de convite por e-mail. Respeita o limite de usuários ativos do plano (409 `PLAN_USER_LIMIT`).\n\nO plano gratuito permite 2 usuários ativos."
+          }
+        },
+        {
+          "name": "Altera nome ou papel de um usuário",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ADMIN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Desativa um usuário e encerra as sessões dele",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users/:id/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                ":id",
+                "deactivate"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Reativa um usuário, se o plano tiver vaga",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/users/:id/reactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                ":id",
+                "reactivate"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Plano",
+      "description": "Plano do estabelecimento e uso do mês",
+      "item": [
+        {
+          "name": "Uso do plano: pedidos do mês e usuários ativos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/plan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "plan"
+              ]
+            },
+            "description": "Qualquer usuário logado vê — é o que explica ao atendente por que o cardápio parou de receber pedidos. O mês é o do calendário, no fuso do estabelecimento."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cardápio público",
+      "description": "Área sem login, resolvida pelo slug do estabelecimento",
+      "item": [
+        {
+          "name": "Cardápio, status e condições de entrega de um estabelecimento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const menu = pm.response.json();",
+                  "if (pm.response.code === 200) {",
+                  "  const produto = menu.categories",
+                  "    .flatMap((c) => c.products)",
+                  "    .find(",
+                  "      (p) =>",
+                  "        p.isAvailable && p.type === 'SIMPLE' && p.priceInCents > 0 &&",
+                  "        p.optionGroups.every((g) => !g.isRequired),",
+                  "    );",
+                  "  const entrega = menu.delivery;",
+                  "  const retirada = entrega.pickupEnabled || !entrega.deliveryEnabled;",
+                  "  const regiao = !retirada && entrega.feeMode === 'BY_REGION' ? entrega.regions[0] : null;",
+                  "  const taxa = retirada ? 0 : regiao ? regiao.feeInCents : entrega.fixedFeeInCents;",
+                  "  if (produto) {",
+                  "    const quantidade = Math.max(1, Math.ceil(menu.establishment.minimumOrderInCents / produto.priceInCents));",
+                  "    pm.collectionVariables.set('menuProductId', produto.id);",
+                  "    pm.collectionVariables.set('orderQuantity', String(quantidade));",
+                  "    pm.collectionVariables.set('orderTotalInCents', String(produto.priceInCents * quantidade + taxa));",
+                  "  }",
+                  "  pm.collectionVariables.set('fulfillment', retirada ? 'PICKUP' : 'DELIVERY');",
+                  "  pm.collectionVariables.set('orderAddressJson', retirada ? 'null' : '{\"newAddress\":{\"postalCode\":\"01452000\",\"street\":\"Rua dos Ipês\",\"number\":\"450\",\"complement\":\"apto 12\",\"neighborhood\":\"Jardim Paulista\",\"city\":\"São Paulo\",\"reference\":null}}');",
+                  "  pm.collectionVariables.set('deliveryRegionIdJson', regiao ? JSON.stringify(regiao.id) : 'null');",
+                  "  if (menu.paymentMethods[0]) pm.collectionVariables.set('paymentMethodId', menu.paymentMethods[0].id);",
+                  "  if (!menu.status.aberto) console.warn('Fechado agora: o pedido será recusado. A padaria-pao-quente abre das 08:00 às 18:00.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/:tenantSlug/menu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                ":tenantSlug",
+                "menu"
+              ],
+              "variable": [
+                {
+                  "key": "tenantSlug",
+                  "value": "{{tenantSlug}}"
+                }
+              ]
+            },
+            "description": "Sem autenticação. Estabelecimento inexistente ou suspenso responde 404, igualmente. O status e a disponibilidade são informativos: o pedido é validado de novo no servidor.\n\nPrepara o pedido: escolhe um produto sem opção obrigatória, a quantidade que atinge o pedido mínimo, a retirada ou a entrega, a forma de pagamento e o total esperado."
+          }
+        },
+        {
+          "name": "Identifica o cliente pelo telefone, no checkout",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"(11) 98765-4321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/:tenantSlug/customers/identify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                ":tenantSlug",
+                "customers",
+                "identify"
+              ],
+              "variable": [
+                {
+                  "key": "tenantSlug",
+                  "value": "{{tenantSlug}}"
+                }
+              ]
+            },
+            "description": "Sem autenticação. Devolve o primeiro nome e os endereços salvos **mascarados**, ou `cliente: null`. O endereço completo nunca é devolvido: o pedido referencia o endereço pelo id. Limite próprio de requisições por IP.\n\nO telefone é da cliente de demonstração do seed."
+          }
+        },
+        {
+          "name": "Envia um pedido",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"customer\": {\n    \"phone\": \"(11) 98765-4321\",\n    \"name\": \"Maria\"\n  },\n  \"fulfillment\": \"{{fulfillment}}\",\n  \"address\": {{orderAddressJson}},\n  \"deliveryRegionId\": {{deliveryRegionIdJson}},\n  \"paymentMethodId\": \"{{paymentMethodId}}\",\n  \"changeForInCents\": null,\n  \"notes\": \"Pedido feito pelo Postman\",\n  \"items\": [\n    {\n      \"productId\": \"{{menuProductId}}\",\n      \"quantity\": {{orderQuantity}},\n      \"notes\": null,\n      \"options\": {}\n    }\n  ],\n  \"expectedTotalInCents\": {{orderTotalInCents}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/:tenantSlug/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                ":tenantSlug",
+                "orders"
+              ],
+              "variable": [
+                {
+                  "key": "tenantSlug",
+                  "value": "{{tenantSlug}}"
+                }
+              ]
+            },
+            "description": "Sem autenticação. O corpo traz só ids, quantidades e escolhas: preços, taxa e total são recalculados no servidor. Responde **422** (`ORDER_REJECTED`) com todos os problemas encontrados, e **409** (`PRICE_CHANGED`) quando o total daqui difere de `expectedTotalInCents`. Repetir o envio com a mesma `idempotencyKey` devolve o pedido já criado.\n\nRode antes \"Cardápio, status e condições de entrega de um estabelecimento\", que prepara produto, quantidade e total. O estabelecimento precisa estar aberto."
+          }
+        }
+      ]
+    }
+  ]
+}
