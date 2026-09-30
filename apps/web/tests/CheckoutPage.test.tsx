@@ -107,6 +107,19 @@ describe('checkout', () => {
     expect(botaoDeEnviar()).toHaveAccessibleName(/R\$\s36,00/)
   })
 
+  it('avisa para onde vão os dados, com a política de privacidade em outra aba', async () => {
+    const { cardapio } = await abrirCheckout()
+
+    expect(
+      screen.getByText(new RegExp(`vão para ${cardapio.establishment.name} preparar e entregar`)),
+    ).toBeVisible()
+    const politica = screen.getByRole('link', { name: 'Política de privacidade' })
+    expect(politica).toHaveAttribute('href', '/privacidade')
+    // Em outra aba: quem está no meio do pedido não perde o que preencheu.
+    expect(politica).toHaveAttribute('target', '_blank')
+    expect(politica).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
   it('enviar vazio aponta todos os campos que faltam de uma vez', async () => {
     await abrirCheckout()
     fireEvent.click(botaoDeEnviar())

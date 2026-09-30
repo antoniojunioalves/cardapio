@@ -1,13 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3333'
 
-export interface HealthResponse {
-  status: 'ok'
-  name: string
-  environment: string
-  uptimeSeconds: number
-  timestamp: string
-}
-
 /**
  * Erro de uma resposta da API, com o status HTTP preservado.
  *
@@ -84,11 +76,6 @@ export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise
 /** POST com corpo JSON, que devolve o JSON da resposta ou lança `ApiError`. */
 export async function postJson<T>(caminho: string, corpo: unknown): Promise<T> {
   return requisitar<T>(caminho, { method: 'POST', body: corpo })
-}
-
-/** Consulta a sonda de saúde da API. */
-export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
-  return getJson<HealthResponse>('/health', signal)
 }
 
 export { API_URL }

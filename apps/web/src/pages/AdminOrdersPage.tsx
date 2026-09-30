@@ -1,10 +1,11 @@
 import type { StatusDoPedido } from '@repo/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, useParams } from 'react-router'
+import { Navigate, useLocation, useParams } from 'react-router'
 
 import { chaveDosPedidos, useMudarStatus, usePedidosDoPainel } from '@/features/admin/api'
 import { CancelOrderDialog } from '@/features/admin/components/CancelOrderDialog'
+import { EmailConfirmationNotice } from '@/features/admin/components/EmailConfirmationNotice'
 import { OrderCard } from '@/features/admin/components/OrderCard'
 import { usePedidosAoVivo, type EstadoDaConexao } from '@/features/admin/live'
 import { emAndamento } from '@/features/admin/orders'
@@ -12,6 +13,7 @@ import { avisoDoPlano, chaveDoPlano, usePlano } from '@/features/admin/plan'
 import { sair, useSessaoStore } from '@/features/admin/session'
 import { criarAlerta, type Alerta } from '@/features/admin/sound'
 import type { PedidoDoPainel } from '@/features/admin/types'
+import type { ChegadaDoCadastro } from '@/features/signup/api'
 import { ApiError } from '@/services/api'
 
 const INDICADOR: Record<EstadoDaConexao, { texto: string; classe: string }> = {
@@ -30,6 +32,7 @@ const INDICADOR: Record<EstadoDaConexao, { texto: string; classe: string }> = {
  */
 export function AdminOrdersPage() {
   const { tenantSlug = '' } = useParams()
+  const chegada = useLocation().state as ChegadaDoCadastro | null
   const sessao = useSessaoStore()
   const logado = sessao.slug === tenantSlug && sessao.usuario !== null
 
@@ -63,7 +66,8 @@ export function AdminOrdersPage() {
   // Sessão que não renova mais (refresh revogado ou vencido) volta ao login.
   if (!logado) return <Navigate to={`/${tenantSlug}/admin`} replace />
 
-  const podeAtualizar = sessao.usuario?.permissions.includes('orders:update') ?? false
+  const permissoes = sessao.usuario?.permissions ?? []
+  const podeAtualizar = permissoes.includes('orders:update')
   const visiveis = pedidos.filter((p) => (aba === 'andamento' ? emAndamento(p) : !emAndamento(p)))
 
   function mudar(pedido: PedidoDoPainel, status: StatusDoPedido, motivo?: string) {
@@ -123,6 +127,15 @@ export function AdminOrdersPage() {
       </header>
 
       <main className="mx-auto mt-section-y flex max-w-3xl flex-col gap-stack px-page-x">
+        {/* A confirmação do cadastro é assunto de quem configura o estabelecimento. */}
+        {permissoes.includes('settings:read') && (
+          <EmailConfirmationNotice
+            slug={tenantSlug}
+            podeReenviar={permissoes.includes('settings:update')}
+            emailNaoEnviado={chegada?.emailNaoEnviado === true}
+          />
+        )}
+
         <div role="tablist" aria-label="Pedidos" className="flex gap-2">
           {(
             [

@@ -9,6 +9,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch, type FieldErrors, type Resolver } from 'react-hook-form'
+import { Link } from 'react-router'
 
 import { TextField } from '@/components/TextField'
 import type { LinhaDoCarrinho, ResumoDoCarrinho } from '@/features/cart/cart'
@@ -480,6 +481,14 @@ export function CheckoutForm({ slug, cardapio, linhas, resumo, aoEnviado }: Chec
           </ul>
         </div>
       )}
+
+      {/* Aberta em outra aba: quem está no meio do pedido não perde o que preencheu. */}
+      <p className="text-caption text-content-muted">
+        Seu nome, telefone e endereço vão para {establishment.name} preparar e entregar o pedido.{' '}
+        <Link to="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">
+          Política de privacidade
+        </Link>
+      </p>
 
       <button
         type="submit"

@@ -94,3 +94,41 @@ export async function abrirCardapio(
   await screen.findByRole('heading', { level: 1, name: cardapio.establishment.name })
   return { fetch, pagina }
 }
+
+/**
+ * Simula a API por rota: `responder` recebe a URL, o método e o corpo enviado,
+ * e devolve a resposta. Devolve o mock, para conferir o que foi chamado.
+ */
+export function mockarRotas(responder: (url: string, metodo: string, corpo: unknown) => Resposta) {
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    const metodo = init?.method ?? 'GET'
+    const corpo: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+    const resposta = responder(url, metodo, corpo)
+    if (resposta === 'falha-de-rede') return Promise.reject(new Error('conexão recusada'))
+    return Promise.resolve({
+      ok: resposta.status < 400,
+      status: resposta.status,
+      json: () => Promise.resolve(resposta.corpo),
+    })
+  })
+  vi.stubGlobal('fetch', fetch)
+  return fetch
+}
+
+/** Uma conexão ao vivo que nunca abre, para os testes que terminam no painel de pedidos. */
+export function pararConexaoAoVivo() {
+  vi.stubGlobal(
+    'WebSocket',
+    class {
+      addEventListener() {
+        /* nunca abre */
+      }
+      send() {
+        /* nada a enviar */
+      }
+      close() {
+        /* nada a fechar */
+      }
+    },
+  )
+}

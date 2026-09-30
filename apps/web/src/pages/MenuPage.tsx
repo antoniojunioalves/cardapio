@@ -66,7 +66,14 @@ export function MenuPage() {
 
   if (consulta.isError) {
     if (consulta.error instanceof ApiError && consulta.error.status === 404) {
-      return <NotFoundPage mensagem="Não encontramos este estabelecimento. Confira o endereço." />
+      // A dica vale para qualquer endereço desconhecido: não revela se este,
+      // em particular, espera a confirmação do e-mail.
+      return (
+        <NotFoundPage
+          mensagem="Não encontramos este estabelecimento. Confira o endereço."
+          dica="Acabou de cadastrar o seu? O cardápio aparece aqui depois que você confirmar o e-mail."
+        />
+      )
     }
 
     return (
