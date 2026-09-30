@@ -1,10 +1,13 @@
+import { FUSO_PADRAO } from '@repo/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 
 import { hashPassword } from '../auth/password.js'
 import { infraLogger } from '../lib/logger.js'
-import { tenantContextFromUser } from '../tenant/context.js'
+import { criarEstabelecimento, novoIdDeEstabelecimento } from '../signup/service.js'
+import { tenantContextFromSignup, tenantContextFromUser } from '../tenant/context.js'
+import { findTenantBySlug } from '../tenant/repository.js'
 import { withTenant } from '../tenant/with-tenant.js'
-import { closeDatabase, db } from './index.js'
+import { closeDatabase } from './index.js'
 import {
   businessHours,
   categories,
@@ -18,23 +21,17 @@ import {
   deliveryRegions,
   deliverySettings,
   paymentMethods,
-  planFeatures,
-  plans,
-  roles,
-  subscriptions,
   tenantPaymentMethods,
   tenantSettings,
-  tenants,
-  userRoles,
-  users,
 } from './schema/index.js'
 import { seedPaymentMethods } from './seed-payment-methods.js'
+import { seedPlans } from './seed-plans.js'
 import { seedRbac } from './seed-rbac.js'
 
 /**
  * Dados de demonstração para desenvolvimento.
  *
- * Idempotente: rodar de novo não duplica nada. Dois estabelecimentos, para que
+ * Idempotente: rodar de novo não duplica nada. Três estabelecimentos, para que
  * o isolamento entre tenants possa ser conferido à mão no psql, e não apenas
  * pelos testes.
  *
@@ -43,32 +40,6 @@ import { seedRbac } from './seed-rbac.js'
  * caminho que o código de produção vai exercitar. Tentar inseri-las fora do
  * contexto seria recusado pelo `WITH CHECK` da policy.
  */
-
-const PLANOS = [
-  {
-    code: 'FREE',
-    name: 'Gratuito',
-    description: 'Para começar: cardápio digital e pedidos pelo WhatsApp.',
-    sortOrder: 0,
-    features: [
-      { key: 'maxOrdersPerMonth', isEnabled: true, limitValue: 100 },
-      { key: 'maxUsers', isEnabled: true, limitValue: 2 },
-      { key: 'reports', isEnabled: false, limitValue: null },
-    ],
-  },
-  {
-    code: 'PREMIUM',
-    name: 'Premium',
-    description: 'Sem teto de pedidos, com relatórios e usuários ilimitados.',
-    sortOrder: 100,
-    features: [
-      // limitValue nulo significa ilimitado — zero seria um limite de verdade.
-      { key: 'maxOrdersPerMonth', isEnabled: true, limitValue: null },
-      { key: 'maxUsers', isEnabled: true, limitValue: null },
-      { key: 'reports', isEnabled: true, limitValue: null },
-    ],
-  },
-] as const
 
 /** Senha única de desenvolvimento. Nunca existe fora do seed. */
 const SENHA_DEMO = 'cardapio123'
@@ -378,40 +349,6 @@ const ESTABELECIMENTOS = [
   },
 ] as const
 
-async function semearPlanos(): Promise<Map<string, string>> {
-  const idsPorCodigo = new Map<string, string>()
-
-  for (const plano of PLANOS) {
-    await db
-      .insert(plans)
-      .values({
-        code: plano.code,
-        name: plano.name,
-        description: plano.description,
-        sortOrder: plano.sortOrder,
-      })
-      .onConflictDoNothing({ target: plans.code })
-
-    const [registro] = await db
-      .select({ id: plans.id })
-      .from(plans)
-      .where(eq(plans.code, plano.code))
-      .limit(1)
-
-    if (!registro) throw new Error(`plano ${plano.code} não foi criado`)
-    idsPorCodigo.set(plano.code, registro.id)
-
-    for (const feature of plano.features) {
-      await db
-        .insert(planFeatures)
-        .values({ planId: registro.id, ...feature })
-        .onConflictDoNothing()
-    }
-  }
-
-  return idsPorCodigo
-}
-
 type Estabelecimento = (typeof ESTABELECIMENTOS)[number]
 
 /**
@@ -685,60 +622,36 @@ async function semearClientes(
   }
 }
 
-async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promise<void> {
+/**
+ * Cria cada estabelecimento de demonstração pelo mesmo caminho do cadastro pela
+ * página (`criarEstabelecimento`) — mas já publicado, e com o plano de cada um.
+ * Estabelecimento que já existe não é recriado; o resto do seed roda de novo,
+ * idempotente.
+ */
+async function semearEstabelecimentos(): Promise<void> {
+  const senhaHash = await hashPassword(SENHA_DEMO)
+
   for (const estabelecimento of ESTABELECIMENTOS) {
-    await db
-      .insert(tenants)
-      .values({ slug: estabelecimento.slug, name: estabelecimento.name })
-      .onConflictDoNothing({ target: tenants.slug })
+    if (!(await findTenantBySlug(estabelecimento.slug))) {
+      const context = tenantContextFromSignup(await novoIdDeEstabelecimento())
+      await withTenant(context, (tx) =>
+        criarEstabelecimento(tx, context, {
+          nome: estabelecimento.name,
+          slug: estabelecimento.slug,
+          fuso: FUSO_PADRAO,
+          status: 'ACTIVE',
+          planoCodigo: estabelecimento.plano,
+          dono: { nome: estabelecimento.dono.nome, email: estabelecimento.dono.email, senhaHash },
+        }),
+      )
+    }
 
-    const [tenant] = await db
-      .select({ id: tenants.id })
-      .from(tenants)
-      .where(eq(tenants.slug, estabelecimento.slug))
-      .limit(1)
-
+    const tenant = await findTenantBySlug(estabelecimento.slug)
     if (!tenant) throw new Error(`tenant ${estabelecimento.slug} não foi criado`)
 
-    const planId = idsDosPlanos.get(estabelecimento.plano)
-    if (!planId) throw new Error(`plano ${estabelecimento.plano} não encontrado`)
-
-    const [papelDono] = await db
-      .select({ id: roles.id })
-      .from(roles)
-      .where(eq(roles.code, 'OWNER'))
-      .limit(1)
-    if (!papelDono) throw new Error('papel OWNER não encontrado — rode o seed de RBAC antes')
-
-    const passwordHash = await hashPassword(SENHA_DEMO)
-
     // Tudo dentro do contexto do tenant: é o WITH CHECK das policies que exige
-    // isso, e é também como o código de produção vai escrever.
+    // isso, e é também como o código de produção escreve.
     await withTenant(tenantContextFromUser(tenant.id), async (tx) => {
-      await tx.insert(subscriptions).values({ tenantId: tenant.id, planId }).onConflictDoNothing()
-
-      await tx
-        .insert(users)
-        .values({
-          tenantId: tenant.id,
-          name: estabelecimento.dono.nome,
-          email: estabelecimento.dono.email,
-          passwordHash,
-        })
-        .onConflictDoNothing({ target: [users.tenantId, users.email] })
-
-      const [usuario] = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, estabelecimento.dono.email))
-        .limit(1)
-      if (!usuario) throw new Error(`usuário ${estabelecimento.dono.email} não foi criado`)
-
-      await tx
-        .insert(userRoles)
-        .values({ tenantId: tenant.id, userId: usuario.id, roleId: papelDono.id })
-        .onConflictDoNothing()
-
       await semearConfiguracoes(tx, tenant.id, estabelecimento)
       await semearCardapio(tx, tenant.id, estabelecimento)
       await semearPersonalizacao(tx, tenant.id, estabelecimento)
@@ -759,8 +672,8 @@ async function semearEstabelecimentos(idsDosPlanos: Map<string, string>): Promis
 try {
   await seedRbac()
   await seedPaymentMethods()
-  const idsDosPlanos = await semearPlanos()
-  await semearEstabelecimentos(idsDosPlanos)
+  await seedPlans()
+  await semearEstabelecimentos()
   infraLogger.info({ senha: SENHA_DEMO }, 'seed concluído — todos os usuários usam esta senha')
 } catch (error) {
   infraLogger.fatal({ err: error }, 'falha no seed')

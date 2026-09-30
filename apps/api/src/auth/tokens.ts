@@ -44,29 +44,31 @@ export function verifyAccessToken(token: string): AccessTokenPayload | null {
 }
 
 /**
- * O refresh token **não é um JWT**, e é uma escolha.
+ * Token opaco de um tenant: `{tenantId}.{256 bits aleatórios}`. É o formato do
+ * refresh token e do link de confirmação de e-mail do cadastro.
  *
- * Ele já precisa de uma consulta ao banco para saber se foi revogado — então a
- * assinatura não compraria nada que a consulta não dê, e em troca traria toda
- * a superfície de verificação de JWT. Um valor aleatório opaco de 256 bits faz
- * o mesmo trabalho com menos partes móveis.
+ * **Não é um JWT**, e é uma escolha. Os dois já precisam de uma consulta ao
+ * banco — para saber se o token foi revogado ou usado —, então a assinatura
+ * não compraria nada que a consulta não dê, e em troca traria toda a
+ * superfície de verificação de JWT. Um valor aleatório opaco de 256 bits faz o
+ * mesmo trabalho com menos partes móveis.
  *
  * No banco fica só o hash SHA-256. Um vazamento da tabela não entrega sessão
- * nenhuma. SHA-256 e não argon2 porque aqui não há senha escolhida por humano
- * para proteger: são 256 bits aleatórios, sem dicionário a atacar, e um hash
- * lento só encareceria cada renovação de sessão.
+ * nem confirmação nenhuma. SHA-256 e não argon2 porque aqui não há senha
+ * escolhida por humano para proteger: são 256 bits aleatórios, sem dicionário
+ * a atacar, e um hash lento só encareceria cada uso.
  */
-export function generateRefreshToken(tenantId: string): { token: string; tokenHash: string } {
+export function generateTenantToken(tenantId: string): { token: string; tokenHash: string } {
   const token = `${tenantId}.${randomBytes(32).toString('base64url')}`
-  return { token, tokenHash: hashRefreshToken(token) }
+  return { token, tokenHash: hashToken(token) }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
- * Extrai o tenant embutido no refresh token.
+ * Extrai o tenant embutido no token.
  *
- * Existe para resolver um impasse: a tabela de refresh tokens é protegida por
+ * Existe para resolver um impasse: as tabelas de tokens são protegidas por
  * RLS, então encontrar a linha exige contexto de tenant — mas o contexto viria
  * justamente do token. O prefixo quebra o círculo.
  *
@@ -74,14 +76,19 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
  * por outro tenant muda o token inteiro, e o hash procurado deixa de existir:
  * a dica só consegue estreitar a busca, nunca alargá-la.
  */
-export function parseRefreshTokenTenant(token: string): string | null {
+export function parseTokenTenant(token: string): string | null {
   const prefixo = token.split('.')[0]
   return prefixo && UUID.test(prefixo) ? prefixo : null
 }
 
-export function hashRefreshToken(token: string): string {
+export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
+
+/** O refresh token é um token de tenant; os nomes próprios deixam claro quem o usa. */
+export const generateRefreshToken = generateTenantToken
+export const parseRefreshTokenTenant = parseTokenTenant
+export const hashRefreshToken = hashToken
 
 export function refreshTokenExpiresAt(): Date {
   const agora = Date.now()

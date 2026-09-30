@@ -12,7 +12,7 @@ export interface TenantRecord {
   slug: string
   name: string
   timezone: string
-  status: 'ACTIVE' | 'SUSPENDED'
+  status: 'ACTIVE' | 'SUSPENDED' | 'PENDING'
 }
 
 const publicColumns = {

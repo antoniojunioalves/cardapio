@@ -3,7 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { closeDatabase, db } from '../src/db/index.js'
 import { tenants } from '../src/db/schema/index.js'
-import { tenantContextFromPublicSlug, tenantContextFromUser } from '../src/tenant/context.js'
+import {
+  tenantContextFromPublicSlug,
+  tenantContextFromSignup,
+  tenantContextFromToken,
+  tenantContextFromUser,
+} from '../src/tenant/context.js'
 import { findTenantById, findTenantBySlug } from '../src/tenant/repository.js'
 
 const sufixo = Math.random().toString(36).slice(2, 10)
@@ -38,6 +43,14 @@ describe('TenantContext', () => {
       tenantId,
       source: 'public-slug',
     })
+  })
+
+  it('registra que o tenant veio de um token emitido por nós', () => {
+    expect(tenantContextFromToken(tenantId)).toEqual({ tenantId, source: 'token' })
+  })
+
+  it('registra que o tenant é o que o cadastro está criando', () => {
+    expect(tenantContextFromSignup(tenantId)).toEqual({ tenantId, source: 'signup' })
   })
 })
 

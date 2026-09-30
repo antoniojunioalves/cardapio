@@ -40,6 +40,8 @@ export const users = pgTable(
 
     isActive: boolean().notNull().default(true),
     lastLoginAt: timestamp({ withTimezone: true }),
+    /** Quando a pessoa provou ser dona do e-mail, pelo link de confirmação. */
+    emailVerifiedAt: timestamp({ withTimezone: true }),
 
     ...timestamps,
   },
@@ -94,6 +96,48 @@ export const refreshTokens = pgTable(
     // outro estabelecimento.
     foreignKey({
       name: 'refresh_tokens_user_mesmo_tenant',
+      columns: [table.tenantId, table.userId],
+      foreignColumns: [users.tenantId, users.id],
+    }).onDelete('cascade'),
+    pgPolicy('tenant_isolation', {
+      as: 'permissive',
+      for: 'all',
+      to: 'public',
+      using: sql`${table.tenantId} = ${currentTenantId}`,
+      withCheck: sql`${table.tenantId} = ${currentTenantId}`,
+    }),
+  ],
+).enableRLS()
+
+/**
+ * Links de confirmação de e-mail enviados a quem cadastrou o estabelecimento.
+ *
+ * Mesmo desenho do refresh token: só o hash SHA-256 fica no banco, e o tenant
+ * vai embutido no token, como dica de roteamento para achar a linha sob RLS.
+ * `usedAt` em vez de apagar a linha: um segundo clique no mesmo link responde
+ * "já confirmado", e não "link inválido".
+ *
+ * `email` é o endereço que o link confirma. Se o e-mail da pessoa mudar
+ * depois do envio, o link antigo não confirma o endereço novo.
+ */
+export const emailVerificationTokens = pgTable(
+  'email_verification_tokens',
+  {
+    id: primaryId(),
+    tenantId: uuid()
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    userId: uuid().notNull(),
+    email: varchar({ length: 254 }).notNull(),
+    tokenHash: varchar({ length: 64 }).notNull().unique(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    usedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('email_verification_tokens_user_idx').on(table.userId),
+    foreignKey({
+      name: 'email_verification_tokens_user_mesmo_tenant',
       columns: [table.tenantId, table.userId],
       foreignColumns: [users.tenantId, users.id],
     }).onDelete('cascade'),
