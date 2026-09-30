@@ -237,7 +237,9 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Armazenamento compartilhado para o rate limit (Redis) — hoje o contador vive na memória do
   processo, o que vira um limite por instância assim que houver mais de uma. A Fase 28 decide se
   já é preciso
-- Deploy contínuo (CD) — o CI entra na Fase 16
+- Deploy contínuo (CD) — o CI existe desde a Fase 16
+- Atualização automática das actions do CI e das dependências (Dependabot ou Renovate) — hoje
+  as actions, fixadas pelo commit, são atualizadas à mão (DEVELOPMENT.md, "CI")
 - Métricas e tracing distribuído
 
 ## SEO e descoberta
@@ -256,9 +258,8 @@ que o produto ainda não tem como aproveitar.
 
 ## Revisões técnicas agendadas
 
-| Assunto           | Gatilho para revisitar                                             |
-| ----------------- | ------------------------------------------------------------------ |
-| TypeScript 7      | Quando o `typescript-eslint` publicar suporte                      |
-| `packages/shared` | Quando houver o primeiro schema Zod realmente usado nos dois lados |
-| Editor de temas   | Quando um tenant pedir identidade visual própria                   |
-| Isolamento físico | Quando existir um cliente de plano CUSTOM que justifique o custo   |
+| Assunto           | Gatilho para revisitar                                           |
+| ----------------- | ---------------------------------------------------------------- |
+| TypeScript 7      | Quando o `typescript-eslint` publicar suporte                    |
+| Editor de temas   | Quando um tenant pedir identidade visual própria                 |
+| Isolamento físico | Quando existir um cliente de plano CUSTOM que justifique o custo |

@@ -5,8 +5,8 @@ import { defineConfig } from 'vitest/config'
 
 /**
  * Os testes rodam contra um PostgreSQL de verdade, num banco separado do de
- * desenvolvimento. Ver `docker/postgres/init/02-test-database.sh` para o
- * motivo — resumido: RLS não se prova com mock.
+ * desenvolvimento. Ver `docker/postgres/init/02-databases.sh` para o motivo —
+ * resumido: RLS não se prova com mock.
  *
  * Pré-requisito: `pnpm db:up`.
  */

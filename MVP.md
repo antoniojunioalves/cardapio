@@ -54,7 +54,7 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Cartões de produto com imagem, descrição, preço e disponibilidade
 - [x] Seleção de opções e adicionais
 - [x] Carrinho persistido no navegador, com indicador de quantidade
-- [x] Checkout: telefone, nome, endereço, forma de pagamento, observações — _o envio é da Fase 11_
+- [x] Checkout: telefone, nome, endereço, forma de pagamento, observações
 - [x] Identificação do cliente por telefone (ver a dívida registrada em SECURITY.md)
 - [x] Pedido validado e **recalculado no servidor**
 - [x] Abertura do WhatsApp do estabelecimento com a mensagem formatada
@@ -69,7 +69,7 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### No ar
 
-- [ ] CI: typecheck, lint, testes e build a cada PR — _Fase 16_
+- [x] CI: formatação, typecheck, lint, testes e build a cada PR e na `main`
 - [ ] Hospedagem, HTTPS, backup e seed essencial de produção — _Fase 28_
 
 ---
@@ -140,6 +140,6 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 15:** os passos 4 a 7 funcionam de ponta a ponta, e os testes provam
-> o isolamento. Os passos 1 a 3 funcionam só pela API, e o sistema ainda não está no ar. As fases
-> 16 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".
+> **Situação ao fim da Fase 16:** os passos 4 a 7 funcionam de ponta a ponta, os testes provam o
+> isolamento e o CI os roda a cada PR. Os passos 1 a 3 funcionam só pela API, e o sistema ainda
+> não está no ar. As fases 17 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".

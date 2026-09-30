@@ -9,8 +9,8 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 15 concluída.** As fases 16 a 28 fecham o MVP — cadastro aberto, telas de
-gestão e o sistema no ar (ver
+**Status atual: Fase 16 concluída** — o CI confere cada PR. As fases 17 a 28 fecham o MVP —
+cadastro aberto, telas de gestão e o sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
@@ -39,22 +39,21 @@ estabelecimentos, com endereços diferentes em cada um.
 
 Versões fixadas e verificadas em conjunto — a instalação resolve sem nenhum conflito de peer.
 
-| Camada    | Tecnologias                                                           |
-| --------- | --------------------------------------------------------------------- |
-| Base      | Node 24.11 · TypeScript 6.0 · pnpm 10.20 · Turborepo 2.11             |
-| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3 |
-| Frontend  | Vite 8.3 · React 19.3 · Tailwind CSS 4.3                              |
-| Qualidade | ESLint 10.11 · typescript-eslint 8.70 · Prettier 3.9 · Vitest 5.0     |
-| Infra     | Docker Compose                                                        |
+| Camada    | Tecnologias                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------- |
+| Base      | Node 24.11 · TypeScript 6.0 · pnpm 10.20 · Turborepo 2.11                                                           |
+| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3                                               |
+| Frontend  | Vite 8.3 · React 19.3 · Tailwind CSS 4.3 · React Router 8.4 · TanStack Query 5 · Zustand 5.0 · React Hook Form 7.89 |
+| Qualidade | ESLint 10.11 · typescript-eslint 8.70 · Prettier 3.9 · Vitest 5.0                                                   |
+| Infra     | Docker Compose · GitHub Actions (CI)                                                                                |
 
 **TypeScript 6, e não 7:** o TypeScript 7 já é estável, mas o `typescript-eslint` declara
 `typescript >=4.8.4 <6.1.0` e não o suporta em nenhuma versão publicada. Adotá-lo hoje custaria
 o lint com informação de tipos — a rede que sustenta a qualidade do projeto. A decisão está
 registrada em [ARCHITECTURE.md](ARCHITECTURE.md#typescript-6-em-vez-de-7).
 
-Bibliotecas da stack que ainda não aparecem aqui — React Router, TanStack Query, Zustand,
-React Hook Form, Drizzle — entram no `package.json` na fase em que forem de fato usadas, para
-que as dependências declaradas correspondam ao que o código realmente importa.
+Cada biblioteca entrou no `package.json` na fase em que passou a ser usada, para que as
+dependências declaradas correspondam ao que o código realmente importa.
 
 ---
 
@@ -87,24 +86,29 @@ para o banco errado, o que é pior do que falhar na inicialização.
 
 ## Comandos
 
-| Comando            | O que faz                                           |
-| ------------------ | --------------------------------------------------- |
-| `pnpm dev`         | API e web em modo watch, em paralelo                |
-| `pnpm build`       | Build de produção de todos os pacotes               |
-| `pnpm typecheck`   | TypeScript em todo o monorepo                       |
-| `pnpm lint`        | ESLint com análise de tipos                         |
-| `pnpm test`        | Vitest em todos os pacotes — **exige `pnpm db:up`** |
-| `pnpm verify`      | typecheck + lint + test + build, na ordem           |
-| `pnpm format`      | Prettier, escrevendo                                |
-| `pnpm db:up`       | Sobe o PostgreSQL via Docker Compose                |
-| `pnpm db:down`     | Derruba os containers (o volume de dados permanece) |
-| `pnpm db:reset`    | Apaga o volume e recria do zero                     |
-| `pnpm db:logs`     | Acompanha os logs do PostgreSQL                     |
-| `pnpm db:generate` | Gera migration a partir do schema Drizzle           |
-| `pnpm db:migrate`  | Aplica as migrations no banco                       |
-| `pnpm db:seed`     | Popula dados de demonstração (idempotente)          |
+| Comando             | O que faz                                                       |
+| ------------------- | --------------------------------------------------------------- |
+| `pnpm dev`          | API e web em modo watch, em paralelo                            |
+| `pnpm build`        | Build de produção de todos os pacotes                           |
+| `pnpm typecheck`    | TypeScript em todo o monorepo                                   |
+| `pnpm lint`         | ESLint com análise de tipos                                     |
+| `pnpm test`         | Vitest em todos os pacotes, um por vez — **exige `pnpm db:up`** |
+| `pnpm verify`       | Formatação, typecheck, lint, testes e build — o mesmo que o CI  |
+| `pnpm format`       | Prettier, escrevendo                                            |
+| `pnpm format:check` | Prettier, só conferindo                                         |
+| `pnpm db:up`        | Sobe o PostgreSQL via Docker Compose                            |
+| `pnpm db:down`      | Derruba os containers (o volume de dados permanece)             |
+| `pnpm db:reset`     | Apaga o volume e recria do zero                                 |
+| `pnpm db:logs`      | Acompanha os logs do PostgreSQL                                 |
+| `pnpm db:generate`  | Gera migration a partir do schema Drizzle                       |
+| `pnpm db:migrate`   | Aplica as migrations no banco                                   |
+| `pnpm db:seed`      | Popula dados de demonstração (idempotente)                      |
 
 Para rodar num pacote só: `pnpm --filter @repo/api test`
+
+**CI:** cada PR e cada commit na `main` passam por formatação, typecheck, lint, testes e build no
+GitHub Actions (`.github/workflows/ci.yml`), com o PostgreSQL subindo pelo mesmo
+`docker-compose.yml`. Como reproduzir na sua máquina: [DEVELOPMENT.md](DEVELOPMENT.md#ci).
 
 Os testes da API rodam contra um PostgreSQL real, no banco `cardapio_test` — separado do de
 desenvolvimento. É proposital: as policies de isolamento entre tenants não podem ser
