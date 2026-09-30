@@ -107,9 +107,18 @@ export async function registerRealtime(instance: FastifyInstance): Promise<void>
             socket.close(resultado.codigo, resultado.motivo)
             return
           }
-          cancelar = canal.assinar(resultado.tenantId, (evento) => {
-            socket.send(JSON.stringify(evento))
-          })
+          cancelar = canal.assinar(
+            resultado.tenantId,
+            resultado.userId,
+            (evento) => {
+              socket.send(JSON.stringify(evento))
+            },
+            // Desativado ou com o papel alterado: fecha já, e o painel se
+            // autentica de novo com o que valer agora.
+            () => {
+              socket.close(SESSAO_INVALIDA, 'sessão alterada')
+            },
+          )
           expira = setTimeout(
             () => {
               socket.close(SESSAO_INVALIDA, 'sessão expirada')

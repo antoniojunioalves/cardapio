@@ -4,6 +4,7 @@ import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js'
 import { cabeMaisUmUsuario } from '../plans/limits.js'
 import { usoDeUsuarios } from '../plans/service.js'
+import { avisarPedido } from '../realtime/notify.js'
 import type { TenantContext } from '../tenant/context.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
 import {
@@ -133,6 +134,8 @@ export async function alterarUsuario(
       const papel = await buscarPapel(tx, dados.role)
       if (!papel) throw new AppError('Papel desconhecido.', 400, 'UNKNOWN_ROLE')
       await definirPapel(tx, context.tenantId, id, papel.id)
+      // As permissões mudaram: a conexão ao vivo se autentica de novo.
+      await avisarPedido(tx, { tipo: 'USUARIO_ALTERADO', tenantId: context.tenantId, userId: id })
     }
     if (dados.name !== undefined) await alterarNome(tx, id, dados.name)
 
@@ -173,6 +176,8 @@ export async function desativarUsuario(
 
     await definirAtivo(tx, id, false)
     await revogarSessoes(tx, id)
+    // Fecha a conexão ao vivo dele já, e não quando o token expirar.
+    await avisarPedido(tx, { tipo: 'USUARIO_ALTERADO', tenantId: context.tenantId, userId: id })
     await recordAudit(tx, context, {
       action: 'user.deactivated',
       entityType: 'user',

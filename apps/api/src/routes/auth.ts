@@ -1,13 +1,19 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { currentUser, requireAuth } from '../auth/middleware.js'
-import { login, logout, refreshSession } from '../auth/service.js'
+import { login, logout, refreshSession, type Session } from '../auth/service.js'
+import { env, isProduction } from '../config/env.js'
+import { UnauthorizedError } from '../lib/errors.js'
 
+/**
+ * A resposta de login e renovação. **Sem o refresh token:** ele vai só no
+ * cookie `httpOnly`, que o JavaScript da página não lê — um script injetado
+ * não tem como roubá-lo.
+ */
 const sessaoSchema = z.object({
   accessToken: z.string(),
-  refreshToken: z.string(),
   user: z.object({
     id: z.uuid(),
     tenantId: z.uuid(),
@@ -24,7 +30,39 @@ const loginSchema = z.object({
   password: z.string().min(1).max(256),
 })
 
-const refreshSchema = z.object({ refreshToken: z.string().min(1) })
+/**
+ * O refresh token vem do cookie. O corpo é alternativa para clientes de API
+ * sem cookie (scripts, Postman); o navegador nunca o manda por ali.
+ */
+// `nullish`: sem corpo, o Fastify entrega `null` — é o caso do navegador.
+const refreshSchema = z.object({ refreshToken: z.string().min(1).optional() }).nullish()
+
+export const COOKIE_DE_SESSAO = 'refresh_token'
+
+/**
+ * - `httpOnly`: invisível ao JavaScript da página.
+ * - `sameSite: strict`: não vai em requisição originada em outro site — sem
+ *   isso, uma página qualquer poderia disparar a renovação em nome de quem
+ *   está logado.
+ * - `path`: só as rotas de autenticação recebem o cookie.
+ * - `secure` em produção: só por HTTPS.
+ */
+const opcoesDoCookie = {
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  path: '/api/v1/auth',
+  secure: isProduction,
+  maxAge: env.JWT_REFRESH_TTL_DAYS * 24 * 60 * 60,
+}
+
+function tokenDaRequisicao(request: FastifyRequest<{ Body: z.infer<typeof refreshSchema> }>) {
+  return request.cookies[COOKIE_DE_SESSAO] ?? request.body?.refreshToken ?? ''
+}
+
+function responderSessao(reply: FastifyReply, sessao: Session) {
+  void reply.setCookie(COOKIE_DE_SESSAO, sessao.refreshToken, opcoesDoCookie)
+  return { accessToken: sessao.accessToken, user: sessao.user }
+}
 
 export function authRoutes(instance: FastifyInstance): void {
   const typed = instance.withTypeProvider<ZodTypeProvider>()
@@ -42,7 +80,7 @@ export function authRoutes(instance: FastifyInstance): void {
       // força bruta bateria, e o custo do argon2 sozinho não a impede.
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     },
-    async (request) => login(request.body),
+    async (request, reply) => responderSessao(reply, await login(request.body)),
   )
 
   typed.post(
@@ -56,7 +94,11 @@ export function authRoutes(instance: FastifyInstance): void {
       },
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     },
-    async (request) => refreshSession(request.body.refreshToken),
+    async (request, reply) => {
+      const token = tokenDaRequisicao(request)
+      if (!token) throw new UnauthorizedError('Sessão inválida.')
+      return responderSessao(reply, await refreshSession(token))
+    },
   )
 
   typed.post(
@@ -70,7 +112,11 @@ export function authRoutes(instance: FastifyInstance): void {
       },
     },
     async (request, reply) => {
-      await logout(request.body.refreshToken)
+      const token = tokenDaRequisicao(request)
+      if (token) await logout(token)
+      // Os mesmos atributos da criação, para apagar exatamente aquele cookie.
+      const { maxAge: _maxAge, ...atributos } = opcoesDoCookie
+      void reply.clearCookie(COOKIE_DE_SESSAO, atributos)
       return reply.status(204).send(null)
     },
   )
@@ -84,7 +130,7 @@ export function authRoutes(instance: FastifyInstance): void {
         response: { 200: sessaoSchema.shape.user },
         security: [{ bearerAuth: [] }],
       },
-      preHandler: requireAuth(),
+      onRequest: requireAuth(),
     },
     (request) => currentUser(request),
   )

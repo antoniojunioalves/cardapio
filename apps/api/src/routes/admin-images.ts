@@ -29,7 +29,7 @@ export function adminImageRoutes(instance: FastifyInstance): void {
           response: { 200: configuracoesSchema },
           security: [{ bearerAuth: [] }],
         },
-        preHandler: requireAuth('settings:update'),
+        onRequest: requireAuth('settings:update'),
       },
       async (request) => {
         const conteudo = await lerArquivo(request)
@@ -53,7 +53,7 @@ export function adminImageRoutes(instance: FastifyInstance): void {
           response: { 200: configuracoesSchema },
           security: [{ bearerAuth: [] }],
         },
-        preHandler: requireAuth('settings:update'),
+        onRequest: requireAuth('settings:update'),
       },
       async (request) =>
         apresentarConfiguracoes(

@@ -44,7 +44,6 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Convite de usuário por e-mail e troca de senha pela própria pessoa — hoje o dono define a senha
   inicial
 - Transferência da posse do estabelecimento (papel `OWNER`)
-- Fechar na hora a conexão ao vivo de um usuário desativado — hoje ela dura até o token expirar
 
 - OTP por SMS e WhatsApp
 - Login via WhatsApp
@@ -54,7 +53,6 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Autenticação em dois fatores para usuários administrativos
 - Bloqueio temporário de conta após N tentativas falhas — hoje há apenas o limite por IP
 - Histórico de senhas, para impedir reuso da anterior
-- Refresh token do painel em cookie `httpOnly`, em vez do `localStorage` (SECURITY.md)
 - **Conta de cliente final, com os dados completos no checkout.** Hoje o cliente é reconhecido só
   pelo telefone, e por isso o checkout mostra apenas o primeiro nome e os endereços mascarados
   (SECURITY.md, seção 5): telefone não prova quem está digitando. Com o cliente **logado na
@@ -203,6 +201,9 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Internacionalização _(o MVP é pt-BR, sem biblioteca de i18n)_
 
 ## Infraestrutura
+
+- Content-Security-Policy da aplicação web no servidor que a hospedar — a API já manda a sua; a
+  da web depende do deploy (o Vite de desenvolvimento usa scripts inline)
 
 - Storage externo (S3 ou equivalente), atrás do `StorageService` que já existe
 - **Processamento de imagem no upload:** remover metadados EXIF (podem conter a localização GPS

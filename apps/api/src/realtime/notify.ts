@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm'
 import pg from 'pg'
 
 import type { TenantTransaction } from '../tenant/with-tenant.js'
-import type { EventoDePedido } from './channel.js'
+import type { EventoDoCanal } from './channel.js'
 
 /**
  * Eventos de pedido pelo `LISTEN`/`NOTIFY` do PostgreSQL.
@@ -21,17 +21,20 @@ import type { EventoDePedido } from './channel.js'
 
 export const CANAL = 'pedidos'
 
-export async function avisarPedido(tx: TenantTransaction, evento: EventoDePedido): Promise<void> {
+export async function avisarPedido(tx: TenantTransaction, evento: EventoDoCanal): Promise<void> {
   await tx.execute(sql`select pg_notify(${CANAL}, ${JSON.stringify(evento)})`)
 }
 
-function lerEvento(texto: string | undefined): EventoDePedido | null {
+function lerEvento(texto: string | undefined): EventoDoCanal | null {
   if (!texto) return null
   try {
-    const dado = JSON.parse(texto) as Partial<EventoDePedido>
-    if (typeof dado.tenantId !== 'string' || typeof dado.pedidoId !== 'string') return null
+    const dado = JSON.parse(texto) as Record<string, unknown>
+    if (typeof dado.tenantId !== 'string') return null
+    if (dado.tipo === 'USUARIO_ALTERADO') {
+      return typeof dado.userId === 'string' ? (dado as unknown as EventoDoCanal) : null
+    }
     if (dado.tipo !== 'PEDIDO_CRIADO' && dado.tipo !== 'STATUS_MUDOU') return null
-    return dado as EventoDePedido
+    return typeof dado.pedidoId === 'string' ? (dado as unknown as EventoDoCanal) : null
   } catch {
     return null
   }
@@ -56,7 +59,7 @@ interface Registro {
  */
 export function ouvirPedidos(
   connectionString: string,
-  aoReceber: (evento: EventoDePedido) => void,
+  aoReceber: (evento: EventoDoCanal) => void,
   log: Registro,
 ): Ouvinte {
   let cliente: pg.Client | null = null
@@ -91,6 +94,7 @@ export function ouvirPedidos(
 
     try {
       await novo.connect()
+      // `CANAL` é constante do código: nada de fora entra neste texto.
       await novo.query(`LISTEN ${CANAL}`)
       espera = 1000
       log.info({ canal: CANAL }, 'escutando eventos de pedido')

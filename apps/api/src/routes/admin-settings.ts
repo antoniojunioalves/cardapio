@@ -245,7 +245,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: configuracoesSchema },
         security: seguranca,
       },
-      preHandler: requireAuth(LER),
+      onRequest: requireAuth(LER),
     },
     async (request) =>
       apresentarConfiguracoes(await obterConfiguracoes(tenantContextOf(request)), storage),
@@ -261,7 +261,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: configuracoesSchema },
         security: seguranca,
       },
-      preHandler: requireAuth(ESCREVER),
+      onRequest: requireAuth(ESCREVER),
     },
     async (request) =>
       apresentarConfiguracoes(
@@ -283,7 +283,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(horarioDeSaida) },
         security: seguranca,
       },
-      preHandler: requireAuth(LER),
+      onRequest: requireAuth(LER),
     },
     async (request) => obterHorarios(tenantContextOf(request)),
   )
@@ -300,7 +300,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(horarioDeSaida) },
         security: seguranca,
       },
-      preHandler: requireAuth(ESCREVER),
+      onRequest: requireAuth(ESCREVER),
     },
     async (request) =>
       substituirHorarios(
@@ -319,7 +319,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: entregaSchema },
         security: seguranca,
       },
-      preHandler: requireAuth(LER),
+      onRequest: requireAuth(LER),
     },
     async (request) => obterEntrega(tenantContextOf(request)),
   )
@@ -334,7 +334,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: entregaSchema },
         security: seguranca,
       },
-      preHandler: requireAuth(ESCREVER),
+      onRequest: requireAuth(ESCREVER),
     },
     async (request) =>
       substituirEntrega(tenantContextOf(request), currentUser(request).id, request.body),
@@ -349,7 +349,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(formaDePagamentoSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth(LER),
+      onRequest: requireAuth(LER),
     },
     async (request) => obterFormasDePagamento(tenantContextOf(request)),
   )
@@ -364,7 +364,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: z.array(formaDePagamentoSchema) },
         security: seguranca,
       },
-      preHandler: requireAuth(ESCREVER),
+      onRequest: requireAuth(ESCREVER),
     },
     async (request) =>
       definirFormasDePagamento(
@@ -385,7 +385,7 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         response: { 200: statusSchema },
         security: seguranca,
       },
-      preHandler: requireAuth(LER),
+      onRequest: requireAuth(LER),
     },
     async (request) => obterStatus(tenantContextOf(request)),
   )

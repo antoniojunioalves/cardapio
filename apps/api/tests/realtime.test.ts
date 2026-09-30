@@ -161,8 +161,8 @@ describe('canal por estabelecimento', () => {
     const canal = new CanalDePedidos()
     const recebidosA: unknown[] = []
     const recebidosB: unknown[] = []
-    const cancelarA = canal.assinar('a', (m) => recebidosA.push(m))
-    canal.assinar('b', (m) => recebidosB.push(m))
+    const cancelarA = canal.assinar('a', 'u1', (m) => recebidosA.push(m))
+    canal.assinar('b', 'u2', (m) => recebidosB.push(m))
 
     canal.publicar({ tipo: 'PEDIDO_CRIADO', tenantId: 'a', pedidoId: 'p1', numero: 1 })
     expect(recebidosA).toEqual([{ type: 'order.created', orderId: 'p1', number: 1 }])
@@ -172,6 +172,43 @@ describe('canal por estabelecimento', () => {
     canal.publicar({ tipo: 'PEDIDO_CRIADO', tenantId: 'a', pedidoId: 'p2', numero: 2 })
     expect(recebidosA).toHaveLength(1)
     expect(canal.totalDeAssinaturas()).toBe(1)
+  })
+})
+
+describe('usuário alterado', () => {
+  it('fecha só as conexões daquele usuário, e não entrega nada a ninguém', () => {
+    const canal = new CanalDePedidos()
+    const encerradas: string[] = []
+    const recebidas: unknown[] = []
+    canal.assinar(
+      'a',
+      'u1',
+      (m) => recebidas.push(m),
+      () => encerradas.push('u1-celular'),
+    )
+    canal.assinar(
+      'a',
+      'u1',
+      (m) => recebidas.push(m),
+      () => encerradas.push('u1-tablet'),
+    )
+    canal.assinar(
+      'a',
+      'u2',
+      (m) => recebidas.push(m),
+      () => encerradas.push('u2'),
+    )
+    canal.assinar(
+      'b',
+      'u1',
+      (m) => recebidas.push(m),
+      () => encerradas.push('outro-tenant'),
+    )
+
+    canal.publicar({ tipo: 'USUARIO_ALTERADO', tenantId: 'a', userId: 'u1' })
+
+    expect(encerradas).toEqual(['u1-celular', 'u1-tablet'])
+    expect(recebidas).toEqual([])
   })
 })
 

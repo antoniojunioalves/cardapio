@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
+import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type RouteOptions } from 'fastify'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
 
 import { env } from './config/env.js'
@@ -31,6 +32,8 @@ export interface BuildAppOptions {
   checkDatabase?: () => Promise<DatabaseCheck>
   /** Desliga o limite de requisições em testes que fazem muitas chamadas. */
   rateLimit?: boolean
+  /** Recebe cada rota registrada — é o inventário que o teste-guarda de rotas confere. */
+  aoRegistrarRota?: (rota: RouteOptions) => void
 }
 
 /**
@@ -49,14 +52,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // complexidade que não se justifica por um rótulo.
     requestIdHeader: 'x-request-id',
     genReqId: () => randomUUID(),
+    // Ver `TRUST_PROXY` em config/env.ts: define de onde vem o IP dos limites.
+    trustProxy: env.TRUST_PROXY,
+    bodyLimit: env.JSON_BODY_LIMIT_BYTES,
   })
 
   // Os schemas Zod das rotas passam a valer tanto para validar a entrada
   // quanto para serializar a saída e gerar o OpenAPI.
+  if (options.aoRegistrarRota) {
+    const registrar = options.aoRegistrarRota
+    instance.addHook('onRoute', (rota) => {
+      registrar(rota)
+    })
+  }
+
   instance.setValidatorCompiler(validatorCompiler)
   instance.setSerializerCompiler(serializerCompiler)
 
   await instance.register(helmet)
+  await instance.register(cookie)
   await instance.register(cors, {
     origin: env.WEB_ORIGIN,
     credentials: true,

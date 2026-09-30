@@ -22,6 +22,7 @@ import {
   criarTenantComUsuario,
   removerTenantDeTeste,
   SENHA_PADRAO,
+  sessaoDe,
   type TenantDeTeste,
 } from './helpers/fixtures.js'
 
@@ -173,10 +174,9 @@ describe('desativar', () => {
     await liberarVagas()
     const { resposta, email } = await criar('STAFF')
     const id = resposta.json<Usuario>().id
-    const sessao = (await entrar(loja.slug, email, 'senha-inicial-123')).json<{
-      accessToken: string
-      refreshToken: string
-    }>()
+    const sessao = sessaoDe<{ accessToken: string }>(
+      await entrar(loja.slug, email, 'senha-inicial-123'),
+    )
 
     expect((await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)).statusCode).toBe(200)
 
@@ -204,6 +204,52 @@ describe('desativar', () => {
     const proprio = await chamar('POST', `/users/${loja.userId}/deactivate`, tokenDoDono)
     expect(proprio.statusCode).toBe(409)
     expect(proprio.json()).toMatchObject({ error: { code: 'CANNOT_DEACTIVATE_SELF' } })
+  })
+})
+
+describe('conexão ao vivo', () => {
+  /** Conecta o painel ao vivo com o token e espera o `ready`. */
+  async function aoVivo(token: string) {
+    const ws = await app.injectWS('/api/v1/admin/orders/stream')
+    const eventos: { tipo: 'mensagem' | 'fechou'; valor: string | number }[] = []
+    ws.on('message', (d: Buffer) => eventos.push({ tipo: 'mensagem', valor: d.toString() }))
+    ws.on('close', (codigo: number) => eventos.push({ tipo: 'fechou', valor: codigo }))
+    ws.send(JSON.stringify({ type: 'auth', token }))
+    const ate = async (fn: () => boolean) => {
+      const limite = Date.now() + 3000
+      while (!fn() && Date.now() < limite) await new Promise((r) => setTimeout(r, 20))
+    }
+    await ate(() => eventos.length > 0)
+    expect(eventos[0]?.valor).toBe('{"type":"ready"}')
+    return { ws, eventos, ate }
+  }
+
+  it('desativar o usuário fecha a conexão ao vivo dele na hora', async () => {
+    await liberarVagas()
+    const { resposta, email } = await criar('STAFF')
+    const token = sessaoDe<{ accessToken: string }>(
+      await entrar(loja.slug, email, 'senha-inicial-123'),
+    ).accessToken
+    const conexao = await aoVivo(token)
+
+    await chamar('POST', `/users/${resposta.json<Usuario>().id}/deactivate`, tokenDoDono)
+
+    await conexao.ate(() => conexao.eventos.some((e) => e.tipo === 'fechou'))
+    expect(conexao.eventos.find((e) => e.tipo === 'fechou')?.valor).toBe(4001)
+  })
+
+  it('mudar o papel também fecha, para a conexão voltar com as permissões novas', async () => {
+    await liberarVagas()
+    const { resposta, email } = await criar('STAFF')
+    const token = sessaoDe<{ accessToken: string }>(
+      await entrar(loja.slug, email, 'senha-inicial-123'),
+    ).accessToken
+    const conexao = await aoVivo(token)
+
+    await chamar('PATCH', `/users/${resposta.json<Usuario>().id}`, tokenDoDono, { role: 'ADMIN' })
+
+    await conexao.ate(() => conexao.eventos.some((e) => e.tipo === 'fechou'))
+    expect(conexao.eventos.find((e) => e.tipo === 'fechou')?.valor).toBe(4001)
   })
 })
 

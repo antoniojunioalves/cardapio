@@ -17,6 +17,19 @@ export type EventoDePedido =
       status: string
     }
 
+/**
+ * O usuário foi desativado ou teve o papel alterado: as conexões dele fecham
+ * na hora, e o painel se autentica de novo — recusado se desativado, com as
+ * permissões novas se o papel mudou.
+ */
+export interface EventoDeUsuario {
+  tipo: 'USUARIO_ALTERADO'
+  tenantId: string
+  userId: string
+}
+
+export type EventoDoCanal = EventoDePedido | EventoDeUsuario
+
 /** O que a conexão recebe: sem `tenantId`, que é interno. */
 export type MensagemAoPainel =
   | { type: 'order.created'; orderId: string; number: number }
@@ -33,29 +46,51 @@ export function mensagemAoPainel(evento: EventoDePedido): MensagemAoPainel {
       }
 }
 
-type Entregar = (mensagem: MensagemAoPainel) => void
+interface Assinatura {
+  userId: string
+  entregar: (mensagem: MensagemAoPainel) => void
+  encerrar: () => void
+}
 
 export class CanalDePedidos {
-  private readonly assinaturas = new Map<string, Set<Entregar>>()
+  private readonly assinaturas = new Map<string, Set<Assinatura>>()
 
-  /** Assina os eventos de um tenant. Devolve a função que cancela a assinatura. */
-  assinar(tenantId: string, entregar: Entregar): () => void {
-    const doTenant = this.assinaturas.get(tenantId) ?? new Set<Entregar>()
-    doTenant.add(entregar)
+  /**
+   * Assina os eventos de um tenant, em nome de um usuário. Devolve a função
+   * que cancela a assinatura.
+   */
+  assinar(
+    tenantId: string,
+    userId: string,
+    entregar: Assinatura['entregar'],
+    encerrar: Assinatura['encerrar'] = () => undefined,
+  ): () => void {
+    const assinatura: Assinatura = { userId, entregar, encerrar }
+    const doTenant = this.assinaturas.get(tenantId) ?? new Set<Assinatura>()
+    doTenant.add(assinatura)
     this.assinaturas.set(tenantId, doTenant)
 
     return () => {
-      doTenant.delete(entregar)
+      doTenant.delete(assinatura)
       if (doTenant.size === 0) this.assinaturas.delete(tenantId)
     }
   }
 
-  publicar(evento: EventoDePedido): void {
+  publicar(evento: EventoDoCanal): void {
+    const doTenant = [...(this.assinaturas.get(evento.tenantId) ?? [])]
+
+    if (evento.tipo === 'USUARIO_ALTERADO') {
+      for (const assinatura of doTenant.filter((a) => a.userId === evento.userId)) {
+        assinatura.encerrar()
+      }
+      return
+    }
+
     const mensagem = mensagemAoPainel(evento)
-    for (const entregar of this.assinaturas.get(evento.tenantId) ?? []) {
+    for (const assinatura of doTenant) {
       // Uma conexão com problema não impede as outras de receber.
       try {
-        entregar(mensagem)
+        assinatura.entregar(mensagem)
       } catch {
         /* a conexão com erro é encerrada pelo próprio socket */
       }

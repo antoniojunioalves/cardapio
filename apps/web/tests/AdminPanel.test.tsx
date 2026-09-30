@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { acoesDoPedido } from '../src/features/admin/orders'
 import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
-import { comSessao, useSessaoStore } from '../src/features/admin/session'
+import { apagarSessaoAntiga, comSessao, useSessaoStore } from '../src/features/admin/session'
 import type { PedidoDoPainel } from '../src/features/admin/types'
 import { cardapioDoZe } from './helpers/cardapio'
 import { abrir } from './helpers/pagina'
@@ -109,7 +109,6 @@ const LIVRE = plano({})
 
 const SESSAO = {
   accessToken: 'token-de-acesso',
-  refreshToken: 'lanchonete.refresh',
   user: {
     id: 'u',
     tenantId: 't',
@@ -171,7 +170,7 @@ async function abrirPainel(api: Api) {
 
 beforeEach(() => {
   localStorage.clear()
-  useSessaoStore.setState({ slug: null, refreshToken: null, usuario: null, accessToken: null })
+  useSessaoStore.setState({ slug: null, usuario: null, accessToken: null })
   WebSocketFalso.instancias = []
   vi.stubGlobal('WebSocket', WebSocketFalso)
 })
@@ -196,7 +195,7 @@ describe('login do painel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha não conferem.')
   })
 
-  it('entra, vai para os pedidos, e só o refresh token fica guardado no navegador', async () => {
+  it('entra, vai para os pedidos, e nenhum token fica guardado no navegador', async () => {
     const fetch = mockarApi({ pedidos: [] })
     abrir('/lanchonete-do-ze/admin')
 
@@ -213,8 +212,11 @@ describe('login do painel', () => {
       email: 'ze@exemplo.com',
       password: 'cardapio123',
     })
-    const guardado = localStorage.getItem('sessao-do-painel') ?? ''
-    expect(guardado).toContain('lanchonete.refresh')
+    // O refresh token fica no cookie httpOnly, que a API define — e que o
+    // login precisa aceitar (`credentials: 'include'`).
+    expect(login?.[1]?.credentials).toBe('include')
+    const guardado = localStorage.getItem('painel') ?? ''
+    expect(guardado).toContain('lanchonete-do-ze')
     expect(guardado).not.toContain('token-de-acesso')
   })
 
@@ -371,22 +373,32 @@ describe('pedidos ao vivo', () => {
   })
 
   it('sair fecha a conexão e volta ao login', async () => {
-    await abrirPainel({ pedidos: [] })
+    const fetch = await abrirPainel({ pedidos: [] })
     const socket = await ultimoSocket()
 
     fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
 
     expect(await screen.findByRole('heading', { name: 'Painel do estabelecimento' })).toBeVisible()
     expect(socket.fechadoPeloPainel).toBe(true)
-    expect(localStorage.getItem('sessao-do-painel')).not.toContain('lanchonete.refresh')
+    expect(useSessaoStore.getState().slug).toBeNull()
+    // O logout leva o cookie, para a API revogar e apagá-lo.
+    const [logout] = chamadas(fetch, '/auth/logout', 'POST')
+    expect(logout?.[1]?.credentials).toBe('include')
   })
 })
 
 describe('sessão', () => {
+  it('apaga o refresh token que versões antigas guardavam no navegador', () => {
+    localStorage.setItem('sessao-do-painel', '{"state":{"refreshToken":"antigo"}}')
+    apagarSessaoAntiga()
+    expect(localStorage.getItem('sessao-do-painel')).toBeNull()
+  })
+
   it('um 401 renova a sessão uma vez e repete a chamada', async () => {
     logar()
     let lista = 0
-    const fetch = vi.fn((url: string) => {
+    // `_init` declarado para o teste poder ler as opções da chamada.
+    const fetch = vi.fn((url: string, _init?: RequestInit) => {
       if (url.endsWith('/auth/refresh')) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(SESSAO) })
       }
@@ -401,7 +413,11 @@ describe('sessão', () => {
     vi.stubGlobal('fetch', fetch)
 
     await expect(comSessao('/api/v1/admin/orders')).resolves.toEqual([])
-    expect(fetch.mock.calls.filter(([u]) => u.endsWith('/auth/refresh'))).toHaveLength(1)
+    const renovacoes = fetch.mock.calls.filter(([u]) => u.endsWith('/auth/refresh'))
+    expect(renovacoes).toHaveLength(1)
+    // Sem corpo: o refresh token vai no cookie.
+    expect(renovacoes[0]?.[1]).toMatchObject({ method: 'POST', credentials: 'include' })
+    expect(renovacoes[0]?.[1]).not.toHaveProperty('body')
   })
 
   it('chamadas simultâneas sem token dividem uma renovação só', async () => {
@@ -436,7 +452,7 @@ describe('sessão', () => {
     )
 
     await expect(comSessao('/a')).rejects.toThrow()
-    expect(useSessaoStore.getState().refreshToken).toBeNull()
+    expect(useSessaoStore.getState().slug).toBeNull()
   })
 })
 

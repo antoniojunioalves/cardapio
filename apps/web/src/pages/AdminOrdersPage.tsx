@@ -31,7 +31,7 @@ const INDICADOR: Record<EstadoDaConexao, { texto: string; classe: string }> = {
 export function AdminOrdersPage() {
   const { tenantSlug = '' } = useParams()
   const sessao = useSessaoStore()
-  const logado = sessao.slug === tenantSlug && sessao.refreshToken !== null
+  const logado = sessao.slug === tenantSlug && sessao.usuario !== null
 
   const queryClient = useQueryClient()
   const consulta = usePedidosDoPainel(tenantSlug, logado)

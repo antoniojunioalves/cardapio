@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
-import { env } from '../config/env.js'
+import { env, isProduction } from '../config/env.js'
 import type { DatabaseCheck } from '../db/index.js'
 
 const databaseCheckSchema = z.object({
@@ -25,6 +25,16 @@ const readySchema = z.object({
   checks: z.object({ database: databaseCheckSchema }),
   timestamp: z.string(),
 })
+
+/**
+ * O que a sonda pública pode dizer do banco. O motivo da falha
+ * (`connect ECONNREFUSED 10.0.3.4:5432`) revela a rede interna: em produção
+ * ele fica só no log.
+ */
+export function verificacaoPublica(database: DatabaseCheck, revelarMotivo: boolean): DatabaseCheck {
+  if (revelarMotivo || database.message === undefined) return database
+  return { status: database.status, latencyMs: database.latencyMs }
+}
 
 export interface HealthRoutesOptions {
   /**
@@ -78,13 +88,14 @@ export function healthRoutes(instance: FastifyInstance, options: HealthRoutesOpt
         response: { 200: readySchema, 503: readySchema },
       },
     },
-    async (_request, reply) => {
+    async (request, reply) => {
       const database = await options.checkDatabase()
       const ready = database.status === 'ok'
+      if (!ready) request.log.error({ database }, 'banco indisponível na sonda de prontidão')
 
       return reply.status(ready ? 200 : 503).send({
         status: ready ? ('ready' as const) : ('unavailable' as const),
-        checks: { database },
+        checks: { database: verificacaoPublica(database, !isProduction) },
         timestamp: new Date().toISOString(),
       })
     },

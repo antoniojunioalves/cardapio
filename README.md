@@ -9,7 +9,8 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 14 concluída.** O cliente final já vê o cardápio, monta o carrinho, envia o
+**Status atual: Fase 15 concluída.** Faltam as telas de gestão para fechar o MVP (ver
+[PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
 de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a sábado) ou a

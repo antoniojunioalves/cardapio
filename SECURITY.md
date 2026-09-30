@@ -90,6 +90,10 @@ mesmos testes se repetem. Recurso sem eles não é considerado pronto.
   explícitos no código. O salt é aleatório por senha e vai embutido no hash.
 - **Token de acesso** JWT HS256 de 15 minutos; **refresh token** opaco de 30 dias, guardado
   apenas como hash SHA-256.
+- **Refresh token em cookie `httpOnly`**, `SameSite=Strict`, só em `/api/v1/auth`, `Secure` em
+  produção. Nunca vai no corpo da resposta nem fica no `localStorage`.
+- **`requireAuth` em `onRequest`:** o 401 vem antes de o corpo ser lido e validado. Um
+  teste-guarda percorre o inventário de rotas e exige isso de toda rota do painel.
 - **Rotação de refresh com detecção de reuso:** reapresentar um token já rotacionado revoga
   todas as sessões do usuário.
 - **Lista de algoritmos fixa** na verificação do JWT — fecha a família de ataques de confusão de
@@ -246,7 +250,7 @@ completo de um endereço salvo só na mensagem depois do OTP (ROADMAP).
   do token — há teste com duas lojas conectadas ao mesmo tempo.
 - O token vai na primeira mensagem, nunca na URL. Exige `orders:read`; usuário desativado não
   entra, porque o usuário é recarregado do banco como no `requireAuth`. A conexão fecha quando o
-  token expira.
+  token expira — e **na hora** quando o usuário é desativado ou tem o papel alterado.
 - A origem é conferida no handshake: o navegador não aplica CORS a WebSocket.
 - O aviso leva só ids; os dados vêm da API REST, com permissão e RLS.
 
@@ -258,19 +262,18 @@ completo de um endereço salvo só na mensagem depois do OTP (ROADMAP).
 - O papel `OWNER` não é dado nem tirado pela API; ninguém muda o próprio papel nem se desativa;
   só o dono altera a conta do dono.
 - **Desativar encerra o acesso na hora**: o token de acesso para de valer na próxima requisição
-  (o usuário é recarregado a cada uma) e todos os refresh tokens dele são revogados. A conexão
-  ao vivo aberta dura até o token expirar (no máximo 15 minutos) e não reconecta.
+  (o usuário é recarregado a cada uma), todos os refresh tokens dele são revogados e a conexão
+  ao vivo dele fecha na hora.
 - Senha inicial definida pelo dono (mínimo de 8 caracteres), com argon2id; a resposta nunca traz
   o hash. E-mail repetido no estabelecimento é recusado.
 - Usuário de outro estabelecimento responde 404.
 
-### Sessão do painel no navegador — **dívida**
+### Sessão do painel no navegador — **em vigor**
 
-O token de acesso fica só na memória da página. O **refresh token fica no `localStorage`**, para
-o tablet da cozinha continuar logado depois de recarregar — e um script injetado na página (XSS)
-poderia lê-lo. Mitigações: rotação a cada uso com detecção de reuso (reapresentar um token já
-usado revoga todas as sessões do usuário), validade de 30 dias e "Sair" revogando no servidor. A
-quitação é levar o refresh token para um cookie `httpOnly` (ROADMAP).
+O token de acesso fica só na memória da página; o refresh token, no cookie `httpOnly` — o
+tablet da cozinha continua logado depois de recarregar, e um script injetado não tem como ler o
+token. Quitada na Fase 15 a dívida de quando ele ficava no `localStorage`; a chave antiga é
+apagada ao carregar o painel.
 
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
@@ -280,10 +283,14 @@ cancelamento.
 
 | Item             | Estado                                                                                               |
 | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)                           |
+| Security headers | **Ativo** — `@fastify/helmet` (CSP, HSTS, `X-Content-Type-Options`, frameguard), com teste           |
 | CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga; libera GET, HEAD, POST, PUT, PATCH e DELETE        |
 | Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone e no envio de pedido |
 | Documentação     | **Ativo** — `/docs` desabilitado em produção                                                         |
+| IP de quem chama | **Explícito** — `TRUST_PROXY`: ligado só atrás de proxy; desligado, `X-Forwarded-For` é ignorado     |
+| Tamanho do corpo | **Ativo** — 64 KB para JSON (`JSON_BODY_LIMIT_BYTES`); upload com limite próprio                     |
+| Logs             | **Ativo** — sem `authorization`, cookies, senha, hash, token de acesso e refresh token, com teste    |
+| Sondas           | **Ativo** — `/ready` não revela o motivo da falha do banco em produção                               |
 | HTTPS            | Responsabilidade do ambiente de deploy                                                               |
 
 O limite global conta na memória do processo. Com mais de uma instância em produção isso vira um

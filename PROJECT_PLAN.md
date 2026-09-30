@@ -1,8 +1,8 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-29
-**Fase atual:** 14 — concluída, aguardando validação (12, 13 e 14)
-**Próxima:** Fase 15 — testes de segurança, hardening e refinamento
+**Fase atual:** 15 — concluída, aguardando validação
+**Próxima:** a definir — as telas de gestão que faltam para o MVP (ver "O que falta para o MVP")
 
 ---
 
@@ -42,8 +42,14 @@ há 10% de tolerância e, depois, o cardápio para de receber pedidos — dizend
 recebendo pedidos", sem citar o plano. Usuários do painel são criados, alterados, desativados e
 reativados pela API, dentro do limite de usuários ativos do plano.
 
-**Ainda não existe:** tela para cardápio, configurações e usuários — o lojista ainda configura
-tudo pela API.
+**As fronteiras foram revisadas (Fase 15).** O refresh token do painel saiu do `localStorage` e
+foi para um cookie `httpOnly`; toda rota do painel recusa quem não está logado antes de ler o
+corpo, e um teste-guarda confere isso pelo inventário de rotas; desativar ou mudar o papel de um
+usuário fecha a conexão ao vivo dele na hora.
+
+**Ainda não existe:** tela para cardápio, configurações e usuários, e a criação de
+estabelecimento pelo Super Admin — o lojista ainda configura tudo pela API. Ver "O que falta
+para o MVP".
 
 ---
 
@@ -68,7 +74,7 @@ tudo pela API.
 | 12  | WhatsApp                                                                                                            | ✅ Concluída |
 | 13  | WebSocket e pedidos em tempo real                                                                                   | ✅ Concluída |
 | 14  | Limites por plano                                                                                                   | ✅ Concluída |
-| 15  | Testes de segurança, hardening e refinamento                                                                        | ⬜           |
+| 15  | Testes de segurança, hardening e refinamento                                                                        | ✅ Concluída |
 
 Três movimentos em relação à ordem sugerida originalmente, cada um porque algo posterior
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
@@ -77,86 +83,88 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 14 — concluída
+## Fase 15 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                             | Status |
-| --- | -------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Regra dos limites, pura (`plans/limits.ts`): aviso a 80%, tolerância de 10%, início do mês no fuso | ✅     |
-| 2   | Plano da assinatura ativa, pedidos do mês e usuários ativos (`plans/repository.ts`)                | ✅     |
-| 3   | Cardápio com `NAO_RECEBENDO` passada a tolerância; o pedido é recusado pela mesma montagem         | ✅     |
-| 4   | `GET /api/v1/admin/plan`: uso do plano para qualquer usuário logado                                | ✅     |
-| 5   | Gestão de usuários: listar, criar, alterar, desativar (revogando sessões) e reativar               | ✅     |
-| 6   | Limite de usuários ativos na criação e na reativação                                               | ✅     |
-| 7   | Web: texto neutro no cardápio bloqueado e aviso do plano no painel                                 | ✅     |
-| 8   | Testes: 10 de limites e bloqueio, 12 de usuários na API; 4 no web                                  | ✅     |
+| #   | Tarefa                                                                                            | Status |
+| --- | ------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Refresh token em cookie `httpOnly`, `SameSite=Strict`, só em `/api/v1/auth`, `Secure` em produção | ✅     |
+| 2   | Painel sem o refresh token no navegador; apaga o que a versão anterior guardava                   | ✅     |
+| 3   | `requireAuth` em `onRequest`: 401 antes de ler e validar o corpo                                  | ✅     |
+| 4   | Teste-guarda por inventário: rota do painel exige login; rota aberta precisa estar na lista       | ✅     |
+| 5   | Desativar ou mudar o papel fecha a conexão ao vivo do usuário na hora                             | ✅     |
+| 6   | `TRUST_PROXY` explícito: o IP dos limites não é escolhido pelo cliente                            | ✅     |
+| 7   | Limite de 64 KB no corpo JSON (upload de imagem com limite próprio)                               | ✅     |
+| 8   | Logs sem refresh token, token de acesso, hash de senha e `set-cookie`                             | ✅     |
+| 9   | `/ready` sem o motivo da falha do banco em produção                                               | ✅     |
+| 10  | Testes de cabeçalhos, tamanho do corpo, IP, log e sonda                                           | ✅     |
 
-### Decisões desta fase
+### Decisões e achados desta fase
 
-Três decisões do Junio, tomadas antes de implementar:
+**Achado: 15 rotas do painel respondiam 400, e não 401, a quem não estava logado.** O Fastify
+valida o corpo antes do `preHandler`, que era onde o `requireAuth` rodava: quem não se
+identificou recebia o formato esperado da rota, e o servidor lia o corpo dele. O teste-guarda
+novo pegou isso na primeira execução. A autenticação passou para `onRequest`, antes de tudo.
 
-**Pedidos: tolerância e depois bloqueio.** O painel avisa a partir de 80% do limite; atingido o
-limite, ainda há 10% de tolerância (110 no plano Gratuito de 100); passada ela, o cardápio passa
-a mostrar "não está recebendo pedidos". Como o pedido é calculado sobre a montagem do cardápio,
-ele é recusado pela mesma regra — e o cliente vê o aviso no cardápio antes de montar o carrinho.
+**Refresh token em cookie `httpOnly`** — quita a dívida da Fase 13. O JavaScript da página não o
+vê; `SameSite=Strict` impede que outra página dispare a renovação; o cookie só vai para
+`/api/v1/auth`. As respostas de login e renovação não trazem mais o token no corpo. A renovação
+e o logout ainda aceitam o token no corpo, como alternativa para clientes de API sem cookie
+(Postman, scripts). A chave antiga do `localStorage` é apagada ao carregar o painel.
 
-**Cancelados contam.** Cancelar não devolve a vaga; senão bastaria cancelar pedidos para nunca
-atingir o limite.
+**Conexão ao vivo fecha na hora** ao desativar ou mudar o papel de alguém — um aviso
+`USUARIO_ALTERADO` pelo mesmo `LISTEN`/`NOTIFY` dos pedidos. O painel dessa pessoa tenta renovar:
+desativada, volta ao login; com papel novo, reconecta com as permissões novas.
 
-**Gestão de usuários entrou nesta fase**, porque o limite de usuários não tinha onde ser aplicado.
+**Achado: atrás de um proxy, os limites por IP virariam um limite único para todos.** Sem
+`trustProxy`, todo cliente aparece com o IP do proxy. Com ele ligado sem proxy, qualquer cliente
+escolhe o próprio IP pelo `X-Forwarded-For`. Por isso é explícito (`TRUST_PROXY`, desligado por
+padrão), com teste de que um `X-Forwarded-For` inventado não escapa do limite.
 
-E as minhas:
+**Achado: o `/ready` público revelava a rede interna** quando o banco caía
+(`connect ECONNREFUSED 10.0.3.4:5432`). Em produção o motivo vai só para o log.
 
-**O cardápio não cita o plano.** O motivo público é `NAO_RECEBENDO`, com o texto "não está
-recebendo pedidos pela internet agora" — pela mesma razão de o estabelecimento suspenso responder
-como inexistente: a situação comercial dele não é assunto de quem abre o cardápio. O painel, que
-o lojista lê, diz tudo.
+**Limite do corpo JSON: 64 KB**, configurável. O maior pedido legítimo fica bem abaixo; o upload
+de imagem tem o limite próprio, e um teste garante que uma foto de 300 KB continua passando.
 
-**O mês é o do calendário, no fuso do estabelecimento**, calculado pelo `Intl` — um teste cobre
-a virada de mês em São Paulo e o horário de verão de Nova York.
-
-**Sem assinatura ativa, nada é limitado.** Ainda não há cobrança, e todo estabelecimento do seed
-tem assinatura. Recurso desligado no plano vale como limite zero; ligado sem valor, ilimitado.
-
-**Usuário: limite exato, sem tolerância.** É o dono quem cria, e ele pode desativar alguém para
-abrir vaga. Só os ativos contam.
-
-**Regras de usuário que permissão não cobre:** o papel `OWNER` não é dado nem tirado pela API;
-ninguém muda o próprio papel nem se desativa; só o dono mexe na conta do dono. Desativar e
-reativar exigem `users:delete`, que o ADMIN não tem — tirar e devolver acesso é decisão de dono.
-
-**Desativar revoga as sessões.** O token de acesso para de valer na próxima requisição (o usuário
-é recarregado a cada uma), e todos os refresh tokens são revogados — segunda barreira, porque a
-renovação já recusa usuário inativo. Um teste confere as duas.
-
-**Senha inicial definida pelo dono**, sem convite por e-mail — não há envio de e-mail ainda.
-
-**Sem tela de usuários.** A decisão foi pelas rotas; a tela entra com as demais telas de gestão.
-
-**A corrida no limite fica com a tolerância.** Dois pedidos simultâneos no último lugar podem
-passar ambos; a tolerância absorve isso sem uma trava a mais.
+**Revisão sem achado:** nenhum SQL montado com texto vindo de fora (o único texto é o `LISTEN`
+de uma constante); nenhum HTML injetado sem escape no web; o único link externo tem `noopener`.
 
 ### Verificação executada
 
-| Verificação                         | Resultado                                                           |
-| ----------------------------------- | ------------------------------------------------------------------- |
-| `pnpm typecheck` / `lint` / `build` | zero erro                                                           |
-| `pnpm test`                         | **571 testes** (410 API + 148 web + 13 shared)                      |
-| Testes sensíveis à regra            | sem o limite de usuários, sem a revogação de sessões: cada um cai   |
-| API rodando com o seed              | Gratuito: 1/100 pedidos, teto 110, 1/2 usuários; Premium: ilimitado |
-| Conferência visual no navegador     | a fazer na validação                                                |
+| Verificação                              | Resultado                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build`      | zero erro                                                                                    |
+| `pnpm test`                              | **588 testes** (426 API + 149 web + 13 shared)                                               |
+| Testes sensíveis à regra                 | rota em `preHandler`, sem o aviso ao desativar: cada um cai                                  |
+| API rodando: login, renovação, logout    | cookie `HttpOnly; SameSite=Strict; Path=/api/v1/auth`; corpo sem token; 401 depois do logout |
+| Rota do painel sem login, corpo inválido | 401, sem detalhes do formato                                                                 |
+| Login no painel pelo navegador           | a fazer na validação                                                                         |
 
 ---
 
-## Fase 15 — próxima
+## O que falta para o MVP
 
-Testes de segurança, hardening e refinamento: revisão das fronteiras (RLS, rotas públicas,
-WebSocket), cabeçalhos, limites, dívidas de SECURITY.md que cabem no MVP, e acabamento geral.
+As 15 fases estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+(MVP.md, "Como saber que acabou"). Os passos 4 a 7 funcionam de ponta a ponta — cardápio no
+celular, pedido, WhatsApp, painel ao vivo, status. Os passos 1 a 3 só funcionam **pela API**:
+
+1. **Criação de estabelecimento pelo Super Admin** — hoje só pelo seed.
+2. **Telas de configuração** — estabelecimento, logo e capa, horários, entrega, pagamentos.
+3. **Telas de cardápio** — categorias, produtos, grupos de opção, combos, imagens.
+4. **Tela de usuários** — a gestão existe na API (Fase 14).
+
+A API de tudo isso já existe e está testada; o que falta são as telas e o fluxo do Super Admin.
+A proposta de fases fica para a próxima conversa, com o Junio.
 
 ---
 
 ## Fases anteriores
+
+**Fase 14** entregou os limites do plano — aviso a 80% dos pedidos do mês, tolerância de 10% e
+depois bloqueio, com o cardápio dizendo só "não está recebendo pedidos" — e a gestão de usuários
+pela API, dentro do limite de usuários ativos.
 
 **Fase 13** entregou os pedidos em tempo real: avisos por `LISTEN`/`NOTIFY` emitidos dentro da
 transação (só chegam depois do commit), canal WebSocket por estabelecimento com o token na
