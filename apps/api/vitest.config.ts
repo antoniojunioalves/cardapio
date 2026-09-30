@@ -29,6 +29,10 @@ export default defineConfig({
       // Uploads dos testes vão para o diretório temporário do sistema, nunca
       // para o storage de desenvolvimento.
       STORAGE_LOCAL_PATH: path.join(tmpdir(), 'cardapio-test-uploads'),
+      // E-mails ficam na memória, para os testes lerem a caixa de saída — nada
+      // sai da máquina. O aviso de novo cadastro vai para um endereço fixo.
+      EMAIL_DRIVER: 'memory',
+      PLATFORM_NOTIFY_EMAIL: 'plataforma@exemplo.com',
     },
     // O pool de conexões é um singleton do módulo; rodar arquivos de teste em
     // processos separados evita que fechar o pool num afete os outros.
