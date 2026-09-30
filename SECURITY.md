@@ -418,9 +418,9 @@ foi fechado como qualquer outra fronteira:
 
 ## Como relatar uma vulnerabilidade
 
-O repositório é público, e o produto ainda não tem usuários. **Não abra uma issue pública** para
-relatar uma vulnerabilidade: ela ficaria visível para todo mundo antes da correção.
+O repositório ainda é público, e o produto ainda não tem usuários. **Não abra uma issue pública**
+para relatar uma vulnerabilidade: ela ficaria visível para todo mundo antes da correção.
 
-O canal previsto é o relato privado de vulnerabilidades do GitHub (aba _Security_ → _Report a
-vulnerability_). Ele ainda está desligado — ligá-lo é configuração do repositório. O prazo de
-resposta entra na Fase 28, junto com o deploy, antes do primeiro estabelecimento real.
+**Antes da publicação oficial, o repositório fica privado** — decisão do Junio, obrigatória na Fase 28. A partir daí o relato privado de vulnerabilidades do GitHub deixa de fazer sentido (só quem tem
+acesso vê o código), e o canal passa a ser um contato de segurança no próprio produto, com o prazo
+de resposta — os dois definidos na Fase 28, antes do primeiro estabelecimento real.

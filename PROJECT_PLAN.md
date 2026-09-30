@@ -237,10 +237,10 @@ vazio**, como faria alguém que nunca viu o sistema.
   política de scripts de instalação do pnpm 10 (DEVELOPMENT.md).
 - Testes: foto com GPS sai sem EXIF; foto grande sai reduzida; PNG transparente continua
   transparente.
-- **Limite do plano gratuito — decidido pelo Junio (validação da Fase 18): 20 produtos**, cada um
-  com a sua imagem, contra abuso do cadastro aberto. Um recurso novo do plano (`maxProducts`), na
-  infraestrutura de limites da Fase 14. Falta decidir as categorias, que também aceitam imagem:
-  sem limite, o abuso passaria por elas.
+- **Limites do plano gratuito — decididos pelo Junio (validação da Fase 18): 20 produtos e 10
+  categorias**, cada um com a sua imagem, contra abuso do cadastro aberto — as categorias também
+  aceitam imagem, e sem limite o abuso passaria por elas. Dois recursos novos do plano
+  (`maxProducts` e `maxCategories`), na infraestrutura de limites da Fase 14.
 
 ### Fase 21 — Estrutura do painel e configuração do estabelecimento
 
@@ -292,6 +292,13 @@ Pode virar duas fases.
 > `.github/workflows/ci.yml` com esse conteúdo (a primeira linha diz onde), conferir se as
 > actions fixadas pelo commit ainda são as versões atuais (DEVELOPMENT.md, "CI") e abrir um PR
 > para vê-lo passar. Deploy sem CI publicaria código que ninguém conferiu do zero.
+
+> **Repositório privado antes da publicação oficial — obrigatório** (decisão do Junio, validação da
+> Fase 18). Hoje o repositório no GitHub é público: o código e o SECURITY.md, que descreve as
+> defesas e as fraquezas conhecidas, estão à vista de qualquer um. Antes do primeiro estabelecimento
+> real: Settings → General → Danger Zone → Change visibility → Private. Com o repositório
+> privado, o CI passa a contar os minutos gratuitos do GitHub (2.000 por mês), e o canal para
+> relatar vulnerabilidade vira um contato no próprio produto (SECURITY.md).
 
 - Escolher a hospedagem, no início da fase.
 - Dockerfiles de produção, HTTPS e a CSP da aplicação web.
@@ -451,7 +458,8 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Suspender não derruba as sessões abertas — o middleware não olha o status do estabelecimento                                                                      | Fase 19                                  |
-| Limite do plano gratuito: 20 produtos (decidido); categorias, a decidir                                                                                           | Fase 20                                  |
+| Limites do plano gratuito: 20 produtos e 10 categorias (decididos)                                                                                                | Fase 20                                  |
+| Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |
 | CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
 | Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |
 | Rate limit conta em memória — vira limite por instância se houver mais de uma                                                                                     | Fase 28, se houver mais de uma instância |
