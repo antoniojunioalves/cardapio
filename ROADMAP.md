@@ -40,6 +40,12 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Autenticação e contas
 
+- Tela de gestão de usuários no painel — hoje só pela API (Fase 14)
+- Convite de usuário por e-mail e troca de senha pela própria pessoa — hoje o dono define a senha
+  inicial
+- Transferência da posse do estabelecimento (papel `OWNER`)
+- Fechar na hora a conexão ao vivo de um usuário desativado — hoje ela dura até o token expirar
+
 - OTP por SMS e WhatsApp
 - Login via WhatsApp
 - Login com Google
@@ -92,6 +98,9 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - "Troco para R$ X" no pagamento em dinheiro
 
 ### Do tenant (assinatura da plataforma)
+
+- Cobrança de excedente e mudança de plano pelo próprio lojista — os limites já são aplicados
+  (Fase 14), mas passar deles hoje só bloqueia
 
 - Cobrança recorrente
 - Escolha de gateway — Stripe, Mercado Pago ou outro; **nenhum foi escolhido**

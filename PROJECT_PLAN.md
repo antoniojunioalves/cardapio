@@ -1,8 +1,8 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-29
-**Fase atual:** 13 — concluída, aguardando validação (12 e 13 juntas)
-**Próxima:** Fase 14 — limites por plano
+**Fase atual:** 14 — concluída, aguardando validação (12, 13 e 14)
+**Próxima:** Fase 15 — testes de segurança, hardening e refinamento
 
 ---
 
@@ -37,6 +37,11 @@ montada no servidor. Endereço escolhido da lista sai mascarado; digitado na hor
 itens, pagamento e botões de status —, com alerta sonoro opcional e o número de pedidos novos no
 título da aba.
 
+**O plano é respeitado.** O painel avisa a partir de 80% dos pedidos do mês; atingido o limite,
+há 10% de tolerância e, depois, o cardápio para de receber pedidos — dizendo só "não está
+recebendo pedidos", sem citar o plano. Usuários do painel são criados, alterados, desativados e
+reativados pela API, dentro do limite de usuários ativos do plano.
+
 **Ainda não existe:** tela para cardápio, configurações e usuários — o lojista ainda configura
 tudo pela API.
 
@@ -62,7 +67,7 @@ tudo pela API.
 | 11  | Pedidos: recálculo no servidor, snapshot, status                                                                    | ✅ Concluída |
 | 12  | WhatsApp                                                                                                            | ✅ Concluída |
 | 13  | WebSocket e pedidos em tempo real                                                                                   | ✅ Concluída |
-| 14  | Limites por plano                                                                                                   | ⬜           |
+| 14  | Limites por plano                                                                                                   | ✅ Concluída |
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ⬜           |
 
 Três movimentos em relação à ordem sugerida originalmente, cada um porque algo posterior
@@ -72,82 +77,91 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 13 — concluída
+## Fase 14 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                               | Status |
-| --- | ---------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Regra do status movida para `packages/shared`, usada pela API e pelo painel                          | ✅     |
-| 2   | `@fastify/websocket` 11.3.1; canal por estabelecimento (`realtime/channel.ts`, puro)                 | ✅     |
-| 3   | Avisos por `LISTEN`/`NOTIFY` do PostgreSQL, emitidos dentro da transação do pedido                   | ✅     |
-| 4   | `GET /api/v1/admin/orders/stream`: token na primeira mensagem, `orders:read`, origem conferida, ping | ✅     |
-| 5   | CORS liberando PUT, PATCH e DELETE                                                                   | ✅     |
-| 6   | Web: sessão do painel (token na memória, refresh no navegador, renovação única)                      | ✅     |
-| 7   | Login em `/{slug}/admin` e painel em `/{slug}/admin/pedidos`                                         | ✅     |
-| 8   | Conexão ao vivo com reconexão, renovação no 4001, desistência no 4003, releitura ao reconectar       | ✅     |
-| 9   | Cartão do pedido com detalhe completo, botões de status e cancelamento com motivo                    | ✅     |
-| 10  | Alerta sonoro opcional e contador de pedidos novos no título                                         | ✅     |
-| 11  | Testes: 9 do tempo real na API, 16 do painel no web                                                  | ✅     |
+| #   | Tarefa                                                                                             | Status |
+| --- | -------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Regra dos limites, pura (`plans/limits.ts`): aviso a 80%, tolerância de 10%, início do mês no fuso | ✅     |
+| 2   | Plano da assinatura ativa, pedidos do mês e usuários ativos (`plans/repository.ts`)                | ✅     |
+| 3   | Cardápio com `NAO_RECEBENDO` passada a tolerância; o pedido é recusado pela mesma montagem         | ✅     |
+| 4   | `GET /api/v1/admin/plan`: uso do plano para qualquer usuário logado                                | ✅     |
+| 5   | Gestão de usuários: listar, criar, alterar, desativar (revogando sessões) e reativar               | ✅     |
+| 6   | Limite de usuários ativos na criação e na reativação                                               | ✅     |
+| 7   | Web: texto neutro no cardápio bloqueado e aviso do plano no painel                                 | ✅     |
+| 8   | Testes: 10 de limites e bloqueio, 12 de usuários na API; 4 no web                                  | ✅     |
 
 ### Decisões desta fase
 
-**Os avisos vêm do `LISTEN`/`NOTIFY` do PostgreSQL.** O `pg_notify` é chamado dentro da transação
-do pedido, e o banco só o entrega **depois do commit**: um pedido desfeito nunca vira alerta, e o
-alerta nunca chega antes de o pedido existir. Funciona com mais de uma instância da API sem
-Redis. Um teste emite um aviso numa transação desfeita e confere que ele não chega.
+Três decisões do Junio, tomadas antes de implementar:
 
-**O aviso leva só ids.** O painel relê a lista pela API REST, que confere permissão e isolamento.
-Nenhum dado pessoal passa pelo canal.
+**Pedidos: tolerância e depois bloqueio.** O painel avisa a partir de 80% do limite; atingido o
+limite, ainda há 10% de tolerância (110 no plano Gratuito de 100); passada ela, o cardápio passa
+a mostrar "não está recebendo pedidos". Como o pedido é calculado sobre a montagem do cardápio,
+ele é recusado pela mesma regra — e o cliente vê o aviso no cardápio antes de montar o carrinho.
 
-**Canal por estabelecimento, com o tenant tirado do token.** A conexão só assina o canal do
-tenant do token; um teste conecta duas lojas e confere que cada uma recebe só o seu.
+**Cancelados contam.** Cancelar não devolve a vaga; senão bastaria cancelar pedidos para nunca
+atingir o limite.
 
-**O token vai na primeira mensagem, não na URL** (que acaba em log de acesso). Conexão sem token
-em 5 s, com token inválido ou expirado fecha com `4001`; sem `orders:read`, com `4003`. A conexão
-fecha quando o token expira, e o painel renova e reconecta. O navegador não aplica CORS a
-WebSocket, então a origem é conferida no handshake — segunda barreira depois do token.
+**Gestão de usuários entrou nesta fase**, porque o limite de usuários não tinha onde ser aplicado.
 
-**O painel relê a lista ao conectar e reconectar**, porque avisos emitidos com a conexão fora não
-voltam, e de minuto em minuto como rede de segurança.
+E as minhas:
 
-**Endereço do painel: `/{slug}/admin`.** O login já pedia o slug; vindo da URL, a sessão fica
-presa a um estabelecimento, e abrir o painel de outro slug pede login.
+**O cardápio não cita o plano.** O motivo público é `NAO_RECEBENDO`, com o texto "não está
+recebendo pedidos pela internet agora" — pela mesma razão de o estabelecimento suspenso responder
+como inexistente: a situação comercial dele não é assunto de quem abre o cardápio. O painel, que
+o lojista lê, diz tudo.
 
-**Sessão no navegador:** token de acesso só na memória; refresh token no `localStorage`, para o
-tablet da cozinha continuar logado ao recarregar. É dívida registrada em SECURITY.md (um script
-injetado poderia lê-lo); o lugar certo é um cookie `httpOnly` (ROADMAP). A renovação é **uma por
-vez**: duas simultâneas apresentariam o mesmo refresh token, e o servidor entenderia como roubo.
+**O mês é o do calendário, no fuso do estabelecimento**, calculado pelo `Intl` — um teste cobre
+a virada de mês em São Paulo e o horário de verão de Nova York.
 
-**A regra do status mudou para `packages/shared`.** O painel mostra só os próximos passos válidos
-com a mesma função que a API usa para recusar.
+**Sem assinatura ativa, nada é limitado.** Ainda não há cobrança, e todo estabelecimento do seed
+tem assinatura. Recurso desligado no plano vale como limite zero; ligado sem valor, ilimitado.
 
-**Alerta sonoro por botão.** O navegador só toca som depois de um gesto na página; o botão "Ligar
-som" é esse gesto. O som é gerado com Web Audio, sem arquivo.
+**Usuário: limite exato, sem tolerância.** É o dono quem cria, e ele pode desativar alguém para
+abrir vaga. Só os ativos contam.
 
-**Nos testes, o fechamento é provado com porta de verdade.** O `injectWS` do plugin não repassa o
-fechamento do cliente ao servidor; com o cliente nativo e porta real, a assinatura é removida.
+**Regras de usuário que permissão não cobre:** o papel `OWNER` não é dado nem tirado pela API;
+ninguém muda o próprio papel nem se desativa; só o dono mexe na conta do dono. Desativar e
+reativar exigem `users:delete`, que o ADMIN não tem — tirar e devolver acesso é decisão de dono.
+
+**Desativar revoga as sessões.** O token de acesso para de valer na próxima requisição (o usuário
+é recarregado a cada uma), e todos os refresh tokens são revogados — segunda barreira, porque a
+renovação já recusa usuário inativo. Um teste confere as duas.
+
+**Senha inicial definida pelo dono**, sem convite por e-mail — não há envio de e-mail ainda.
+
+**Sem tela de usuários.** A decisão foi pelas rotas; a tela entra com as demais telas de gestão.
+
+**A corrida no limite fica com a tolerância.** Dois pedidos simultâneos no último lugar podem
+passar ambos; a tolerância absorve isso sem uma trava a mais.
 
 ### Verificação executada
 
-| Verificação                            | Resultado                                                                         |
-| -------------------------------------- | --------------------------------------------------------------------------------- |
-| `pnpm typecheck` / `lint` / `build`    | zero erro                                                                         |
-| `pnpm test`                            | **545 testes** (388 API + 144 web + 13 shared)                                    |
-| Testes sensíveis à regra               | canal sem filtro de tenant, renovação duplicada, retentativa no 4003: cada um cai |
-| API rodando                            | CORS libera PATCH; `ready` com o login real do Zé; 4001 com token inválido        |
-| Pedido chegando ao painel no navegador | a fazer na validação                                                              |
+| Verificação                         | Resultado                                                           |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `build` | zero erro                                                           |
+| `pnpm test`                         | **571 testes** (410 API + 148 web + 13 shared)                      |
+| Testes sensíveis à regra            | sem o limite de usuários, sem a revogação de sessões: cada um cai   |
+| API rodando com o seed              | Gratuito: 1/100 pedidos, teto 110, 1/2 usuários; Premium: ilimitado |
+| Conferência visual no navegador     | a fazer na validação                                                |
 
 ---
 
-## Fase 14 — próxima
+## Fase 15 — próxima
 
-Limites por plano: aplicar os limites de `plan_features` (pedidos por mês, usuários), com
-mensagens claras para o lojista e sem bloquear o cliente final no meio do pedido.
+Testes de segurança, hardening e refinamento: revisão das fronteiras (RLS, rotas públicas,
+WebSocket), cabeçalhos, limites, dívidas de SECURITY.md que cabem no MVP, e acabamento geral.
 
 ---
 
 ## Fases anteriores
+
+**Fase 13** entregou os pedidos em tempo real: avisos por `LISTEN`/`NOTIFY` emitidos dentro da
+transação (só chegam depois do commit), canal WebSocket por estabelecimento com o token na
+primeira mensagem, e o primeiro painel — login, pedidos ao vivo, detalhe com endereço completo,
+botões de status e alerta sonoro.
 
 **Fase 12** entregou a mensagem do pedido para o WhatsApp do estabelecimento, montada no servidor
 e guardada no pedido, com um botão na confirmação. Endereço escolhido da lista sai mascarado

@@ -7,6 +7,7 @@ import {
 } from '../settings/repository.js'
 import { statusDoEstabelecimento, type StatusDoEstabelecimento } from '../settings/opening-hours.js'
 import { urlDaImagem, type StorageService } from '../storage/index.js'
+import { usoDoPlano } from '../plans/service.js'
 import { resolverEstabelecimentoPublico } from '../tenant/public.js'
 import type { TenantContext } from '../tenant/context.js'
 import type { TenantRecord } from '../tenant/repository.js'
@@ -23,6 +24,12 @@ import { carregarCardapio, type CardapioCarregado } from './repository.js'
  * só porque alguém a criou. O schema de resposta da rota é a segunda barreira,
  * e o teste que procura campos internos na resposta é a terceira.
  */
+
+/**
+ * O status do cardápio: o do horário, ou `NAO_RECEBENDO` quando o
+ * estabelecimento passou do limite de pedidos do plano (sem dizer por quê).
+ */
+export type StatusDoCardapio = StatusDoEstabelecimento | { aberto: false; motivo: 'NAO_RECEBENDO' }
 
 export interface OpcaoPublica {
   id: string
@@ -93,7 +100,7 @@ export interface CardapioPublico {
     prepTimeMaxMinutes: number | null
     minimumOrderInCents: number
   }
-  status: StatusDoEstabelecimento
+  status: StatusDoCardapio
   hours: { dayOfWeek: number; opensAt: string; closesAt: string }[]
   delivery: {
     deliveryEnabled: boolean
@@ -170,12 +177,18 @@ export async function montarCardapioPublico(
       prepTimeMaxMinutes: configuracoes.prepTimeMaxMinutes,
       minimumOrderInCents: configuracoes.minimumOrderInCents,
     },
-    status: statusDoEstabelecimento({
-      intervalos,
-      timezone: tenant.timezone,
-      aceitandoPedidos: configuracoes.isAcceptingOrders,
-      agora,
-    }),
+    // Passado o limite do plano com a tolerância, o cardápio para de receber
+    // pedidos. A resposta não cita o plano: a situação comercial do
+    // estabelecimento não é da conta de quem abre o cardápio.
+    status:
+      (await usoDoPlano(tx, tenant.timezone, agora)).pedidos.situacao === 'BLOQUEADO'
+        ? { aberto: false, motivo: 'NAO_RECEBENDO' }
+        : statusDoEstabelecimento({
+            intervalos,
+            timezone: tenant.timezone,
+            aceitandoPedidos: configuracoes.isAcceptingOrders,
+            agora,
+          }),
     hours: intervalos.map((i) => ({
       dayOfWeek: i.dayOfWeek,
       opensAt: i.opensAt,

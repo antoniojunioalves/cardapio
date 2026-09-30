@@ -250,6 +250,20 @@ completo de um endereço salvo só na mensagem depois do OTP (ROADMAP).
 - A origem é conferida no handshake: o navegador não aplica CORS a WebSocket.
 - O aviso leva só ids; os dados vêm da API REST, com permissão e RLS.
 
+### Gestão de usuários — **em vigor**
+
+- Listar, criar, alterar, desativar e reativar pela API (`/api/v1/admin/users`), com
+  `users:read`, `users:create`, `users:update` e `users:delete`. Desativar e reativar pedem
+  `users:delete`, que o ADMIN não tem.
+- O papel `OWNER` não é dado nem tirado pela API; ninguém muda o próprio papel nem se desativa;
+  só o dono altera a conta do dono.
+- **Desativar encerra o acesso na hora**: o token de acesso para de valer na próxima requisição
+  (o usuário é recarregado a cada uma) e todos os refresh tokens dele são revogados. A conexão
+  ao vivo aberta dura até o token expirar (no máximo 15 minutos) e não reconecta.
+- Senha inicial definida pelo dono (mínimo de 8 caracteres), com argon2id; a resposta nunca traz
+  o hash. E-mail repetido no estabelecimento é recusado.
+- Usuário de outro estabelecimento responde 404.
+
 ### Sessão do painel no navegador — **dívida**
 
 O token de acesso fica só na memória da página. O **refresh token fica no `localStorage`**, para

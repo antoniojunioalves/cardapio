@@ -1020,8 +1020,20 @@ conectar e a cada minuto.
 Modelo genérico desde o início: `plans`, `plan_features`, `subscriptions`. Nada limita o sistema
 a dois planos — FREE, STARTER, ADVANCED, PREMIUM e CUSTOM cabem sem migration de estrutura.
 
-As tabelas nascem na Fase 3, junto do modelo de tenant. A verificação de limites é Fase 14. Não
-há cobrança no MVP e nenhum gateway foi escolhido.
+As tabelas nascem na Fase 3, junto do modelo de tenant. Não há cobrança no MVP e nenhum gateway
+foi escolhido.
+
+**Os limites (Fase 14)** — regra pura em `src/plans/limits.ts`, uso em `src/plans/service.ts`:
+
+- **Pedidos por mês** (`maxOrdersPerMonth`): aviso no painel a partir de 80%; atingido o limite,
+  tolerância de 10%; passada ela, o cardápio público passa a `NAO_RECEBENDO` e, como o pedido é
+  calculado sobre a mesma montagem, é recusado pela mesma regra. Cancelados contam. O mês é o do
+  calendário no fuso do estabelecimento, pelo `Intl`.
+- **Usuários ativos** (`maxUsers`): limite exato, conferido ao criar e ao reativar.
+- `null` é ilimitado; recurso desligado (`isEnabled = false`) vale zero; sem assinatura ativa,
+  nada é limitado.
+- O cardápio público **não cita o plano** — só "não está recebendo pedidos". O painel
+  (`GET /api/v1/admin/plan`) mostra o uso com todas as letras.
 
 Atenção à distinção: **o cliente final não paga online** pelo pedido no MVP (escolhe a forma de
 pagamento que usará no recebimento). O que é preparado aqui é a assinatura **do estabelecimento**

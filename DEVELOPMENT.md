@@ -82,6 +82,8 @@ apps/api/src/
 ├── customers/     cliente final: máscara, repositório, identificação por telefone
 ├── orders/        pedido: cálculo puro, status, repositório, serviço, mensagem do WhatsApp
 ├── realtime/      pedidos ao vivo: canal por tenant, LISTEN/NOTIFY, WebSocket
+├── plans/         limites do plano: regra pura, uso de pedidos e usuários
+├── users/         gestão de usuários do painel
 ├── public-menu/   cardápio público
 └── db/            schema Drizzle, migrations, seed, catálogos
 

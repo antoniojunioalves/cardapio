@@ -74,6 +74,16 @@ describe('status do estabelecimento', () => {
     expect(status.detalhe).toContain('pausou os pedidos')
   })
 
+  it('parado por falta de pedidos disponíveis no plano: texto neutro, sem citar o plano', () => {
+    const status = descreverStatus({ aberto: false, motivo: 'NAO_RECEBENDO' })
+    expect(status).toEqual({
+      aberto: false,
+      titulo: 'Fechado no momento',
+      detalhe: 'O estabelecimento não está recebendo pedidos pela internet agora.',
+    })
+    expect(JSON.stringify(status).toLowerCase()).not.toMatch(/plano|limite/)
+  })
+
   it('sem horário cadastrado diz só "Fechado"', () => {
     expect(descreverStatus({ aberto: false, motivo: 'SEM_HORARIO_CADASTRADO' })).toEqual({
       aberto: false,

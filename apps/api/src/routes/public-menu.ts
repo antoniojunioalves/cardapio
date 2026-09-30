@@ -16,7 +16,7 @@ const statusSchema = z.union([
   z.object({ aberto: z.literal(true), fechaAs: z.string() }),
   z.object({
     aberto: z.literal(false),
-    motivo: z.enum(['PAUSADO', 'FORA_DO_HORARIO', 'SEM_HORARIO_CADASTRADO']),
+    motivo: z.enum(['PAUSADO', 'FORA_DO_HORARIO', 'SEM_HORARIO_CADASTRADO', 'NAO_RECEBENDO']),
     proximaAbertura: z
       .object({ dayOfWeek: z.number(), opensAt: z.string(), emDias: z.number() })
       .optional(),
