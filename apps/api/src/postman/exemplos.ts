@@ -42,7 +42,7 @@ export interface VariavelDaColecao {
 }
 
 /** Senha fixa do estabelecimento criado pelo Postman: o script do cadastro a guarda para o login. */
-const SENHA_DO_CADASTRO = 'senha-do-teste-123'
+const SENHA_DO_CADASTRO = 'Senha-do-teste-123'
 
 export const VARIAVEIS: VariavelDaColecao[] = [
   { chave: 'baseUrl', valor: 'http://localhost:3333', descricao: 'Endereço da API.' },
@@ -373,7 +373,7 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
     corpo: {
       name: 'Atendente de Teste',
       email: 'atendente-{{$timestamp}}@exemplo.com',
-      password: 'senha-do-atendente',
+      password: 'Senha-do-atendente',
       role: 'STAFF',
     },
     depois: guardarIdCriado('userId'),

@@ -376,7 +376,7 @@
                   "  pm.collectionVariables.set('accessToken', cadastro.accessToken);",
                   "  pm.collectionVariables.set('tenantSlug', cadastro.establishment.slug);",
                   "  pm.collectionVariables.set('email', cadastro.user.email);",
-                  "  pm.collectionVariables.set('password', 'senha-do-teste-123');",
+                  "  pm.collectionVariables.set('password', 'Senha-do-teste-123');",
                   "}"
                 ]
               }
@@ -395,7 +395,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"establishmentName\": \"Minha Lanchonete de Teste\",\n  \"slug\": \"teste-{{$timestamp}}\",\n  \"ownerName\": \"Dono de Teste\",\n  \"email\": \"dono-{{$timestamp}}@exemplo.com\",\n  \"password\": \"senha-do-teste-123\",\n  \"termsVersion\": \"2026-09-30\",\n  \"timezone\": \"America/Sao_Paulo\"\n}",
+              "raw": "{\n  \"establishmentName\": \"Minha Lanchonete de Teste\",\n  \"slug\": \"teste-{{$timestamp}}\",\n  \"ownerName\": \"Dono de Teste\",\n  \"email\": \"dono-{{$timestamp}}@exemplo.com\",\n  \"password\": \"Senha-do-teste-123\",\n  \"termsVersion\": \"2026-09-30\",\n  \"timezone\": \"America/Sao_Paulo\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1876,7 +1876,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Atendente de Teste\",\n  \"email\": \"atendente-{{$timestamp}}@exemplo.com\",\n  \"password\": \"senha-do-atendente\",\n  \"role\": \"STAFF\"\n}",
+              "raw": "{\n  \"name\": \"Atendente de Teste\",\n  \"email\": \"atendente-{{$timestamp}}@exemplo.com\",\n  \"password\": \"Senha-do-atendente\",\n  \"role\": \"STAFF\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -75,7 +75,7 @@ function preencher() {
   escrever('Nome do estabelecimento', 'Lanchonete da Maria')
   escrever('Seu nome', 'Maria Dona')
   escrever('E-mail', 'maria@exemplo.com')
-  escrever('Senha', 'senha-forte-123')
+  escrever('Senha', 'Senha-forte-123')
   fireEvent.click(screen.getByRole('checkbox', { name: /Li e aceito/ }))
 }
 
@@ -140,9 +140,38 @@ describe('cadastro', () => {
     expect(await screen.findByText('Informe o nome do estabelecimento.')).toBeVisible()
     expect(screen.getByText('Informe o seu nome.')).toBeVisible()
     expect(screen.getByText('Informe um e-mail válido, como voce@exemplo.com.')).toBeVisible()
-    expect(screen.getByText('A senha precisa de ao menos 8 caracteres.')).toBeVisible()
+    expect(screen.getByText('A senha precisa de pelo menos 8 caracteres.')).toBeVisible()
     expect(
       screen.getByText('Para criar a conta, aceite os termos de uso e a política de privacidade.'),
+    ).toBeVisible()
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
+  it('a senha mostra, enquanto se digita, o que ainda falta', () => {
+    mockarApi()
+    abrir('/cadastro')
+    const regras = () => screen.getByRole('list', { name: 'Regras da senha' })
+
+    escrever('Senha', 'abc')
+    expect(regras()).toHaveTextContent('Uma letra minúscula: atendida')
+    expect(regras()).toHaveTextContent('Uma letra maiúscula: falta')
+    expect(regras()).toHaveTextContent('Pelo menos 8 caracteres: falta')
+    expect(regras()).toHaveTextContent('Um caractere especial, como ! @ # ou -: falta')
+
+    escrever('Senha', 'Abcdef-1')
+    expect(regras()).not.toHaveTextContent('falta')
+  })
+
+  it('senha sem caractere especial é recusada antes de ir à API, dizendo o que falta', async () => {
+    const fetch = mockarApi()
+    abrir('/cadastro')
+    preencher()
+    escrever('Senha', 'SenhaForte123')
+
+    enviar()
+
+    expect(
+      await screen.findByText('A senha precisa de um caractere especial, como ! @ # ou -.'),
     ).toBeVisible()
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
@@ -187,7 +216,7 @@ describe('cadastro', () => {
       slug: 'lanchonete-da-maria',
       ownerName: 'Maria Dona',
       email: 'maria@exemplo.com',
-      password: 'senha-forte-123',
+      password: 'Senha-forte-123',
       termsVersion: VERSAO_DOS_TERMOS,
     })
     expect(corpo).not.toHaveProperty('aceite')

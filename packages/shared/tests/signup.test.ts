@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   cadastroSchema,
   fusoValido,
+  REGRAS_DA_SENHA,
   senhaSchema,
   slugReservado,
   slugSchema,
@@ -59,11 +60,39 @@ describe('endereço do cardápio', () => {
 })
 
 describe('senha', () => {
-  it('exige ao menos 8 caracteres', () => {
-    expect(mensagem(senhaSchema.safeParse('1234567'))).toBe(
-      'A senha precisa de ao menos 8 caracteres.',
-    )
-    expect(senhaSchema.safeParse('12345678').success).toBe(true)
+  const problemasDa = (senha: string) =>
+    senhaSchema.safeParse(senha).error?.issues.map((i) => i.message) ?? []
+
+  it('aceita a que tem 8 caracteres, maiúscula, minúscula e caractere especial', () => {
+    expect(senhaSchema.safeParse('Senha-12').success).toBe(true)
+    expect(senhaSchema.safeParse('Pão de Queijo!').success).toBe(true)
+  })
+
+  it('recusa cada regra que falta, com a própria mensagem', () => {
+    expect(problemasDa('Se-1')).toEqual(['A senha precisa de pelo menos 8 caracteres.'])
+    expect(problemasDa('senha-123')).toEqual(['A senha precisa de uma letra maiúscula.'])
+    expect(problemasDa('SENHA-123')).toEqual(['A senha precisa de uma letra minúscula.'])
+    expect(problemasDa('Senha1234')).toEqual([
+      'A senha precisa de um caractere especial, como ! @ # ou -.',
+    ])
+  })
+
+  it('mostra todos os problemas de uma vez', () => {
+    expect(problemasDa('abc')).toHaveLength(3)
+    expect(problemasDa('')).toHaveLength(4)
+  })
+
+  it('letra com acento conta como letra; espaço não conta como caractere especial', () => {
+    expect(problemasDa('ÇÃO-ação')).toEqual([])
+    expect(problemasDa('Senha com espaço')).toEqual([
+      'A senha precisa de um caractere especial, como ! @ # ou -.',
+    ])
+  })
+
+  it('a lista de regras, que a tela mostra, é a mesma que o schema aplica', () => {
+    for (const regra of REGRAS_DA_SENHA) {
+      expect(problemasDa('')).toContain(regra.mensagem)
+    }
   })
 })
 
@@ -83,7 +112,7 @@ describe('cadastro', () => {
     slug: 'Lanchonete-do-Ze',
     ownerName: 'José da Silva',
     email: 'ze@exemplo.com',
-    password: 'senha-forte-123',
+    password: 'Senha-forte-123',
     termsVersion: VERSAO_DOS_TERMOS,
   }
 

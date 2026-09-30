@@ -10,6 +10,7 @@ import { ApiError } from '@/services/api'
 
 import { cadastrar, useDisponibilidadeDoEndereco, type EstabelecimentoCadastrado } from '../api'
 import { sugerirSlug } from '../slug'
+import { PasswordRules } from './PasswordRules'
 import { useAtrasado } from '../useAtrasado'
 
 /**
@@ -87,7 +88,10 @@ export function SignupForm({ aoCadastrar }: SignupFormProps) {
 
   // O endereço acompanha o nome até a pessoa mexer nele; apagado, volta a acompanhar.
   const [enderecoEditado, setEnderecoEditado] = useState(false)
-  const [nome, slug] = useWatch({ control, name: ['establishmentName', 'slug'] })
+  const [nome, slug, senha] = useWatch({
+    control,
+    name: ['establishmentName', 'slug', 'password'],
+  })
 
   useEffect(() => {
     if (!enderecoEditado) setValue('slug', sugerirSlug(nome ?? ''))
@@ -102,6 +106,7 @@ export function SignupForm({ aoCadastrar }: SignupFormProps) {
     disponibilidade.data && !disponibilidade.data.available ? disponibilidade.data : null
 
   const idDoEndereco = useId()
+  const idDaSenha = useId()
   const endereco = register('slug', {
     onChange: (evento: { target: { value: string } }) => {
       setEnderecoEditado(evento.target.value !== '')
@@ -215,14 +220,28 @@ export function SignupForm({ aoCadastrar }: SignupFormProps) {
         erro={erros.email?.message}
         {...register('email')}
       />
-      <TextField
-        rotulo="Senha"
-        type="password"
-        autoComplete="new-password"
-        dica="Pelo menos 8 caracteres."
-        erro={erros.password?.message}
-        {...register('password')}
-      />
+      <div className="flex flex-col gap-1">
+        <label htmlFor={idDaSenha} className="text-body font-semibold text-content">
+          Senha
+        </label>
+        <input
+          id={idDaSenha}
+          type="password"
+          autoComplete="new-password"
+          aria-invalid={erros.password ? true : undefined}
+          aria-describedby={`${idDaSenha}-regras${erros.password ? ` ${idDaSenha}-erro` : ''}`}
+          className={`text-body w-full rounded-control border bg-surface px-3 py-2 ${
+            erros.password ? 'border-danger' : 'border-border'
+          }`}
+          {...register('password')}
+        />
+        <PasswordRules id={`${idDaSenha}-regras`} senha={senha ?? ''} />
+        {erros.password && (
+          <p id={`${idDaSenha}-erro`} className="text-caption text-danger">
+            {erros.password.message}
+          </p>
+        )}
+      </div>
 
       {/* Campo-armadilha: fora da tela e do leitor de tela. Quem o preenche é robô. */}
       <div aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden">

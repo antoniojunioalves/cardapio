@@ -85,13 +85,54 @@ export const slugSchema = z
   )
   .refine((slug) => !slugReservado(slug), 'Este endereço é reservado. Escolha outro.')
 
-/** A mesma regra da criação de usuários do painel. */
 export const SENHA_MINIMA = 8
+
+export interface RegraDaSenha {
+  /** Como a tela lista a regra, enquanto a pessoa digita. */
+  descricao: string
+  /** O erro quando a regra não é atendida. */
+  mensagem: string
+  atende: (senha: string) => boolean
+}
+
+/**
+ * As regras da senha de quem cadastra um estabelecimento — decisão do Junio na
+ * validação da Fase 18. Letra, aqui, é qualquer letra, com ou sem acento;
+ * caractere especial é o que não é letra, número nem espaço.
+ *
+ * A tela usa a lista para mostrar o que falta; o schema, para recusar.
+ */
+export const REGRAS_DA_SENHA: readonly RegraDaSenha[] = [
+  {
+    descricao: `Pelo menos ${String(SENHA_MINIMA)} caracteres`,
+    mensagem: `A senha precisa de pelo menos ${String(SENHA_MINIMA)} caracteres.`,
+    atende: (senha) => senha.length >= SENHA_MINIMA,
+  },
+  {
+    descricao: 'Uma letra maiúscula',
+    mensagem: 'A senha precisa de uma letra maiúscula.',
+    atende: (senha) => /\p{Lu}/u.test(senha),
+  },
+  {
+    descricao: 'Uma letra minúscula',
+    mensagem: 'A senha precisa de uma letra minúscula.',
+    atende: (senha) => /\p{Ll}/u.test(senha),
+  },
+  {
+    descricao: 'Um caractere especial, como ! @ # ou -',
+    mensagem: 'A senha precisa de um caractere especial, como ! @ # ou -.',
+    atende: (senha) => /[^\p{L}\p{N}\s]/u.test(senha),
+  },
+]
 
 export const senhaSchema = z
   .string()
-  .min(SENHA_MINIMA, `A senha precisa de ao menos ${String(SENHA_MINIMA)} caracteres.`)
   .max(256, 'Use no máximo 256 caracteres.')
+  .superRefine((senha, ctx) => {
+    for (const regra of REGRAS_DA_SENHA) {
+      if (!regra.atende(senha)) ctx.addIssue({ code: 'custom', message: regra.mensagem })
+    }
+  })
 
 /**
  * A versão em vigor dos termos de uso e da política de privacidade.
