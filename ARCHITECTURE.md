@@ -828,6 +828,8 @@ src/
 | `/:tenantSlug`                | cardápio público                                       |
 | `/:tenantSlug/checkout`       | finalizar pedido                                       |
 | `/:tenantSlug/pedido-enviado` | confirmação do pedido                                  |
+| `/:tenantSlug/admin`          | login do painel                                        |
+| `/:tenantSlug/admin/pedidos`  | pedidos ao vivo                                        |
 | qualquer outra                | não encontrado                                         |
 
 No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
@@ -883,7 +885,18 @@ carrinho do Zustand, e monta o formulário com React Hook Form + Zod.
 - A identificação é mutação, não consulta: dado pessoal fora do cache, uma chamada por telefone,
   e a resposta vale só para o número que está no campo.
 
-### 9.6 Temas
+### 9.6 Painel do estabelecimento
+
+`features/admin/`. A **sessão** (`session.ts`) guarda o token de acesso só na memória e o refresh
+token no `localStorage`, junto do slug — a sessão é de um estabelecimento. `comSessao` chama a
+API com o token e, num 401, renova uma vez e repete; a renovação é única mesmo com várias
+chamadas simultâneas, porque duas apresentariam o mesmo refresh token e o servidor as trataria
+como roubo.
+
+A **lista** vem do TanStack Query; a **conexão ao vivo** (`live.ts`) só manda relê-la. Os botões
+de status saem de `proximosStatus`, a regra de `packages/shared` que a API também aplica.
+
+### 9.7 Temas
 
 Os **valores** vivem em CSS custom properties, em
 [`apps/web/src/theme/tokens.css`](apps/web/src/theme/tokens.css), dentro do bloco `@theme` do
@@ -978,8 +991,27 @@ Com S3, as imagens seriam servidas pelo bucket ou por uma CDN, e este caminho de
 WebSocket para entregar pedidos novos ao painel administrativo. Polling não é a solução
 principal: num painel de cozinha o atraso é percebido na hora.
 
-O canal é **por tenant**, e a autorização é verificada no handshake — um socket jamais recebe
-evento de outro tenant. Fase 13.
+**De onde vêm os avisos:** `LISTEN`/`NOTIFY` do PostgreSQL (`src/realtime/notify.ts`). Criar um
+pedido e mudar o status chamam `pg_notify` **dentro da transação**; o banco entrega o aviso só
+depois do commit, então rollback nunca vira alerta e o alerta nunca chega antes do pedido. Cada
+instância da API escuta o canal numa conexão própria (fora do pool, porque `LISTEN` a prende),
+com reconexão de espera crescente — e todas recebem, sem Redis.
+
+**O que o aviso leva:** só ids (`order.created`, `order.status_changed`). O painel relê a lista
+pela API REST, que já confere permissão e isolamento; nenhum dado pessoal passa pelo canal.
+
+**Quem recebe:** `CanalDePedidos` (`src/realtime/channel.ts`, puro) entrega cada aviso só às
+conexões do tenant dele. A conexão assina o canal do tenant **do token**.
+
+**Autenticação** (`GET /api/v1/admin/orders/stream`): o token vai na primeira mensagem —
+WebSocket de navegador não manda `Authorization`, e token em URL vai para log. A verificação é a
+do `requireAuth` (token, usuário recarregado, permissão `orders:read`). Fecha com `4001` sem
+token em 5 s, com token inválido ou quando ele expira (o painel renova e reconecta), e `4003` sem
+permissão (o painel desiste). A origem é conferida no handshake, porque o navegador não aplica
+CORS a WebSocket. Um ping a cada 30 s derruba conexão morta.
+
+**Perda de avisos:** um aviso emitido com a conexão fora se perde. O painel relê a lista ao
+conectar e a cada minuto.
 
 ---
 

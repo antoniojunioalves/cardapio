@@ -240,6 +240,24 @@ então segue a mesma regra da identificação — endereço salvo sai **mascarad
 na hora sai completo, e o nome é o que a pessoa digitou (nunca o completo guardado). O endereço
 completo de um endereço salvo só na mensagem depois do OTP (ROADMAP).
 
+### Pedidos em tempo real — **em vigor**
+
+- O canal WebSocket entrega cada aviso só às conexões do estabelecimento dele, com o tenant tirado
+  do token — há teste com duas lojas conectadas ao mesmo tempo.
+- O token vai na primeira mensagem, nunca na URL. Exige `orders:read`; usuário desativado não
+  entra, porque o usuário é recarregado do banco como no `requireAuth`. A conexão fecha quando o
+  token expira.
+- A origem é conferida no handshake: o navegador não aplica CORS a WebSocket.
+- O aviso leva só ids; os dados vêm da API REST, com permissão e RLS.
+
+### Sessão do painel no navegador — **dívida**
+
+O token de acesso fica só na memória da página. O **refresh token fica no `localStorage`**, para
+o tablet da cozinha continuar logado depois de recarregar — e um script injetado na página (XSS)
+poderia lê-lo. Mitigações: rotação a cada uso com detecção de reuso (reapresentar um token já
+usado revoga todas as sessões do usuário), validade de 30 dias e "Sair" revogando no servidor. A
+quitação é levar o refresh token para um cookie `httpOnly` (ROADMAP).
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.
@@ -249,7 +267,7 @@ cancelamento.
 | Item             | Estado                                                                                               |
 | ---------------- | ---------------------------------------------------------------------------------------------------- |
 | Security headers | **Ativo** — `@fastify/helmet` (HSTS, `X-Content-Type-Options`, frameguard)                           |
-| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga                                                     |
+| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga; libera GET, HEAD, POST, PUT, PATCH e DELETE        |
 | Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone e no envio de pedido |
 | Documentação     | **Ativo** — `/docs` desabilitado em produção                                                         |
 | HTTPS            | Responsabilidade do ambiente de deploy                                                               |

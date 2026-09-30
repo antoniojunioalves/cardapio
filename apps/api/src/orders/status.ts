@@ -1,43 +1,11 @@
-import type { OrderStatus } from '../db/schema/index.js'
+import type { MotivoDaRecusa } from '@repo/shared'
 
 /**
- * O caminho do status de um pedido, sem banco nem framework.
- *
- * **Só avança.** O painel pode pular etapas — a lanchonete pequena não precisa
- * marcar "aceito" e "em preparo" separadamente —, mas nunca voltar: um pedido
- * "saiu para entrega" que volta a "em preparo" deixaria o cliente sem saber em
- * que acreditar.
- *
- * - `OUT_FOR_DELIVERY` só existe para entrega.
- * - `CANCELLED` vale de qualquer status não final, e exige motivo.
- * - `COMPLETED` e `CANCELLED` são finais.
+ * A regra do caminho do status mora em `@repo/shared` (`order-status.ts`): o
+ * painel usa a mesma para só oferecer os próximos passos válidos. Aqui ficam
+ * as mensagens de recusa da API.
  */
-
-const SEQUENCIA: readonly OrderStatus[] = [
-  'RECEIVED',
-  'ACCEPTED',
-  'PREPARING',
-  'READY',
-  'OUT_FOR_DELIVERY',
-  'COMPLETED',
-]
-
-export const STATUS_FINAIS: readonly OrderStatus[] = ['COMPLETED', 'CANCELLED']
-
-export type MotivoDaRecusa = 'STATUS_FINAL' | 'NAO_AVANCA' | 'SO_PARA_ENTREGA' | 'MESMO_STATUS'
-
-/** Por que a transição não vale, ou `null` se vale. */
-export function problemaDaTransicao(
-  de: OrderStatus,
-  para: OrderStatus,
-  modalidade: 'DELIVERY' | 'PICKUP',
-): MotivoDaRecusa | null {
-  if (de === para) return 'MESMO_STATUS'
-  if (STATUS_FINAIS.includes(de)) return 'STATUS_FINAL'
-  if (para === 'CANCELLED') return null
-  if (para === 'OUT_FOR_DELIVERY' && modalidade !== 'DELIVERY') return 'SO_PARA_ENTREGA'
-  return SEQUENCIA.indexOf(para) > SEQUENCIA.indexOf(de) ? null : 'NAO_AVANCA'
-}
+export { problemaDaTransicao, STATUS_FINAIS, type MotivoDaRecusa } from '@repo/shared'
 
 export const MENSAGEM_DA_RECUSA: Record<MotivoDaRecusa, string> = {
   MESMO_STATUS: 'O pedido já está neste status.',

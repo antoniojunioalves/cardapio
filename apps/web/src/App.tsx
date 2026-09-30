@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
+import { AdminLoginPage } from '@/pages/AdminLoginPage'
+import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { HomePage } from '@/pages/HomePage'
 import { MenuPage } from '@/pages/MenuPage'
@@ -14,7 +16,8 @@ import { OrderSentPage } from '@/pages/OrderSentPage'
  *
  * `/:tenantSlug` casa com um segmento só, então `/lanchonete-do-ze` abre o
  * cardápio, `/lanchonete-do-ze/checkout` finaliza o pedido,
- * `/lanchonete-do-ze/pedido-enviado` confirma, e qualquer outro
+ * `/lanchonete-do-ze/pedido-enviado` confirma, `/lanchonete-do-ze/admin` é o
+ * painel do estabelecimento, e qualquer outro
  * segundo segmento cai no não encontrado. As
  * rotas administrativas, quando vierem, ficam sob um prefixo próprio.
  */
@@ -25,6 +28,8 @@ export function AppRoutes() {
       <Route path="/:tenantSlug" element={<MenuPage />} />
       <Route path="/:tenantSlug/checkout" element={<CheckoutPage />} />
       <Route path="/:tenantSlug/pedido-enviado" element={<OrderSentPage />} />
+      <Route path="/:tenantSlug/admin" element={<AdminLoginPage />} />
+      <Route path="/:tenantSlug/admin/pedidos" element={<AdminOrdersPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
