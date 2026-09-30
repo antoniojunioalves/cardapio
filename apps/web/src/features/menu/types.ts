@@ -11,7 +11,7 @@ export type StatusDoEstabelecimento =
   | { aberto: true; fechaAs: string }
   | {
       aberto: false
-      motivo: 'PAUSADO' | 'FORA_DO_HORARIO' | 'SEM_HORARIO_CADASTRADO'
+      motivo: 'PAUSADO' | 'FORA_DO_HORARIO' | 'SEM_HORARIO_CADASTRADO' | 'NAO_RECEBENDO'
       proximaAbertura?: { dayOfWeek: number; opensAt: string; emDias: number }
     }
 

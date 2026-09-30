@@ -8,6 +8,7 @@ import { CancelOrderDialog } from '@/features/admin/components/CancelOrderDialog
 import { OrderCard } from '@/features/admin/components/OrderCard'
 import { usePedidosAoVivo, type EstadoDaConexao } from '@/features/admin/live'
 import { emAndamento } from '@/features/admin/orders'
+import { avisoDoPlano, chaveDoPlano, usePlano } from '@/features/admin/plan'
 import { sair, useSessaoStore } from '@/features/admin/session'
 import { criarAlerta, type Alerta } from '@/features/admin/sound'
 import type { PedidoDoPainel } from '@/features/admin/types'
@@ -34,6 +35,7 @@ export function AdminOrdersPage() {
 
   const queryClient = useQueryClient()
   const consulta = usePedidosDoPainel(tenantSlug, logado)
+  const aviso = avisoDoPlano(usePlano(tenantSlug, logado).data)
   const mudarStatus = useMudarStatus(tenantSlug)
   const [aba, setAba] = useState<'andamento' | 'encerrados'>('andamento')
   const [cancelando, setCancelando] = useState<PedidoDoPainel | null>(null)
@@ -44,7 +46,11 @@ export function AdminOrdersPage() {
 
   const conexao = usePedidosAoVivo(logado, (aviso) => {
     void queryClient.invalidateQueries({ queryKey: chaveDosPedidos(tenantSlug) })
-    if (aviso.type === 'order.created' && somLigado) alerta.current?.tocar()
+    if (aviso.type === 'order.created') {
+      // Cada pedido novo aproxima o limite do plano.
+      void queryClient.invalidateQueries({ queryKey: chaveDoPlano(tenantSlug) })
+      if (somLigado) alerta.current?.tocar()
+    }
   })
 
   const pedidos = consulta.data ?? []
@@ -141,6 +147,18 @@ export function AdminOrdersPage() {
           ))}
         </div>
 
+        {aviso && (
+          <p
+            role="note"
+            className={`text-caption rounded-control p-3 ${
+              aviso.nivel === 'alerta'
+                ? 'bg-accent-100 font-semibold text-accent-800'
+                : 'bg-brand-50 text-brand-800'
+            }`}
+          >
+            {aviso.texto}
+          </p>
+        )}
         {conexao === 'sem-permissao' && (
           <p className="text-caption text-content-muted">
             Sua conta não recebe pedidos ao vivo; a lista é atualizada a cada minuto.
