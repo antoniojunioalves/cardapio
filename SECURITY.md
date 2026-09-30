@@ -1,9 +1,10 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 16**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 17**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
 cookie `httpOnly`, RBAC por permissão, auditoria append-only, headers de segurança, CORS
-restrito, limites de requisição, validação de ambiente e o CI conferindo cada PR. Cada seção
+restrito, limites de requisição, validação de ambiente e o cadastro aberto de estabelecimento,
+com confirmação de e-mail. O CI está pronto, mas desligado até a Fase 28 (seção 12). Cada seção
 abaixo diz o que já vale e o que ainda não.
 
 ---
@@ -127,6 +128,11 @@ forma exportada de proteger uma rota.
 O usuário é **recarregado do banco a cada requisição**, então desativar alguém tem efeito
 imediato em vez de esperar o token expirar.
 
+**Ainda não vale para o estabelecimento suspenso** (achado da Fase 17): o middleware e a
+renovação de sessão não olham o status do tenant. A suspensão tira o cardápio do ar e impede um
+login novo, mas quem já estava logado continua no painel. Resolve na Fase 19, junto dos comandos
+de suspensão.
+
 ---
 
 ## 5. Dívida de privacidade assumida: identificação por telefone
@@ -197,8 +203,9 @@ imediatamente se algo estiver inválido, em vez de descobrir no meio de uma requ
 
 ### Área pública — **em vigor**
 
-As rotas sem login são o cardápio (`GET .../menu`), a identificação por telefone (seção 5) e o
-envio do pedido (`POST .../orders`). O que as protege:
+As rotas sem login são o cardápio (`GET .../menu`), a identificação por telefone (seção 5), o
+envio do pedido (`POST .../orders`) e o cadastro de estabelecimento (`/signup`, abaixo). O que as
+protege:
 
 - **O tenant vem só do slug**, traduzido para id pelo servidor. Um token de outro estabelecimento
   enviado junto é ignorado — há teste para isso.
@@ -244,6 +251,38 @@ então segue a mesma regra da identificação — endereço salvo sai **mascarad
 na hora sai completo, e o nome é o que a pessoa digitou (nunca o completo guardado). O endereço
 completo de um endereço salvo só na mensagem depois do OTP (ROADMAP).
 
+### Cadastro de estabelecimento — **em vigor**
+
+Aberto a qualquer pessoa, no plano gratuito (Fase 17). É a rota pública que **cria** coisas — um
+estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por isso a mais fechada:
+
+- **O cardápio nasce fora do ar** (`PENDING`) e só é publicado quando o dono confirma o e-mail.
+  Até lá, responde o mesmo 404 de um endereço inexistente. O painel funciona na hora.
+- **O e-mail de confirmação não repete nada do que foi digitado.** Ele vai para um endereço que
+  quem se cadastra escolhe — pode ser de outra pessoa. Se levasse o nome do estabelecimento, o
+  cadastro viraria um jeito de mandar, pelo nosso remetente, um texto qualquer ("clique aqui e
+  informe sua senha") para qualquer endereço. Vai só o endereço do cardápio, que só tem letras,
+  números e hífen, e o link. E-mail só em texto: não há HTML a escapar. Há teste com o golpe no
+  nome do estabelecimento.
+- **O link:** 256 bits aleatórios, só o hash no banco, 48 horas, uso único, o tenant embutido
+  como dica de roteamento (como o refresh token). O token vai no **fragmento** do link, que não
+  chega a log de servidor nem vaza por `Referer`; a página o manda no corpo de um POST.
+- **Confirmar só sai de `PENDING`:** um link guardado não desfaz uma suspensão da plataforma.
+- **O reenvio vai sempre para o e-mail do dono**, seja quem for que peça, com um minuto entre
+  envios contado no banco — um atendente não publica o cardápio com o próprio e-mail.
+- **Não revela quem tem conta.** E-mail é único por estabelecimento, e cada cadastro cria um
+  estabelecimento novo: o mesmo e-mail pode cadastrar outro, e a resposta nunca diz "já existe".
+- **Limites:** 10 cadastros por hora por IP, um campo-armadilha que só robô preenche, endereços
+  reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
+- **O aceite dos termos vai para a auditoria**, com a versão aceita e o IP. Versão diferente da
+  atual é recusada: ninguém aceita um texto que não viu.
+- **Tudo numa transação**, e os e-mails só depois do commit. Sem o plano gratuito no banco, o
+  cadastro responde 503 em vez de criar estabelecimento sem plano.
+- `EMAIL_DRIVER=memory`, que descartaria todo e-mail, é recusado em produção na inicialização.
+
+**O que ainda não há:** captcha (só se aparecer abuso — ROADMAP) e moderação além da suspensão por
+comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
+
 ### Pedidos em tempo real — **em vigor**
 
 - O canal WebSocket entrega cada aviso só às conexões do estabelecimento dele, com o tenant tirado
@@ -281,17 +320,17 @@ cancelamento.
 
 ## 8. Cabeçalhos, CORS e limites
 
-| Item             | Estado                                                                                               |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| Security headers | **Ativo** — `@fastify/helmet` (CSP, HSTS, `X-Content-Type-Options`, frameguard), com teste           |
-| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga; libera GET, HEAD, POST, PUT, PATCH e DELETE        |
-| Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone e no envio de pedido |
-| Documentação     | **Ativo** — `/docs` desabilitado em produção                                                         |
-| IP de quem chama | **Explícito** — `TRUST_PROXY`: ligado só atrás de proxy; desligado, `X-Forwarded-For` é ignorado     |
-| Tamanho do corpo | **Ativo** — 64 KB para JSON (`JSON_BODY_LIMIT_BYTES`); upload com limite próprio                     |
-| Logs             | **Ativo** — sem `authorization`, cookies, senha, hash, token de acesso e refresh token, com teste    |
-| Sondas           | **Ativo** — `/ready` não revela o motivo da falha do banco em produção                               |
-| HTTPS            | Responsabilidade do ambiente de deploy                                                               |
+| Item             | Estado                                                                                                                                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security headers | **Ativo** — `@fastify/helmet` (CSP, HSTS, `X-Content-Type-Options`, frameguard), com teste                                                                                                                                    |
+| CORS             | **Ativo** — restrito a `WEB_ORIGIN`, sem curinga; libera GET, HEAD, POST, PUT, PATCH e DELETE                                                                                                                                 |
+| Rate limiting    | **Ativo** — limite global; 5/min no login; 10/min na identificação por telefone e no envio de pedido; 10/hora no cadastro, 60/min na consulta de endereço, 10/min na confirmação, 5/hora no reenvio (e 1 minuto entre envios) |
+| Documentação     | **Ativo** — `/docs` desabilitado em produção                                                                                                                                                                                  |
+| IP de quem chama | **Explícito** — `TRUST_PROXY`: ligado só atrás de proxy; desligado, `X-Forwarded-For` é ignorado                                                                                                                              |
+| Tamanho do corpo | **Ativo** — 64 KB para JSON (`JSON_BODY_LIMIT_BYTES`); upload com limite próprio                                                                                                                                              |
+| Logs             | **Ativo** — sem `authorization`, cookies, senha, hash, token de acesso e refresh token, com teste                                                                                                                             |
+| Sondas           | **Ativo** — `/ready` não revela o motivo da falha do banco em produção                                                                                                                                                        |
+| HTTPS            | Responsabilidade do ambiente de deploy                                                                                                                                                                                        |
 
 O limite global conta na memória do processo. Com mais de uma instância em produção isso vira um
 limite por instância; um armazenamento compartilhado entra junto do deploy (ROADMAP).
@@ -320,6 +359,8 @@ o redimensionamento (ROADMAP).
 - `.env` está no `.gitignore` e **jamais** é commitado.
 - `.env.example` documenta as chaves com valores de desenvolvimento, nunca reais.
 - Em produção, segredos vêm do gerenciador do ambiente, nunca de arquivo versionado.
+- A senha do SMTP (`SMTP_PASSWORD`) é segredo como o `JWT_SECRET`. Em desenvolvimento não há
+  nenhuma: o Mailpit aceita qualquer envio, e nada sai da máquina.
 - Credencial e token são redigidos no logger, não no ponto de chamada — para não depender de
   alguém lembrar em cada log novo.
 - O CI não tem segredo nenhum: roda só com os valores de desenvolvimento (seção 12).

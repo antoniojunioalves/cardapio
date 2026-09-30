@@ -43,6 +43,10 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Convite de usuário por e-mail — hoje o dono define a senha inicial, e a pessoa a troca depois
   (Fase 25)
 - Transferência da posse do estabelecimento (papel `OWNER`)
+- Troca do próprio e-mail, com nova confirmação — o link de confirmação (Fase 17) vale só para o
+  e-mail ao qual foi enviado, então a troca já nasce protegida; falta a funcionalidade
+- Captcha no cadastro, se aparecer abuso — hoje há limite por IP, campo-armadilha e o cardápio só
+  vai ao ar depois da confirmação do e-mail (Fase 17)
 
 - OTP por SMS e WhatsApp
 - Login via WhatsApp

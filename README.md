@@ -9,8 +9,9 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 16 concluída** — o CI confere cada PR. As fases 17 a 28 fecham o MVP —
-cadastro aberto, telas de gestão e o sistema no ar (ver
+**Status atual: Fase 17 concluída** — o estabelecimento já se cadastra pela API, no plano
+gratuito, e o cardápio é publicado quando o dono confirma o e-mail. As fases 18 a 28 fecham o
+MVP — telas do cadastro e de gestão, e o sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
@@ -42,10 +43,10 @@ Versões fixadas e verificadas em conjunto — a instalação resolve sem nenhum
 | Camada    | Tecnologias                                                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------- |
 | Base      | Node 24.11 · TypeScript 6.0 · pnpm 10.20 · Turborepo 2.11                                                           |
-| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3                                               |
+| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3 · nodemailer 10                               |
 | Frontend  | Vite 8.3 · React 19.3 · Tailwind CSS 4.3 · React Router 8.4 · TanStack Query 5 · Zustand 5.0 · React Hook Form 7.89 |
 | Qualidade | ESLint 10.11 · typescript-eslint 8.70 · Prettier 3.9 · Vitest 5.0                                                   |
-| Infra     | Docker Compose · GitHub Actions (CI, desligado até a Fase 28)                                                       |
+| Infra     | Docker Compose (PostgreSQL, Mailpit) · GitHub Actions (CI, desligado até a Fase 28)                                 |
 
 **TypeScript 6, e não 7:** o TypeScript 7 já é estável, mas o `typescript-eslint` declara
 `typescript >=4.8.4 <6.1.0` e não o suporta em nenhuma versão publicada. Adotá-lo hoje custaria
@@ -80,6 +81,7 @@ Depois disso:
 - Frontend — <http://localhost:5173>
 - API — <http://localhost:3333/health>
 - Documentação da API — <http://localhost:3333/docs>
+- E-mails enviados pela API (Mailpit) — <http://localhost:8025>
 
 O `.env` é obrigatório: a API não sobe sem `DATABASE_URL`. Um valor padrão apontaria em silêncio
 para o banco errado, o que é pior do que falhar na inicialização.
@@ -96,7 +98,7 @@ para o banco errado, o que é pior do que falhar na inicialização.
 | `pnpm verify`       | Formatação, typecheck, lint, testes e build — o mesmo que o CI  |
 | `pnpm format`       | Prettier, escrevendo                                            |
 | `pnpm format:check` | Prettier, só conferindo                                         |
-| `pnpm db:up`        | Sobe o PostgreSQL via Docker Compose                            |
+| `pnpm db:up`        | Sobe o PostgreSQL e o Mailpit via Docker Compose                |
 | `pnpm db:down`      | Derruba os containers (o volume de dados permanece)             |
 | `pnpm db:reset`     | Apaga o volume e recria do zero                                 |
 | `pnpm db:logs`      | Acompanha os logs do PostgreSQL                                 |

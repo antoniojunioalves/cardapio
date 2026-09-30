@@ -1,9 +1,9 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-30
-**Fase atual:** 16 — concluída, aguardando validação
-**Próxima:** 17 — envio de e-mail e cadastro do estabelecimento pela API. As fases 17 a 28 fecham o
-MVP (ver "O que falta para o MVP")
+**Fase atual:** 17 — concluída, aguardando validação
+**Próxima:** 18 — telas do cadastro: landing page, cadastro, confirmação de e-mail, termos. As fases
+18 a 28 fecham o MVP (ver "O que falta para o MVP")
 
 ---
 
@@ -50,11 +50,17 @@ usuário fecha a conexão ao vivo dele na hora.
 
 **O CI está pronto e guardado (Fase 16).** Formatação, typecheck, lint, testes e build no GitHub
 Actions, com o PostgreSQL criado do zero pelos mesmos scripts de init do desenvolvimento. Foi
-desligado para agilizar os merges — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt` e volta na Fase 28. Até lá, o `pnpm verify` roda os mesmos passos na máquina de quem desenvolve.
+desligado para agilizar os merges — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt` e volta
+na Fase 28. Até lá, o `pnpm verify` roda os mesmos passos na máquina de quem desenvolve.
 
-**Ainda não existe:** o cadastro do estabelecimento pela página inicial e as telas de
-configuração, cardápio, usuários e clientes — hoje o estabelecimento nasce pelo seed e é
-configurado pela API. As fases 17 a 28 fecham o MVP; ver "O que falta para o MVP".
+**O estabelecimento já se cadastra pela API (Fase 17).** `POST /api/v1/public/signup` cria o
+estabelecimento no plano gratuito, com o dono e a sessão aberta; o cardápio nasce fora do ar e é
+publicado quando o dono clica no link enviado por e-mail. Em desenvolvimento, os e-mails caem no
+Mailpit (http://localhost:8025).
+
+**Ainda não existe:** as telas do cadastro e as telas de configuração, cardápio, usuários e
+clientes — hoje o estabelecimento se cadastra e é configurado pela API. As fases 18 a 28 fecham o
+MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -81,8 +87,8 @@ configurado pela API. As fases 17 a 28 fecham o MVP; ver "O que falta para o MVP
 | 14  | Limites por plano                                                                                                   | ✅ Concluída |
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ✅ Concluída |
 | 16  | CI no GitHub e ajustes nos docs — _o workflow ficou guardado até a Fase 28_                                         | ✅ Concluída |
-| 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ⬜ Próxima   |
-| 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ⬜           |
+| 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ✅ Concluída |
+| 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ⬜ Próxima   |
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜           |
 | 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜           |
 | 21  | Estrutura do painel e configuração do estabelecimento                                                               | ⬜           |
@@ -101,84 +107,84 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 16 — concluída
+## Fase 17 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                                  | Status |
-| --- | ------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | Workflow `.github/workflows/ci.yml`: formatação, typecheck, lint, testes e build em cada PR e na `main` | ✅     |
-| 2   | PostgreSQL pelo mesmo `docker-compose.yml`, criado do zero pelos scripts de init a cada execução        | ✅     |
-| 3   | Healthcheck do compose pela rede: o `--wait` só libera depois dos scripts de init                       | ✅     |
-| 4   | Actions fixadas pelo commit, token só de leitura, checkout sem credencial gravada, nenhum segredo       | ✅     |
-| 5   | `pnpm verify` igual ao CI: confere a formatação, e o `pnpm test` roda um pacote por vez                 | ✅     |
-| 6   | Ajustes nos docs e no comentário do `vitest.config.ts`                                                  | ✅     |
-| 7   | `turbo.json`: a tarefa `test` declara `TZ` e as URLs do banco de testes                                 | ✅     |
+| #   | Tarefa                                                                                                   | Status |
+| --- | -------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | CI guardado registrado nos docs, com o aviso na Fase 28 de que ela precisa dele                          | ✅     |
+| 2   | `packages/shared`: endereço do cardápio (formato e reservados), senha, versão dos termos, fuso, cadastro | ✅     |
+| 3   | Banco: status `PENDING`, `users.email_verified_at`, `email_verification_tokens` com RLS forçado          | ✅     |
+| 4   | `seed-plans.ts`: os planos saem do seed de demonstração, para os testes e o seed de produção             | ✅     |
+| 5   | `EmailService`: SMTP (`nodemailer`), memória nos testes, Mailpit no compose, variáveis de ambiente       | ✅     |
+| 6   | `criarEstabelecimento` numa transação, com a origem `signup` no `TenantContext`; o seed passa a usá-lo   | ✅     |
+| 7   | Cadastro, confirmação, reenvio, situação e disponibilidade do endereço, cada rota com limite próprio     | ✅     |
+| 8   | Aviso à plataforma a cada cadastro; aceite dos termos na auditoria, com a versão e o IP                  | ✅     |
+| 9   | Testes: fluxo completo, recusas, reenvio, isolamento, limite por IP, configuração de e-mail              | ✅     |
 
 ### Decisões e achados desta fase
 
-**Achado: para um banco novo, o healthcheck do compose dava "pronto" cedo demais.** O
-`pg_isready` testava pelo socket local, e na primeira inicialização o PostgreSQL sobe um servidor
-temporário, só no socket, para rodar os scripts de `docker/postgres/init/`. No CI, o
-`docker compose up --wait` poderia liberar os testes antes de as roles e o `cardapio_test`
-existirem — uma falha intermitente, de tempo. No desenvolvimento nunca apareceu, porque o banco
-já existe. O healthcheck passou a testar pela rede (`-h 127.0.0.1`), onde o servidor temporário
-não escuta.
+**O e-mail de confirmação não repete nada do que foi digitado.** Ele vai para um endereço que
+quem se cadastra escolhe — pode ser de outra pessoa. Se levasse o nome do estabelecimento, o
+cadastro viraria um jeito de mandar, pelo nosso remetente, um texto qualquer para qualquer
+endereço. Vai só o endereço do cardápio (letras, números e hífen) e o link; o aviso para a
+plataforma, que vai para nós, leva tudo. Há teste com um golpe escrito no nome.
 
-**Banco pelo compose, e não por _service container_.** O service container do GitHub sobe antes
-do checkout e não enxerga os scripts de init; eles teriam de ser copiados para o workflow, numa
-segunda versão que divergiria em silêncio. Pelo compose, o CI prova a cada execução que os
-scripts criam do zero um banco onde a suíte inteira passa.
+**O token vai no fragmento do link** (`/confirmar-email#token=…`), que o navegador não envia ao
+servidor nem repassa como `Referer`: ele não aparece em log nenhum. A página da Fase 18 o lê e o
+manda à API no corpo de um POST.
 
-**Actions fixadas pelo commit, não pela tag** — uma tag pode ser movida por quem controla a
-action. Versões atuais: checkout v7.0.1, setup-node v7.0.0 e pnpm/action-setup v6.1.0, com as
-entradas usadas conferidas no `action.yml` de cada commit.
+**Uma transação só, e os e-mails depois do commit.** O id do estabelecimento é pedido ao banco
+antes da transação, e o contexto nasce dele: estabelecimento, assinatura, dono, aceite dos termos,
+link e sessão são gravados juntos. Servidor de e-mail fora do ar não desfaz o cadastro — a
+resposta diz que o e-mail não saiu, e o painel oferece o reenvio.
 
-**Sem `.env` no CI.** O plano previa copiar o `.env.example`, mas nada precisa dele: a
-`DATABASE_URL` e o `JWT_SECRET` dos testes vêm do `vitest.config.ts`, e o resto tem valor
-padrão.
+**Confirmar só tira de `PENDING`**: um link guardado não desfaz uma suspensão. **O reenvio vai
+sempre para quem cadastrou**, seja quem for que peça, com um minuto entre envios contado no
+banco.
 
-**`pnpm verify` igual ao CI.** Ele não conferia a formatação, e o `pnpm test` rodava os pacotes em
-paralelo — o que já derrubou o processo no WSL (código 137). Agora os dois fazem o mesmo, e o
-DEVELOPMENT.md explica as duas diferenças que sobram: o fuso (o GitHub roda em UTC) e o banco
-criado do zero.
+**Fuso no cadastro, fora do plano.** O fuso do estabelecimento não é editável em lugar nenhum, e
+um estabelecimento de Manaus veria o aberto/fechado errado com o de Brasília. O cadastro aceita
+um fuso opcional, validado pelo `Intl`; sem ele, vale Brasília. A tela da Fase 18 pode mandar o
+do navegador.
 
-**Achado: o Turborepo barrava as variáveis dos testes, e o cache escondia isso.** No modo padrão
-do Turbo 2, só chega ao script a variável declarada no `env` da tarefa — e só ela entra na chave
-do cache. Comprovado num experimento isolado e depois no próprio repositório:
-`TEST_DATABASE_URL`, que o `.env.example` documenta, nunca chegava ao Vitest pelo `pnpm test`
-(só funcionava porque o padrão coincide); e `TZ=UTC pnpm test` logo depois de um `pnpm test`
-reapresentava o resultado antigo sem rodar nada. A tarefa `test` passou a declarar `TZ`,
-`TEST_DATABASE_URL` e `TEST_MIGRATION_DATABASE_URL`. O CI não era afetado — roda do zero, com os
-valores padrão —, mas as instruções de reprodução local dependiam disso.
+**Desvio do plano: a fixture `criarTenantComUsuario` não passou a usar `criarEstabelecimento`.**
+Ela cria papéis e permissões próprios de cada teste e nenhum plano — é o que a maioria dos testes
+precisa provar. Com o OWNER e o plano FREE (2 usuários), centenas de testes passariam a provar
+outra coisa. O seed usa a função; os testes do cadastro usam a rota de verdade.
 
-**Achado: o repositório é público** no GitHub, e o SECURITY.md dizia que o projeto era privado.
-Não há segredo no repositório, e em repositório público o CI não gasta minutos. O workflow já foi
-desenhado para isso: PR de fork roda com token só de leitura e sem segredos. Para relatar
-vulnerabilidade, o canal previsto é o relato privado do GitHub, que hoje está desligado — ligar é
-decisão do Junio.
+**Achado: suspender não derruba quem já está logado.** O middleware e a renovação de sessão não
+olham o status do estabelecimento. Não afeta a Fase 17 — é até o que deixa o dono de um cadastro
+ainda não confirmado usar o painel —, mas a suspensão da Fase 19 precisa derrubar as sessões.
+
+**Origens do contexto:** `signup`, para o estabelecimento que está sendo criado, e `token`, para o
+tenant embutido num token nosso. A renovação de sessão usava a de slug público e passou a declarar
+a verdadeira.
+
+**Limite do plano gratuito contra abuso — avaliado, não implementado.** O cadastro aberto limita
+10 cadastros por hora por IP, mas cada estabelecimento pode subir imagens de até 5 MB sem limite
+de quantidade: o risco real é o disco. Sugestão: um limite de produtos no FREE (a Fase 14 já
+suporta um recurso novo) e a redução das imagens no upload (Fase 20, já no plano). Decisão do
+Junio.
 
 ### Verificação executada
 
-| Verificação                                                                       | Resultado                                                                          |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `actionlint` no workflow                                                          | nenhum problema                                                                    |
-| `pnpm format:check` / `typecheck` / `lint` / `build`                              | zero erro                                                                          |
-| Testes do web e do shared em UTC, como no GitHub                                  | 149 + 13 passando                                                                  |
-| Clone limpo, `--frozen-lockfile`, banco novo pelos scripts de init, testes em UTC | **588 testes** (426 API + 149 web + 13 shared)                                     |
-| Os testes usaram o banco novo, e não o de desenvolvimento                         | as 20 migrations aplicadas nele — a `TEST_DATABASE_URL` chegou ao Vitest           |
-| `docker compose up --wait` com banco novo                                         | liberou em 6 a 7 s, depois dos três scripts de init (logs do banco)                |
-| Servidor temporário da imagem `postgres:18-alpine`                                | `listen_addresses=''`: não escuta na rede, e o healthcheck novo só vê o definitivo |
-| Execução no GitHub                                                                | no primeiro PR — validação do Junio                                                |
+| Verificação                                               | Resultado                                                                                                                                                                                                              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                                             | **627 testes** (454 API + 149 web + 24 shared); formatação, typecheck, lint e build                                                                                                                                    |
+| Testes sensíveis à regra                                  | cadastro já publicado, sem campo-armadilha, confirmação de suspenso, reenvio desviado: cada um cai                                                                                                                     |
+| API compilada, banco de desenvolvimento e SMTP no Mailpit | cadastro 201 e cardápio 404; os dois e-mails chegaram, com acentos certos e a confirmação sem texto digitado; o link publicou (cardápio 200), o segundo clique respondeu `ALREADY_CONFIRMED`, o reenvio depois deu 409 |
+| Clone limpo, `--frozen-lockfile`                          | `pnpm verify` inteiro: os mesmos 627 testes, formatação, typecheck, lint e build                                                                                                                                       |
 
 ---
 
 ## O que falta para o MVP
 
-As fases 1 a 16 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+As fases 1 a 17 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
 (MVP.md, "Como saber que acabou"). Os passos 4 a 7 funcionam de ponta a ponta — cardápio no
 celular, pedido, WhatsApp, painel ao vivo, status. Os passos 1 a 3 só funcionam **pela API**, e
-o sistema ainda não está no ar. As fases 17 a 28 fecham essa distância; a 16 pôs o CI no ar.
+o sistema ainda não está no ar. As fases 18 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -197,26 +203,6 @@ o sistema ainda não está no ar. As fases 17 a 28 fecham essa distância; a 16 
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
 
-### Fase 17 — Envio de e-mail e cadastro pela API
-
-- **`EmailService`** no padrão do `StorageService`: provedor SMTP, o Mailpit no
-  `docker-compose.yml` para ver os e-mails em desenvolvimento, e um provedor falso nos testes.
-- **`criarEstabelecimento`**, numa transação só: estabelecimento, assinatura do plano FREE, dono
-  com o papel OWNER e configurações iniciais. Extraído de `semearEstabelecimentos`
-  (`apps/api/src/db/seed.ts`); o seed e `criarTenantComUsuario` passam a usá-lo.
-- **Uma nova origem nomeada no `TenantContext`** — a arquitetura proíbe construtor genérico.
-- **`POST /api/v1/public/signup`:** nome do estabelecimento, slug, nome do dono, e-mail, senha e
-  a versão dos termos aceita. Slugs reservados numa lista em `packages/shared` — `/cadastro`,
-  `/termos` e as demais páginas colidiriam com `/:tenantSlug`. Limite por IP e campo-armadilha
-  contra robôs. Já entra logado, com o cookie da Fase 15. Nunca responde "e-mail já
-  cadastrado".
-- **Confirmação de e-mail:** token aleatório, guardado como hash, que expira e vale uma vez. O
-  painel funciona na hora; **o cardápio só fica público depois da confirmação** — até lá, o
-  mesmo 404. Com reenvio.
-- **Aviso à plataforma** por e-mail a cada novo cadastro. **Aceite dos termos na auditoria**,
-  com a versão e o IP. Rotas abertas novas em `ROTAS_ABERTAS`, com o motivo.
-- A avaliar: limite de produtos ou de armazenamento no plano gratuito, contra abuso.
-
 ### Fase 18 — Telas do cadastro
 
 - `/` vira a landing page, no lugar da página de teste do ambiente, com "Começar grátis" e
@@ -225,12 +211,19 @@ vazio**, como faria alguém que nunca viu o sistema.
 - `/termos` e `/privacidade` com texto provisório até o Junio entregar o final;
   `/confirmar-email` recebe o link do e-mail.
 - O checkout ganha um aviso de privacidade, com link, para os dados do cliente final.
+- A API está pronta (Fase 17): `POST /public/signup`, `GET /public/signup/slug-availability`,
+  `POST /public/signup/confirm-email`, `GET /admin/email-confirmation` e o reenvio. Os schemas e a
+  versão dos termos (`VERSAO_DOS_TERMOS`) estão em `packages/shared`; o link do e-mail aponta para
+  `/confirmar-email#token=…`. O painel ganha o aviso "confirme seu e-mail", com o botão de
+  reenviar.
 
 ### Fase 19 — Comandos do Super Admin
 
 - Um comando `pnpm` para listar estabelecimentos, suspender, reativar, trocar o plano e reenviar
   a confirmação. Roda no servidor, e cada ação fica registrada.
 - A tabela `platform_admins` fica para o painel da plataforma, no ROADMAP.
+- **Suspender precisa derrubar quem já está logado** (achado da Fase 17): hoje o middleware e a
+  renovação de sessão não olham o status do estabelecimento.
 
 ### Fase 20 — Tratamento de imagens no upload
 
@@ -262,7 +255,8 @@ vazio**, como faria alguém que nunca viu o sistema.
 
 - Tela de usuários sobre a API da Fase 14.
 - Cada pessoa troca a própria senha, e o dono redefine a de um atendente.
-- "Esqueci minha senha" por e-mail, com o envio da Fase 17.
+- "Esqueci minha senha" por e-mail, com o envio da Fase 17 — e o mesmo desenho do link de
+  confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link.
 
 ### Fase 26 — Clientes e histórico de pedidos
 
@@ -298,6 +292,12 @@ Pode virar duas fases.
 ---
 
 ## Fases anteriores
+
+**Fase 16** escreveu o CI no GitHub Actions — com o PostgreSQL criado do zero pelos scripts de
+init, actions fixadas pelo commit e nenhum segredo —, guardado depois até a Fase 28 para agilizar
+os merges. No caminho: o healthcheck do compose passou a testar pela rede (pelo socket, dava
+"pronto" antes dos scripts de init), o `turbo.json` passou a repassar aos testes o fuso e o banco
+de testes (o Turbo os barrava, e o cache escondia), e o `pnpm verify` ficou igual ao CI.
 
 **Fase 15** revisou as fronteiras: o refresh token do painel foi para um cookie `httpOnly`; o
 `requireAuth` passou para `onRequest`, depois de um teste-guarda pelo inventário de rotas mostrar
@@ -384,51 +384,57 @@ DML) e à correção do ARCHITECTURE.md.
 
 O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Decisão                                             | Resumo                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------- |
-| Banco único, schema único, `tenant_id`              | Muitos tenants pequenos e homogêneos                                 |
-| RLS + camada tenant-scoped + teste-guarda           | Duas defesas independentes, mais um portão no CI                     |
-| Duas roles de banco: migrator e app                 | O dono da tabela consegue desligar o RLS; a app não pode ser dona    |
-| `TenantContext` sem construtor genérico             | Não há como criar contexto a partir de dado do cliente               |
-| `tenants` sem RLS, com repositório estreito         | A resolução do slug antecede o contexto                              |
-| Guarda exige declarar tabelas globais               | Pega a tabela que deveria ter `tenant_id` e não tem                  |
-| Super Admin em tabela própria                       | Com `tenant_id` nulo a policy nunca casaria — linha invisível        |
-| Refresh token opaco, não JWT                        | Já consulta o banco para revogação; assinatura não compra nada       |
-| `audit_logs` sem policy de update nem delete        | Append-only pela estrutura, não por convenção                        |
-| Usuário recarregado a cada requisição               | Desativar alguém passa a valer na hora                               |
-| `requireAuth()` devolve a cadeia pronta             | Ordem errada entre autenticar e autorizar falharia em silêncio       |
-| argon2id com parâmetros explícitos                  | Um padrão invisível nunca é revisitado                               |
-| Substituição em vez de CRUD em horários e regiões   | É como a grade semanal é editada de verdade                          |
-| `closesAt = opensAt` proibido                       | Ambiguidade tornaria a travessia de meia-noite indecidível           |
-| Região inativa conta como inexistente               | Desativar precisa impedir pedido, não só esconder                    |
-| Domínio separado de banco e framework               | Casos de borda cobertos em milissegundos                             |
-| `DRIZZLE_CONFIG` compartilhado                      | Instância sem `casing` falha de um jeito que parece outro problema   |
-| Banco guarda chave de storage, não URL              | Trocar de provider não exige reescrever linhas                       |
-| Tipo de imagem detectado pelos bytes                | Extensão e `Content-Type` são escolhidos por quem envia              |
-| Arquivo antigo apagado só depois do commit          | Rollback não deixa referência para arquivo inexistente               |
-| UUIDv7 gerado no banco (`uuidv7()` do PG 18)        | Vale para seed e INSERT manual, sem dependência                      |
-| Testes contra PostgreSQL real                       | RLS não se prova com mock                                            |
-| `/health` não consulta o banco                      | Senão uma oscilação do banco reinicia processos saudáveis            |
-| TypeScript 6.0.3 em vez de 7.0.2                    | `typescript-eslint` não suporta TS 7                                 |
-| Dinheiro em centavos inteiros                       | Ponto flutuante quebra a checagem de pedido mínimo                   |
-| Escopo `@repo/` nos pacotes internos                | Renomear o produto não toca em nenhum import                         |
-| Compose cobre só o PostgreSQL                       | Containerizar o dev de um monorepo pnpm custa mais do que rende      |
-| Dependências instaladas na fase em que forem usadas | `package.json` reflete o que o código importa                        |
-| Identificação devolve endereço mascarado            | Telefone não prova identidade; o pedido referencia o endereço por id |
-| Cliente por estabelecimento                         | O dado serve a quem o coletou                                        |
-| CI sobe o banco pelo mesmo compose                  | Um caminho só para roles e banco; o CI prova os scripts de init      |
-| Actions do CI fixadas pelo commit                   | Uma tag pode ser movida por quem controla a action                   |
-| Variáveis dos testes declaradas no `turbo.json`     | O Turbo barra as não declaradas, e o cache esconde a diferença       |
+| Decisão                                             | Resumo                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------- |
+| Banco único, schema único, `tenant_id`              | Muitos tenants pequenos e homogêneos                                      |
+| RLS + camada tenant-scoped + teste-guarda           | Duas defesas independentes, mais um portão no CI                          |
+| Duas roles de banco: migrator e app                 | O dono da tabela consegue desligar o RLS; a app não pode ser dona         |
+| `TenantContext` sem construtor genérico             | Não há como criar contexto a partir de dado do cliente                    |
+| `tenants` sem RLS, com repositório estreito         | A resolução do slug antecede o contexto                                   |
+| Guarda exige declarar tabelas globais               | Pega a tabela que deveria ter `tenant_id` e não tem                       |
+| Super Admin em tabela própria                       | Com `tenant_id` nulo a policy nunca casaria — linha invisível             |
+| Refresh token opaco, não JWT                        | Já consulta o banco para revogação; assinatura não compra nada            |
+| `audit_logs` sem policy de update nem delete        | Append-only pela estrutura, não por convenção                             |
+| Usuário recarregado a cada requisição               | Desativar alguém passa a valer na hora                                    |
+| `requireAuth()` devolve a cadeia pronta             | Ordem errada entre autenticar e autorizar falharia em silêncio            |
+| argon2id com parâmetros explícitos                  | Um padrão invisível nunca é revisitado                                    |
+| Substituição em vez de CRUD em horários e regiões   | É como a grade semanal é editada de verdade                               |
+| `closesAt = opensAt` proibido                       | Ambiguidade tornaria a travessia de meia-noite indecidível                |
+| Região inativa conta como inexistente               | Desativar precisa impedir pedido, não só esconder                         |
+| Domínio separado de banco e framework               | Casos de borda cobertos em milissegundos                                  |
+| `DRIZZLE_CONFIG` compartilhado                      | Instância sem `casing` falha de um jeito que parece outro problema        |
+| Banco guarda chave de storage, não URL              | Trocar de provider não exige reescrever linhas                            |
+| Tipo de imagem detectado pelos bytes                | Extensão e `Content-Type` são escolhidos por quem envia                   |
+| Arquivo antigo apagado só depois do commit          | Rollback não deixa referência para arquivo inexistente                    |
+| UUIDv7 gerado no banco (`uuidv7()` do PG 18)        | Vale para seed e INSERT manual, sem dependência                           |
+| Testes contra PostgreSQL real                       | RLS não se prova com mock                                                 |
+| `/health` não consulta o banco                      | Senão uma oscilação do banco reinicia processos saudáveis                 |
+| TypeScript 6.0.3 em vez de 7.0.2                    | `typescript-eslint` não suporta TS 7                                      |
+| Dinheiro em centavos inteiros                       | Ponto flutuante quebra a checagem de pedido mínimo                        |
+| Escopo `@repo/` nos pacotes internos                | Renomear o produto não toca em nenhum import                              |
+| Compose cobre só o PostgreSQL                       | Containerizar o dev de um monorepo pnpm custa mais do que rende           |
+| Dependências instaladas na fase em que forem usadas | `package.json` reflete o que o código importa                             |
+| Identificação devolve endereço mascarado            | Telefone não prova identidade; o pedido referencia o endereço por id      |
+| Cliente por estabelecimento                         | O dado serve a quem o coletou                                             |
+| CI sobe o banco pelo mesmo compose                  | Um caminho só para roles e banco; o CI prova os scripts de init           |
+| Actions do CI fixadas pelo commit                   | Uma tag pode ser movida por quem controla a action                        |
+| Variáveis dos testes declaradas no `turbo.json`     | O Turbo barra as não declaradas, e o cache esconde a diferença            |
+| Cadastro aberto nasce `PENDING`                     | O cardápio só vai ao ar depois de o dono provar o e-mail                  |
+| E-mail a terceiros sem texto digitado               | Senão o cadastro vira jeito de mandar qualquer texto pelo nosso remetente |
+| Token de confirmação no fragmento do link           | O fragmento não chega ao servidor nem vaza por `Referer`                  |
+| E-mails só depois do commit                         | Rollback não desfaz e-mail enviado                                        |
 
 ---
 
 ## Pendências conhecidas
 
-| Item                                                                          | Quando resolve                           |
-| ----------------------------------------------------------------------------- | ---------------------------------------- |
-| CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`            | Fase 28, antes do deploy                 |
-| Sem Dockerfile para API e web                                                 | Fase 28                                  |
-| Rate limit conta em memória — vira limite por instância se houver mais de uma | Fase 28, se houver mais de uma instância |
-| Plano FREE só existe porque o seed de demonstração o cria                     | Fase 28 (seed essencial de produção)     |
-| Contrato do cardápio público copiado no web, fora do `packages/shared`        | Quando o contrato mudar de novo          |
-| Checkout não lembra os dados no aparelho ao voltar ao cardápio                | ROADMAP                                  |
+| Item                                                                                                                                                              | Quando resolve                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Suspender não derruba as sessões abertas — o middleware não olha o status do estabelecimento                                                                      | Fase 19                                  |
+| Limite de produtos ou de armazenamento no plano gratuito, contra abuso do cadastro aberto                                                                         | A decidir — sugestão: com a Fase 20      |
+| CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
+| Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |
+| Rate limit conta em memória — vira limite por instância se houver mais de uma                                                                                     | Fase 28, se houver mais de uma instância |
+| Os catálogos (papéis, formas de pagamento, planos) só são semeados pelo seed de demonstração — já separados em `seed-rbac`, `seed-payment-methods` e `seed-plans` | Fase 28 (seed essencial de produção)     |
+| Contrato do cardápio público copiado no web, fora do `packages/shared`                                                                                            | Quando o contrato mudar de novo          |
+| Checkout não lembra os dados no aparelho ao voltar ao cardápio                                                                                                    | ROADMAP                                  |
