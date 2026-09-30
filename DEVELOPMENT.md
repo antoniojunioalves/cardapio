@@ -38,21 +38,22 @@ mudança simplesmente não acontece e o sintoma é um erro de permissão inexpli
 
 ## Comandos
 
-| Comando            | Efeito                                                           |
-| ------------------ | ---------------------------------------------------------------- |
-| `pnpm dev`         | API e web em watch, em paralelo                                  |
-| `pnpm verify`      | typecheck → lint → test → build                                  |
-| `pnpm typecheck`   | TypeScript em todos os pacotes                                   |
-| `pnpm lint`        | ESLint com informação de tipos                                   |
-| `pnpm test`        | Vitest em todos os pacotes — **exige `pnpm db:up`**              |
-| `pnpm build`       | Build de produção                                                |
-| `pnpm format`      | Prettier, escrevendo                                             |
-| `pnpm db:up`       | Sobe o PostgreSQL                                                |
-| `pnpm db:down`     | Derruba os containers, preservando o volume                      |
-| `pnpm db:reset`    | Apaga o volume e recria — necessário ao alterar scripts de init  |
-| `pnpm db:generate` | Gera migration a partir do schema; não toca no banco             |
-| `pnpm db:migrate`  | Aplica as migrations, com a role que tem DDL                     |
-| `pnpm db:seed`     | Dois estabelecimentos e dois planos de demonstração; idempotente |
+| Comando             | Efeito                                                            |
+| ------------------- | ----------------------------------------------------------------- |
+| `pnpm dev`          | API e web em watch, em paralelo                                   |
+| `pnpm verify`       | format:check → typecheck → lint → test → build — o mesmo que o CI |
+| `pnpm typecheck`    | TypeScript em todos os pacotes                                    |
+| `pnpm lint`         | ESLint com informação de tipos                                    |
+| `pnpm test`         | Vitest em todos os pacotes, um por vez — **exige `pnpm db:up`**   |
+| `pnpm build`        | Build de produção                                                 |
+| `pnpm format`       | Prettier, escrevendo                                              |
+| `pnpm format:check` | Prettier, só conferindo                                           |
+| `pnpm db:up`        | Sobe o PostgreSQL                                                 |
+| `pnpm db:down`      | Derruba os containers, preservando o volume                       |
+| `pnpm db:reset`     | Apaga o volume e recria — necessário ao alterar scripts de init   |
+| `pnpm db:generate`  | Gera migration a partir do schema; não toca no banco              |
+| `pnpm db:migrate`   | Aplica as migrations, com a role que tem DDL                      |
+| `pnpm db:seed`      | Três estabelecimentos e dois planos de demonstração; idempotente  |
 
 Num pacote só:
 
@@ -62,6 +63,58 @@ pnpm --filter @repo/web dev
 ```
 
 `pnpm verify` é o que precisa passar antes de considerar qualquer tarefa concluída.
+
+Os testes rodam **um pacote por vez** (`--concurrency=1` no script): em paralelo, a suíte da API
+e a do web disputam memória, e no WSL o processo já foi derrubado por isso (código 137).
+
+---
+
+## CI
+
+Cada PR e cada commit na `main` rodam o `.github/workflows/ci.yml` no GitHub Actions:
+formatação, typecheck, lint, testes e build — os passos do `pnpm verify`, separados para o GitHub
+mostrar qual falhou. O PostgreSQL sobe pelo mesmo `docker-compose.yml` do desenvolvimento, e os
+scripts de `docker/postgres/init/` criam as roles e o banco de testes do zero a cada execução.
+
+**Para reproduzir na sua máquina:** `pnpm verify`. O que passa aqui passa lá, com duas diferenças
+conhecidas:
+
+- **Fuso horário.** O GitHub roda em UTC; a máquina de desenvolvimento, no fuso local. Para
+  conferir um teste que envolva data ou horário: `TZ=UTC pnpm test`.
+- **Banco do zero.** O CI cria o banco a cada execução; aqui ele já existe. Mudou um script de
+  `docker/postgres/init/`? `pnpm db:reset` repete o caminho do CI — e apaga os dados de
+  desenvolvimento.
+
+**O Turborepo só repassa aos testes as variáveis declaradas.** No modo padrão dele, uma variável
+de ambiente que não esteja no `env` da tarefa em `turbo.json` não chega ao script — e também não
+entra na chave do cache, então mudá-la reaproveita o resultado anterior sem rodar nada. Por isso
+a tarefa `test` declara `TZ`, `TEST_DATABASE_URL` e `TEST_MIGRATION_DATABASE_URL`: sem isso,
+`TZ=UTC pnpm test` logo depois de um `pnpm test` só reapresentaria o resultado antigo, e o banco
+de testes do `.env.example` nunca chegaria ao Vitest. Variável nova que um teste leia entra na
+mesma lista.
+
+**Sem segredos.** O CI não usa `.env`: os testes usam os valores de desenvolvimento, que já são o
+padrão do `docker-compose.yml` e do `apps/api/vitest.config.ts`. Não cadastre segredo no GitHub
+para o CI — se um teste precisar de um, o valor de teste vai no `vitest.config.ts`, como o
+`JWT_SECRET`.
+
+**Atualizar uma action.** Elas são fixadas pelo commit, e não pela tag (SECURITY.md, seção 12).
+Para subir a versão, descubra o commit da tag nova:
+
+```bash
+gh api repos/actions/checkout/releases/latest --jq .tag_name
+gh api repos/actions/checkout/commits/v7.0.1 --jq .sha
+```
+
+Troque o commit e o comentário da versão juntos, e confira no `action.yml` da versão nova se as
+entradas usadas continuam existindo.
+
+**Conferir o workflow antes do push:** o [actionlint](https://github.com/rhysd/actionlint) roda
+sem instalação, pelo Docker:
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest
+```
 
 ---
 

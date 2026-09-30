@@ -1,9 +1,10 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 7b**. Já estão em vigor o isolamento entre tenants (RLS forçado, roles de
-banco separadas, testes que o comprovam), autenticação com argon2id e JWT, RBAC por permissão,
-auditoria append-only, headers de segurança, CORS restrito, limites de requisição e validação de
-ambiente. As rotas administrativas de configuração já exigem permissão e registram auditoria. Cada seção abaixo diz o que já vale e o que ainda não.
+Estado atual: **Fase 16**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
+cookie `httpOnly`, RBAC por permissão, auditoria append-only, headers de segurança, CORS
+restrito, limites de requisição, validação de ambiente e o CI conferindo cada PR. Cada seção
+abaixo diz o que já vale e o que ainda não.
 
 ---
 
@@ -55,21 +56,20 @@ linhas.
 
 Rodam contra PostgreSQL real e provam, para a primeira tabela tenant-scoped:
 
-| O que é provado                                            | Resultado              |
-| ---------------------------------------------------------- | ---------------------- |
-| `SELECT` sem `WHERE` dentro de um contexto                 | só as linhas do tenant |
-| Consulta fora de `withTenant`                              | zero linhas            |
-| Tenant A faz `UPDATE` mirando linha de B                   | nenhuma alterada       |
-| Tenant A faz `UPDATE` sabendo o **id exato** da linha de B | nenhuma alterada       |
-| Tenant A faz `DELETE` na linha de B                        | nenhuma apagada        |
-| Tenant A faz `INSERT` marcado com o tenant de B            | recusado               |
-| Escrita fora de contexto                                   | recusada               |
-| Contexto após o fim da transação                           | não sobrevive          |
-| Contextos em sequência e **concorrentes**                  | não se misturam        |
-| Contexto após rollback                                     | limpo                  |
-
-| Tenant A cria um produto dentro de uma categoria de B | recusado pela FK composta |
-| Tenant A atribui papel a um usuário de B | recusado pela FK composta |
+| O que é provado                                            | Resultado                 |
+| ---------------------------------------------------------- | ------------------------- |
+| `SELECT` sem `WHERE` dentro de um contexto                 | só as linhas do tenant    |
+| Consulta fora de `withTenant`                              | zero linhas               |
+| Tenant A faz `UPDATE` mirando linha de B                   | nenhuma alterada          |
+| Tenant A faz `UPDATE` sabendo o **id exato** da linha de B | nenhuma alterada          |
+| Tenant A faz `DELETE` na linha de B                        | nenhuma apagada           |
+| Tenant A faz `INSERT` marcado com o tenant de B            | recusado                  |
+| Escrita fora de contexto                                   | recusada                  |
+| Contexto após o fim da transação                           | não sobrevive             |
+| Contextos em sequência e **concorrentes**                  | não se misturam           |
+| Contexto após rollback                                     | limpo                     |
+| Tenant A cria um produto dentro de uma categoria de B      | recusado pela FK composta |
+| Tenant A atribui papel a um usuário de B                   | recusado pela FK composta |
 
 O caso do "id exato" é o que fecha o IDOR: conhecer o identificador não ajuda, porque quem nega
 é o banco e não a obscuridade do id.
@@ -322,6 +322,7 @@ o redimensionamento (ROADMAP).
 - Em produção, segredos vêm do gerenciador do ambiente, nunca de arquivo versionado.
 - Credencial e token são redigidos no logger, não no ponto de chamada — para não depender de
   alguém lembrar em cada log novo.
+- O CI não tem segredo nenhum: roda só com os valores de desenvolvimento (seção 12).
 
 ---
 
@@ -345,7 +346,23 @@ dado pessoal de cliente.
 
 ---
 
+## 12. CI — **em vigor**
+
+O workflow (`.github/workflows/ci.yml`) roda código do repositório a cada PR, e por isso é
+fechado como qualquer outra fronteira:
+
+| Risco                                              | Defesa                                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Action de terceiro trocada depois de adotada       | Fixada pelo **commit**, não pela tag — uma tag pode ser movida por quem controla a action                                                        |
+| Token do workflow usado para alterar o repositório | `permissions: contents: read`; o checkout não grava o token no `.git/config`                                                                     |
+| PR de fork — o repositório é público               | O gatilho é `pull_request`, nunca `pull_request_target`: o PR de fork roda com token só de leitura e sem segredos; e o CI não tem segredo nenhum |
+| Dependência executando código na instalação        | `pnpm install --frozen-lockfile`: só o lockfile, e só o `esbuild` roda script de instalação                                                      |
+
 ## Como relatar uma vulnerabilidade
 
-O projeto é privado e ainda não tem usuários. Quando houver, este documento ganha um canal de
-contato e um prazo de resposta.
+O repositório é público, e o produto ainda não tem usuários. **Não abra uma issue pública** para
+relatar uma vulnerabilidade: ela ficaria visível para todo mundo antes da correção.
+
+O canal previsto é o relato privado de vulnerabilidades do GitHub (aba _Security_ → _Report a
+vulnerability_). Ele ainda está desligado — ligá-lo é configuração do repositório. O prazo de
+resposta entra na Fase 28, junto com o deploy, antes do primeiro estabelecimento real.

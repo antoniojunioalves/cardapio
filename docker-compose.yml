@@ -25,7 +25,15 @@ services:
       - postgres-data:/var/lib/postgresql
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cardapio}']
+      # Pela rede (-h 127.0.0.1), e não pelo socket local: na primeira
+      # inicialização, o servidor temporário que roda os scripts de init escuta
+      # só no socket, e o healthcheck daria "pronto" antes de as roles e o banco
+      # de testes existirem. O CI depende disso (`docker compose up --wait`).
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cardapio}',
+        ]
       interval: 5s
       timeout: 5s
       retries: 10

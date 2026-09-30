@@ -1083,6 +1083,24 @@ diante de `pnpm install && pnpm db:up && pnpm dev`. Os Dockerfiles de API e web 
 fase de deploy, quando o alvo for imagem de produção — que é um artefato diferente de um
 ambiente de desenvolvimento.
 
+### CI sobe o banco pelo mesmo compose
+
+O CI (Fase 16) roda `docker compose up --wait postgres`, e não um _service container_ do GitHub
+Actions. O service container sobe antes do checkout, então não enxerga `docker/postgres/init/`:
+as duas roles, o banco de testes e os privilégios teriam de ser recriados no workflow, numa
+segunda cópia que divergiria da primeira em silêncio. Pelo compose, o caminho é um só — e o CI
+passa a provar, a cada execução, que os scripts de init criam do zero um banco onde a suíte
+inteira passa.
+
+Consequência: o healthcheck do compose testa pela rede (`pg_isready -h 127.0.0.1`), e não pelo
+socket local. Na primeira inicialização, o servidor temporário que roda os scripts de init escuta
+só no socket; pelo socket, o `--wait` liberaria os testes antes de as roles existirem. No
+desenvolvimento isso nunca aparece, porque o banco já existe.
+
+Os passos do CI são os do `pnpm verify`, e o `pnpm test` roda um pacote por vez, como no CI. As
+duas diferenças que sobram — o fuso (UTC no GitHub) e o banco criado do zero — estão no
+DEVELOPMENT.md, com o comando que reproduz cada uma.
+
 ### Pacote compartilhado só quando há o que compartilhar
 
 `packages/config` guarda a identidade do produto e as bases de tsconfig e eslint.
