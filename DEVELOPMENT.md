@@ -71,7 +71,14 @@ e a do web disputam memória, e no WSL o processo já foi derrubado por isso (c�
 
 ## CI
 
-Cada PR e cada commit na `main` rodam o `.github/workflows/ci.yml` no GitHub Actions:
+> **Desligado por enquanto.** O workflow foi tirado do repositório para agilizar os merges e volta
+> na Fase 28, antes de colocar o sistema no ar. O conteúdo está guardado em
+> `CI_PARA_IMPLEMENTAR_DEPOIS.txt`: para religar, recrie `.github/workflows/ci.yml` com ele (a primeira linha
+> diz onde) e confira se as actions fixadas ainda são as versões atuais — ver "Atualizar uma
+> action", abaixo. Até lá, `pnpm verify` é a verificação.
+
+Com o workflow no lugar, cada PR e cada commit na `main` rodam o `.github/workflows/ci.yml` no
+GitHub Actions:
 formatação, typecheck, lint, testes e build — os passos do `pnpm verify`, separados para o GitHub
 mostrar qual falhou. O PostgreSQL sobe pelo mesmo `docker-compose.yml` do desenvolvimento, e os
 scripts de `docker/postgres/init/` criam as roles e o banco de testes do zero a cada execução.

@@ -69,7 +69,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### No ar
 
-- [x] CI: formatação, typecheck, lint, testes e build a cada PR e na `main`
+- [ ] CI: formatação, typecheck, lint, testes e build a cada PR e na `main` — _pronto na Fase
+      16 e guardado; volta na Fase 28_
 - [ ] Hospedagem, HTTPS, backup e seed essencial de produção — _Fase 28_
 
 ---

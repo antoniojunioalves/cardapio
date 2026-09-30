@@ -45,7 +45,7 @@ Versões fixadas e verificadas em conjunto — a instalação resolve sem nenhum
 | Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3                                               |
 | Frontend  | Vite 8.3 · React 19.3 · Tailwind CSS 4.3 · React Router 8.4 · TanStack Query 5 · Zustand 5.0 · React Hook Form 7.89 |
 | Qualidade | ESLint 10.11 · typescript-eslint 8.70 · Prettier 3.9 · Vitest 5.0                                                   |
-| Infra     | Docker Compose · GitHub Actions (CI)                                                                                |
+| Infra     | Docker Compose · GitHub Actions (CI, desligado até a Fase 28)                                                       |
 
 **TypeScript 6, e não 7:** o TypeScript 7 já é estável, mas o `typescript-eslint` declara
 `typescript >=4.8.4 <6.1.0` e não o suporta em nenhuma versão publicada. Adotá-lo hoje custaria
@@ -106,9 +106,9 @@ para o banco errado, o que é pior do que falhar na inicialização.
 
 Para rodar num pacote só: `pnpm --filter @repo/api test`
 
-**CI:** cada PR e cada commit na `main` passam por formatação, typecheck, lint, testes e build no
-GitHub Actions (`.github/workflows/ci.yml`), com o PostgreSQL subindo pelo mesmo
-`docker-compose.yml`. Como reproduzir na sua máquina: [DEVELOPMENT.md](DEVELOPMENT.md#ci).
+**CI:** o workflow do GitHub Actions está pronto, mas **desligado até a Fase 28** — foi tirado
+para agilizar os merges, e o conteúdo está guardado em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`. Enquanto isso,
+`pnpm verify` roda os mesmos passos na sua máquina. Como religar: [DEVELOPMENT.md](DEVELOPMENT.md#ci).
 
 Os testes da API rodam contra um PostgreSQL real, no banco `cardapio_test` — separado do de
 desenvolvimento. É proposital: as policies de isolamento entre tenants não podem ser

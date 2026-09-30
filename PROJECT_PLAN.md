@@ -48,9 +48,9 @@ foi para um cookie `httpOnly`; toda rota do painel recusa quem não está logado
 corpo, e um teste-guarda confere isso pelo inventário de rotas; desativar ou mudar o papel de um
 usuário fecha a conexão ao vivo dele na hora.
 
-**Cada PR passa pelo CI (Fase 16).** No GitHub Actions: formatação, typecheck, lint, testes e
-build, com o PostgreSQL criado do zero pelos mesmos scripts de init do desenvolvimento. O
-`pnpm verify` roda os mesmos passos na máquina de quem desenvolve.
+**O CI está pronto e guardado (Fase 16).** Formatação, typecheck, lint, testes e build no GitHub
+Actions, com o PostgreSQL criado do zero pelos mesmos scripts de init do desenvolvimento. Foi
+desligado para agilizar os merges — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt` e volta na Fase 28. Até lá, o `pnpm verify` roda os mesmos passos na máquina de quem desenvolve.
 
 **Ainda não existe:** o cadastro do estabelecimento pela página inicial e as telas de
 configuração, cardápio, usuários e clientes — hoje o estabelecimento nasce pelo seed e é
@@ -80,7 +80,7 @@ configurado pela API. As fases 17 a 28 fecham o MVP; ver "O que falta para o MVP
 | 13  | WebSocket e pedidos em tempo real                                                                                   | ✅ Concluída |
 | 14  | Limites por plano                                                                                                   | ✅ Concluída |
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ✅ Concluída |
-| 16  | CI no GitHub e ajustes nos docs                                                                                     | ✅ Concluída |
+| 16  | CI no GitHub e ajustes nos docs — _o workflow ficou guardado até a Fase 28_                                         | ✅ Concluída |
 | 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ⬜ Próxima   |
 | 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ⬜           |
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜           |
@@ -92,7 +92,7 @@ configurado pela API. As fases 17 a 28 fecham o MVP; ver "O que falta para o MVP
 | 25  | Usuários e senha                                                                                                    | ⬜           |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
 | 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
-| 28  | Colocar no ar                                                                                                       | ⬜           |
+| 28  | Colocar no ar — religa antes o CI guardado na Fase 16                                                               | ⬜           |
 
 Três movimentos em relação à ordem sugerida originalmente, cada um porque algo posterior
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
@@ -281,6 +281,12 @@ vazio**, como faria alguém que nunca viu o sistema.
 
 Pode virar duas fases.
 
+> **Precisa do CI funcionando — religar antes de tudo.** O workflow da Fase 16 foi desligado para
+> agilizar os merges e está guardado em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`. Recriar
+> `.github/workflows/ci.yml` com esse conteúdo (a primeira linha diz onde), conferir se as
+> actions fixadas pelo commit ainda são as versões atuais (DEVELOPMENT.md, "CI") e abrir um PR
+> para vê-lo passar. Deploy sem CI publicaria código que ninguém conferiu do zero.
+
 - Escolher a hospedagem, no início da fase.
 - Dockerfiles de produção, HTTPS e a CSP da aplicação web.
 - Backup do banco e das imagens, com a restauração testada.
@@ -420,6 +426,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                          | Quando resolve                           |
 | ----------------------------------------------------------------------------- | ---------------------------------------- |
+| CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`            | Fase 28, antes do deploy                 |
 | Sem Dockerfile para API e web                                                 | Fase 28                                  |
 | Rate limit conta em memória — vira limite por instância se houver mais de uma | Fase 28, se houver mais de uma instância |
 | Plano FREE só existe porque o seed de demonstração o cria                     | Fase 28 (seed essencial de produção)     |

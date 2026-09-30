@@ -346,10 +346,11 @@ dado pessoal de cliente.
 
 ---
 
-## 12. CI — **em vigor**
+## 12. CI — **pronto, desligado até a Fase 28**
 
-O workflow (`.github/workflows/ci.yml`) roda código do repositório a cada PR, e por isso é
-fechado como qualquer outra fronteira:
+O workflow está guardado em `CI_PARA_IMPLEMENTAR_DEPOIS.txt` e volta antes de colocar o sistema no ar
+(DEVELOPMENT.md, "CI"). Quando voltar, ele roda código do repositório a cada PR, e por isso já
+foi fechado como qualquer outra fronteira:
 
 | Risco                                              | Defesa                                                                                                                                           |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

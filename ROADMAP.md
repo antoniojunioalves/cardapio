@@ -237,7 +237,7 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Armazenamento compartilhado para o rate limit (Redis) — hoje o contador vive na memória do
   processo, o que vira um limite por instância assim que houver mais de uma. A Fase 28 decide se
   já é preciso
-- Deploy contínuo (CD) — o CI existe desde a Fase 16
+- Deploy contínuo (CD) — o CI foi escrito na Fase 16 e volta na Fase 28
 - Atualização automática das actions do CI e das dependências (Dependabot ou Renovate) — hoje
   as actions, fixadas pelo commit, são atualizadas à mão (DEVELOPMENT.md, "CI")
 - Métricas e tracing distribuído

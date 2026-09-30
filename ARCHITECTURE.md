@@ -1101,6 +1101,9 @@ Os passos do CI são os do `pnpm verify`, e o `pnpm test` roda um pacote por vez
 duas diferenças que sobram — o fuso (UTC no GitHub) e o banco criado do zero — estão no
 DEVELOPMENT.md, com o comando que reproduz cada uma.
 
+O workflow foi desligado depois da Fase 16, para agilizar os merges, e está guardado em
+`CI_PARA_IMPLEMENTAR_DEPOIS.txt` até a Fase 28.
+
 ### Pacote compartilhado só quando há o que compartilhar
 
 `packages/config` guarda a identidade do produto e as bases de tsconfig e eslint.
