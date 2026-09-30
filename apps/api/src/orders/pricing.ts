@@ -64,7 +64,9 @@ export function calcularPedido(cardapio: CardapioPublico, pedido: NovoPedido): R
       'ESTABELECIMENTO_FECHADO',
       cardapio.status.motivo === 'PAUSADO'
         ? 'O estabelecimento pausou os pedidos. Tente de novo em instantes.'
-        : 'O estabelecimento está fechado agora.',
+        : cardapio.status.motivo === 'NAO_RECEBENDO'
+          ? 'O estabelecimento não está recebendo pedidos pela internet agora.'
+          : 'O estabelecimento está fechado agora.',
     )
   }
 
