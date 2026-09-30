@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { acoesDoPedido } from '../src/features/admin/orders'
+import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
 import { comSessao, useSessaoStore } from '../src/features/admin/session'
 import type { PedidoDoPainel } from '../src/features/admin/types'
 import { cardapioDoZe } from './helpers/cardapio'
@@ -97,6 +98,15 @@ function pedido(extra: Partial<PedidoDoPainel> = {}): PedidoDoPainel {
   }
 }
 
+function plano(extra: Partial<UsoDoPlano['orders']>): UsoDoPlano {
+  return {
+    plan: { code: 'FREE', name: 'Gratuito' },
+    orders: { used: 10, limit: 100, ceiling: 110, state: 'LIVRE', ...extra },
+    users: { active: 1, limit: 2 },
+  }
+}
+const LIVRE = plano({})
+
 const SESSAO = {
   accessToken: 'token-de-acesso',
   refreshToken: 'lanchonete.refresh',
@@ -111,6 +121,7 @@ const SESSAO = {
 
 interface Api {
   pedidos: PedidoDoPainel[]
+  plano?: UsoDoPlano
   login?: { status: number; corpo: unknown }
   /** Respostas da lista, na ordem; a última se repete. */
   listas?: { status: number; corpo: unknown }[]
@@ -123,6 +134,7 @@ function mockarApi(api: Api) {
     let resposta: { status: number; corpo: unknown } = { status: 200, corpo: cardapioDoZe() }
     if (url.endsWith('/auth/login')) resposta = api.login ?? { status: 200, corpo: SESSAO }
     else if (url.endsWith('/auth/refresh')) resposta = { status: 200, corpo: SESSAO }
+    else if (url.endsWith('/admin/plan')) resposta = { status: 200, corpo: api.plano ?? LIVRE }
     else if (url.includes('/admin/orders') && metodo === 'GET') {
       const listas = api.listas ?? [{ status: 200, corpo: api.pedidos }]
       resposta = listas[Math.min(chamadasDaLista, listas.length - 1)] ?? resposta
@@ -425,5 +437,46 @@ describe('sessão', () => {
 
     await expect(comSessao('/a')).rejects.toThrow()
     expect(useSessaoStore.getState().refreshToken).toBeNull()
+  })
+})
+
+describe('aviso do plano', () => {
+  it('um nível para cada situação, e nada quando está livre ou é ilimitado', () => {
+    expect(avisoDoPlano(LIVRE)).toBeNull()
+    expect(avisoDoPlano(plano({ limit: null, ceiling: null, used: 5000 }))).toBeNull()
+    expect(avisoDoPlano({ ...LIVRE, plan: null })).toBeNull()
+
+    expect(avisoDoPlano(plano({ used: 85, state: 'PERTO_DO_LIMITE' }))).toEqual({
+      nivel: 'atencao',
+      texto: 'Você recebeu 85 de 100 pedidos deste mês no plano Gratuito.',
+    })
+    expect(avisoDoPlano(plano({ used: 104, state: 'NA_TOLERANCIA' }))?.texto).toContain(
+      'continua recebendo até 110 pedidos',
+    )
+    const bloqueado = avisoDoPlano(plano({ used: 110, state: 'BLOQUEADO' }))
+    expect(bloqueado?.nivel).toBe('alerta')
+    expect(bloqueado?.texto).toContain('O cardápio parou de receber pedidos')
+  })
+
+  it('o painel mostra o aviso quando o plano está no limite', async () => {
+    await abrirPainel({ pedidos: [], plano: plano({ used: 110, state: 'BLOQUEADO' }) })
+    expect(await screen.findByRole('note')).toHaveTextContent('O cardápio parou de receber pedidos')
+  })
+
+  it('um pedido novo manda reler o uso do plano', async () => {
+    const fetch = await abrirPainel({ pedidos: [] })
+    const socket = await ultimoSocket()
+    socket.abrir()
+    socket.receber({ type: 'ready' })
+    await waitFor(() => {
+      expect(chamadas(fetch, '/admin/plan').length).toBeGreaterThan(0)
+    })
+    const antes = chamadas(fetch, '/admin/plan').length
+
+    socket.receber({ type: 'order.created', orderId: 'x', number: 9 })
+
+    await waitFor(() => {
+      expect(chamadas(fetch, '/admin/plan').length).toBeGreaterThan(antes)
+    })
   })
 })
