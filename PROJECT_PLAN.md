@@ -1,9 +1,9 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-09-30
-**Fase atual:** 17 — concluída, aguardando validação
-**Próxima:** 18 — telas do cadastro: landing page, cadastro, confirmação de e-mail, termos. As fases
-18 a 28 fecham o MVP (ver "O que falta para o MVP")
+**Fase atual:** 18 — concluída, aguardando validação
+**Próxima:** 19 — comandos do Super Admin: listar, suspender, reativar, trocar o plano. As fases 19 a
+28 fecham o MVP (ver "O que falta para o MVP")
 
 ---
 
@@ -58,9 +58,16 @@ estabelecimento no plano gratuito, com o dono e a sessão aberta; o cardápio na
 publicado quando o dono clica no link enviado por e-mail. Em desenvolvimento, os e-mails caem no
 Mailpit (http://localhost:8025).
 
-**Ainda não existe:** as telas do cadastro e as telas de configuração, cardápio, usuários e
-clientes — hoje o estabelecimento se cadastra e é configurado pela API. As fases 18 a 28 fecham o
-MVP; ver "O que falta para o MVP".
+**E pela página inicial (Fase 18).** Em `/`, a página do produto leva a `/cadastro`, que sugere
+o endereço do cardápio pelo nome e confere se está livre enquanto a pessoa digita; o cadastro já
+abre o painel, onde um aviso lembra de confirmar o e-mail — com o botão de reenviar. O link do
+e-mail abre `/confirmar-email`, que publica o cardápio. `/entrar` leva ao login de um
+estabelecimento, e `/termos` e `/privacidade` têm o texto (provisório) que o cadastro aceita. O
+checkout avisa para onde vão os dados do cliente.
+
+**Ainda não existe:** as telas de configuração, cardápio, usuários e clientes — o estabelecimento
+se cadastra pela página, mas ainda é configurado pela API. As fases 19 a 28 fecham o MVP; ver "O
+que falta para o MVP".
 
 ---
 
@@ -88,8 +95,8 @@ MVP; ver "O que falta para o MVP".
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ✅ Concluída |
 | 16  | CI no GitHub e ajustes nos docs — _o workflow ficou guardado até a Fase 28_                                         | ✅ Concluída |
 | 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ✅ Concluída |
-| 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ⬜ Próxima   |
-| 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜           |
+| 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ✅ Concluída |
+| 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜ Próxima   |
 | 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜           |
 | 21  | Estrutura do painel e configuração do estabelecimento                                                               | ⬜           |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
@@ -107,84 +114,82 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
-## Fase 17 — concluída
+## Fase 18 — concluída
 
 ### Microtasks
 
-| #   | Tarefa                                                                                                   | Status |
-| --- | -------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | CI guardado registrado nos docs, com o aviso na Fase 28 de que ela precisa dele                          | ✅     |
-| 2   | `packages/shared`: endereço do cardápio (formato e reservados), senha, versão dos termos, fuso, cadastro | ✅     |
-| 3   | Banco: status `PENDING`, `users.email_verified_at`, `email_verification_tokens` com RLS forçado          | ✅     |
-| 4   | `seed-plans.ts`: os planos saem do seed de demonstração, para os testes e o seed de produção             | ✅     |
-| 5   | `EmailService`: SMTP (`nodemailer`), memória nos testes, Mailpit no compose, variáveis de ambiente       | ✅     |
-| 6   | `criarEstabelecimento` numa transação, com a origem `signup` no `TenantContext`; o seed passa a usá-lo   | ✅     |
-| 7   | Cadastro, confirmação, reenvio, situação e disponibilidade do endereço, cada rota com limite próprio     | ✅     |
-| 8   | Aviso à plataforma a cada cadastro; aceite dos termos na auditoria, com a versão e o IP                  | ✅     |
-| 9   | Testes: fluxo completo, recusas, reenvio, isolamento, limite por IP, configuração de e-mail              | ✅     |
+| #   | Tarefa                                                                                               | Status |
+| --- | ---------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Página inicial em `/`, no lugar da página de teste do ambiente, com a moldura das páginas do produto | ✅     |
+| 2   | `/cadastro`: regras de `@repo/shared`, endereço sugerido pelo nome e conferido enquanto se digita    | ✅     |
+| 3   | `/entrar`: pergunta o endereço — aceita o link colado — e leva ao login daquele estabelecimento      | ✅     |
+| 4   | `/confirmar-email`: token do fragmento, tirado do endereço depois de lido; um POST só                | ✅     |
+| 5   | `/termos` e `/privacidade`, com texto provisório e a versão em vigor                                 | ✅     |
+| 6   | Painel: aviso "seu cardápio ainda não está no ar", com reenvio, para quem cuida das configurações    | ✅     |
+| 7   | Checkout: aviso de para onde vão os dados, com a política de privacidade em outra aba                | ✅     |
+| 8   | Cardápio não encontrado: dica genérica para quem acabou de se cadastrar                              | ✅     |
+| 9   | Testes: página inicial, entrar, cadastro, confirmação, aviso do painel, checkout, regras do endereço | ✅     |
 
 ### Decisões e achados desta fase
 
-**O e-mail de confirmação não repete nada do que foi digitado.** Ele vai para um endereço que
-quem se cadastra escolhe — pode ser de outra pessoa. Se levasse o nome do estabelecimento, o
-cadastro viraria um jeito de mandar, pelo nosso remetente, um texto qualquer para qualquer
-endereço. Vai só o endereço do cardápio (letras, números e hífen) e o link; o aviso para a
-plataforma, que vai para nós, leva tudo. Há teste com um golpe escrito no nome.
+**O endereço acompanha o nome até a pessoa mexer nele** — "Lanchonete do Zé" sugere
+`lanchonete-do-ze` — e volta a acompanhar se ela o apagar. A disponibilidade é conferida 400 ms
+depois da última tecla, e só para endereço já no formato certo: fora dele, quem fala é a
+validação, com a mesma mensagem da API.
 
-**O token vai no fragmento do link** (`/confirmar-email#token=…`), que o navegador não envia ao
-servidor nem repassa como `Referer`: ele não aparece em log nenhum. A página da Fase 18 o lê e o
-manda à API no corpo de um POST.
+**O cadastro chama a API com `credentials`**, como o login: a resposta traz o refresh token num
+cookie, e sem isso o navegador o descartaria — a sessão morreria no primeiro recarregamento. Há
+teste para isso.
 
-**Uma transação só, e os e-mails depois do commit.** O id do estabelecimento é pedido ao banco
-antes da transação, e o contexto nasce dele: estabelecimento, assinatura, dono, aceite dos termos,
-link e sessão são gravados juntos. Servidor de e-mail fora do ar não desfaz o cadastro — a
-resposta diz que o e-mail não saiu, e o painel oferece o reenvio.
+**A confirmação tira o token do endereço** assim que o lê: ele não fica no histórico nem vai junto
+se a pessoa copiar o link. O POST acontece uma vez por token — o React Query não o repete quando o
+React monta a página duas vezes —, e um segundo clique no link responde "já estava confirmado", e
+não erro.
 
-**Confirmar só tira de `PENDING`**: um link guardado não desfaz uma suspensão. **O reenvio vai
-sempre para quem cadastrou**, seja quem for que peça, com um minuto entre envios contado no
-banco.
+**O campo-armadilha fica fora da tela, do teclado e do leitor de tela** (`aria-hidden`,
+`tabIndex=-1`): só robô o preenche.
 
-**Fuso no cadastro, fora do plano.** O fuso do estabelecimento não é editável em lugar nenhum, e
-um estabelecimento de Manaus veria o aberto/fechado errado com o de Brasília. O cadastro aceita
-um fuso opcional, validado pelo `Intl`; sem ele, vale Brasília. A tela da Fase 18 pode mandar o
-do navegador.
+**Fuso do aparelho, sem pergunta.** O cadastro manda o fuso do navegador, se o `Intl` o reconhece —
+o palpite certo para quase todo mundo, que se cadastra de onde fica o estabelecimento. Achado: o
+fuso **não é editável em lugar nenhum** depois do cadastro. Entrou na tela de configurações da
+Fase 21.
 
-**Desvio do plano: a fixture `criarTenantComUsuario` não passou a usar `criarEstabelecimento`.**
-Ela cria papéis e permissões próprios de cada teste e nenhum plano — é o que a maioria dos testes
-precisa provar. Com o OWNER e o plano FREE (2 usuários), centenas de testes passariam a provar
-outra coisa. O seed usa a função; os testes do cadastro usam a rota de verdade.
+**A página inicial não cita os números do plano gratuito.** Os limites vivem no catálogo da API
+(`catalogs.ts`); escritos na página, ela mentiria na primeira mudança de plano. Diz só "plano
+gratuito, sem cartão de crédito".
 
-**Achado: suspender não derruba quem já está logado.** O middleware e a renovação de sessão não
-olham o status do estabelecimento. Não afeta a Fase 17 — é até o que deixa o dono de um cadastro
-ainda não confirmado usar o painel —, mas a suspensão da Fase 19 precisa derrubar as sessões.
+**Termos e privacidade provisórios**, com o aviso na própria página. O texto mora em
+`features/legal/textos.ts`; trocá-lo exige trocar `VERSAO_DOS_TERMOS` (`packages/shared`), que é a
+versão que cada cadastro registra. O definitivo é do Junio, antes do primeiro estabelecimento real
+(Fase 28).
 
-**Origens do contexto:** `signup`, para o estabelecimento que está sendo criado, e `token`, para o
-tenant embutido num token nosso. A renovação de sessão usava a de slug público e passou a declarar
-a verdadeira.
+**A dica do cardápio não encontrado é genérica** — "acabou de cadastrar o seu? Ele aparece depois
+que você confirmar o e-mail" — e aparece para qualquer endereço desconhecido: não revela se aquele
+espera confirmação.
 
-**Limite do plano gratuito contra abuso — avaliado, não implementado.** O cadastro aberto limita
-10 cadastros por hora por IP, mas cada estabelecimento pode subir imagens de até 5 MB sem limite
-de quantidade: o risco real é o disco. Sugestão: um limite de produtos no FREE (a Fase 14 já
-suporta um recurso novo) e a redução das imagens no upload (Fase 20, já no plano). Decisão do
-Junio.
+**O aviso de confirmação é de quem cuida das configurações:** aparece com `settings:read` e reenvia
+com `settings:update`; o atendente nem consulta.
+
+**A página de verificação do ambiente saiu.** A sonda de saúde no web só servia a ela; o teste da
+troca de tema em tempo de execução, que ela demonstrava, virou teste das próprias funções de tema.
 
 ### Verificação executada
 
-| Verificação                                               | Resultado                                                                                                                                                                                                              |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm verify`                                             | **627 testes** (454 API + 149 web + 24 shared); formatação, typecheck, lint e build                                                                                                                                    |
-| Testes sensíveis à regra                                  | cadastro já publicado, sem campo-armadilha, confirmação de suspenso, reenvio desviado: cada um cai                                                                                                                     |
-| API compilada, banco de desenvolvimento e SMTP no Mailpit | cadastro 201 e cardápio 404; os dois e-mails chegaram, com acentos certos e a confirmação sem texto digitado; o link publicou (cardápio 200), o segundo clique respondeu `ALREADY_CONFIRMED`, o reenvio depois deu 409 |
-| Clone limpo, `--frozen-lockfile`                          | `pnpm verify` inteiro: os mesmos 627 testes, formatação, typecheck, lint e build                                                                                                                                       |
+| Verificação                      | Resultado                                                                                                                              |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                    | **674 testes** (463 API + 187 web + 24 shared); formatação, typecheck, lint e build                                                    |
+| Clone limpo, `--frozen-lockfile` | os mesmos 674 testes, formatação, typecheck, lint e build                                                                              |
+| Testes sensíveis à regra         | cadastro sem `credentials`, token que fica no endereço, nome que sobrescreve o endereço editado, aviso para quem não pode: cada um cai |
+| Página no navegador              | a fazer na validação                                                                                                                   |
 
 ---
 
 ## O que falta para o MVP
 
-As fases 1 a 17 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
-(MVP.md, "Como saber que acabou"). Os passos 4 a 7 funcionam de ponta a ponta — cardápio no
-celular, pedido, WhatsApp, painel ao vivo, status. Os passos 1 a 3 só funcionam **pela API**, e
-o sistema ainda não está no ar. As fases 18 a 28 fecham essa distância.
+As fases 1 a 18 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+(MVP.md, "Como saber que acabou"). O passo 1 — cadastrar pela página inicial e confirmar o e-mail
+— e os passos 4 a 7 funcionam de ponta a ponta. Os passos 2 e 3 só funcionam **pela API**, e o
+sistema ainda não está no ar. As fases 19 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -209,20 +214,6 @@ o sistema ainda não está no ar. As fases 18 a 28 fecham essa distância.
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
 
-### Fase 18 — Telas do cadastro
-
-- `/` vira a landing page, no lugar da página de teste do ambiente, com "Começar grátis" e
-  "Entrar". "Entrar" pede o endereço do estabelecimento, porque o login precisa do slug.
-- `/cadastro` sugere o endereço do cardápio a partir do nome e confere se está livre.
-- `/termos` e `/privacidade` com texto provisório até o Junio entregar o final;
-  `/confirmar-email` recebe o link do e-mail.
-- O checkout ganha um aviso de privacidade, com link, para os dados do cliente final.
-- A API está pronta (Fase 17): `POST /public/signup`, `GET /public/signup/slug-availability`,
-  `POST /public/signup/confirm-email`, `GET /admin/email-confirmation` e o reenvio. Os schemas e a
-  versão dos termos (`VERSAO_DOS_TERMOS`) estão em `packages/shared`; o link do e-mail aponta para
-  `/confirmar-email#token=…`. O painel ganha o aviso "confirme seu e-mail", com o botão de
-  reenviar.
-
 ### Fase 19 — Comandos do Super Admin
 
 - Um comando `pnpm` para listar estabelecimentos, suspender, reativar, trocar o plano e reenviar
@@ -244,7 +235,8 @@ vazio**, como faria alguém que nunca viu o sistema.
 - Navegação entre Pedidos, Cardápio, Configurações, Usuários e Clientes, conforme as permissões.
 - Tela de configurações: nome (rota nova — o nome fica em `tenants` e nenhuma rota o altera),
   descrição, contato, WhatsApp, endereço, tempo de preparo, pedido mínimo, "recebendo pedidos",
-  logo e capa.
+  logo e capa — e o **fuso**, que hoje só é definido no cadastro, pelo aparelho (achado da Fase
+  18).
 - O início do painel ganha a lista "o que falta para receber pedidos": e-mail confirmado,
   WhatsApp, horários, entrega ou retirada, forma de pagamento e pelo menos um produto.
 
@@ -298,6 +290,13 @@ Pode virar duas fases.
 ---
 
 ## Fases anteriores
+
+**Fase 17** entregou o cadastro aberto pela API, no plano gratuito: o estabelecimento nasce
+`PENDING` — o mesmo 404 de um endereço inexistente — e é publicado quando o dono confirma o e-mail;
+o e-mail de confirmação não repete nada do que foi digitado, e o token vai no fragmento do link. O
+envio de e-mail passou a existir (SMTP, com o Mailpit em desenvolvimento), e o seed cria os
+estabelecimentos pelo mesmo caminho do cadastro. Depois dela veio a coleção do Postman, gerada
+das rotas por `pnpm postman`.
 
 **Fase 16** escreveu o CI no GitHub Actions — com o PostgreSQL criado do zero pelos scripts de
 init, actions fixadas pelo commit e nenhum segredo —, guardado depois até a Fase 28 para agilizar

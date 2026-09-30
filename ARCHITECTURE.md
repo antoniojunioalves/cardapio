@@ -892,7 +892,11 @@ src/
 
 | Rota                          | Página                                                 |
 | ----------------------------- | ------------------------------------------------------ |
-| `/`                           | verificação do ambiente, até existir página do produto |
+| `/`                           | página inicial do produto                              |
+| `/cadastro`                   | cadastro do estabelecimento                            |
+| `/entrar`                     | pergunta o endereço e leva ao login do estabelecimento |
+| `/confirmar-email`            | confirmação do e-mail pelo link (`#token=…`)           |
+| `/termos`, `/privacidade`     | termos de uso e política de privacidade                |
 | `/:tenantSlug`                | cardápio público                                       |
 | `/:tenantSlug/checkout`       | finalizar pedido                                       |
 | `/:tenantSlug/pedido-enviado` | confirmação do pedido                                  |
@@ -990,6 +994,28 @@ ilegíveis.
 
 Não há editor de temas, apenas a arquitetura que torna um possível sem tocar em componentes. O
 cardápio público ainda usa o tema do produto: o banco não guarda cores por estabelecimento.
+
+### 9.8 Páginas do produto e cadastro
+
+As páginas do produto — inicial, cadastro, entrar, confirmação e textos legais — usam a moldura
+`components/SiteLayout.tsx`; o cardápio e o painel não, porque lá a identidade é a do
+estabelecimento. Elas ficam no mesmo nível de `/:tenantSlug`: rota fixa ganha da rota com
+parâmetro, e é por isso que esses endereços estão em `SLUGS_RESERVADOS` (6.8).
+
+**O cadastro** (`features/signup/`) valida com o schema da API (`cadastroSchema`), sem a versão dos
+termos e o fuso, que a tela preenche. O endereço do cardápio é sugerido pelo nome até a pessoa
+editá-lo, e conferido na API 400 ms depois da última tecla. A chamada leva `credentials`, como o
+login: o refresh token vem num cookie. Deu certo, a sessão já está aberta, e a pessoa cai no
+painel — com o recado de que o e-mail não saiu, se for o caso, no estado da navegação.
+
+**A confirmação** lê o token do fragmento e o tira do endereço na hora; o POST sai uma vez por
+token (chave do React Query). **O painel** mostra o aviso de confirmação a quem tem
+`settings:read`, e o relê quando a pessoa volta à aba — quem confirmou pelo celular vê o aviso
+sumir sem recarregar.
+
+**Os textos legais** moram em `features/legal/textos.ts`, com o nome do produto vindo de
+`@repo/config`. A versão exibida é `VERSAO_DOS_TERMOS`, a mesma que o cadastro envia e a API
+registra.
 
 ---
 

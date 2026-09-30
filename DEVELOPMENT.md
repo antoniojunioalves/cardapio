@@ -168,9 +168,9 @@ apps/api/src/
 └── db/            schema Drizzle, migrations, seed, catálogos
 
 apps/web/src/
-├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper, TextField
-├── features/      por domínio — menu/, cart/, checkout/, admin/ (sessão, ao vivo, pedidos)
-├── pages/         composição de rotas — MenuPage, CheckoutPage, OrderSentPage, HomePage…
+├── components/    genéricos, sem regra de negócio — Sheet, QuantityStepper, TextField, SiteLayout
+├── features/      por domínio — menu/, cart/, checkout/, admin/, signup/ (cadastro), legal/ (termos)
+├── pages/         composição de rotas — LandingPage, SignupPage, MenuPage, CheckoutPage…
 ├── layouts/
 ├── theme/         tokens de design
 ├── services/      clientes HTTP
@@ -245,6 +245,14 @@ do estabelecimento (região, forma aceita, troco) vai num schema montado com o c
 falhou; para mostrar todos os erros de uma vez, deixe a base aceitar texto e valide tudo no
 `superRefine`. E a base precisa aceitar `null`: grupo de rádios sem nada marcado chega assim
 depois que o foco passa por ele, e um `z.string()` puro derruba a base inteira.
+
+### Textos legais
+
+Os termos de uso e a política de privacidade moram em `apps/web/src/features/legal/textos.ts`.
+**Mudou o texto, mude a versão:** `VERSAO_DOS_TERMOS`, em `packages/shared/src/signup.ts`, é o que
+o cadastro envia e a API registra na auditoria como aceito — texto novo com a versão velha
+registraria um aceite de algo que a pessoa não leu. A API recusa cadastro com versão diferente da
+atual, e a tela, aberta antes da troca, pede um novo aceite.
 
 ### Código compartilhado entre API e web
 
