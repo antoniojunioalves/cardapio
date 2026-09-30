@@ -51,10 +51,10 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### Fundações não negociáveis
 
-- [ ] Isolamento entre tenants com RLS e testes que o comprovam
+- [x] Isolamento entre tenants com RLS e testes que o comprovam
 - [x] Preço, taxa, total e disponibilidade calculados sempre no backend
 - [x] Snapshot dos dados do produto dentro do pedido
-- [ ] Validação com Zod em toda fronteira
+- [x] Validação com Zod em toda fronteira
 - [ ] Mobile-first e acessível
 
 ---
@@ -120,3 +120,8 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 7. Atualizar o status
 
 E os testes provam que o Tenant A não enxerga nada do Tenant B.
+
+> **Situação ao fim da Fase 15:** os passos 4 a 7 funcionam de ponta a ponta, e os testes provam
+> o isolamento. Os passos 1 a 3 funcionam só pela API — faltam a criação de estabelecimento pelo
+> Super Admin e as telas de configuração, cardápio e usuários. Ver PROJECT_PLAN.md, "O que falta
+> para o MVP".

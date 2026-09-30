@@ -234,9 +234,13 @@ motivo. Sem isso o teste falha — de propósito.
 Use sempre `requireAuth()`, que devolve a cadeia pronta:
 
 ```ts
-app.get('/produtos', { preHandler: requireAuth('products:read') }, handler)
-app.get('/perfil', { preHandler: requireAuth() }, handler) // só autenticação
+app.get('/produtos', { onRequest: requireAuth('products:read') }, handler)
+app.get('/perfil', { onRequest: requireAuth() }, handler) // só autenticação
 ```
+
+**Em `onRequest`, nunca em `preHandler`**: o Fastify valida o corpo antes do `preHandler`, e quem
+não está logado receberia 400 com o formato da rota. `tests/route-guard.test.ts` confere toda
+rota do painel pelo inventário — e toda rota aberta precisa estar na lista dele, com o motivo.
 
 Não existe `authenticate` nem `authorize` exportados separadamente, de propósito: montá-los na
 ordem errada falharia em silêncio, com o erro parecendo de sessão e não de configuração.

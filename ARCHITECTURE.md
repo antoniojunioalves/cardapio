@@ -361,8 +361,14 @@ A mensagem de falha traz a causa raiz (`connect ECONNREFUSED …`), e não o emb
 ### 5.1.3 Limite de requisições
 
 Limite global em memória, com o 429 no mesmo formato de erro de todas as outras respostas. É o
-piso: login e a consulta de cliente por telefone terão limites próprios e bem mais estritos nas
-fases em que forem criados.
+piso: login (5/min), identificação por telefone e envio de pedido (10/min) têm limites próprios.
+
+**De onde vem o IP:** `TRUST_PROXY` (desligado por padrão). Atrás de um proxy reverso, precisa
+estar ligado — senão todo cliente aparece com o IP do proxy e o limite vira um só para todos. Sem
+proxy, precisa estar desligado — senão qualquer cliente escolhe o próprio IP pelo
+`X-Forwarded-For` e escapa dos limites.
+
+O corpo JSON tem limite de 64 KB (`JSON_BODY_LIMIT_BYTES`); o upload de imagem, o seu.
 
 O contador vive na memória do processo; com mais de uma instância em produção isso vira um
 limite por instância, e aí entra um armazenamento compartilhado. Registrado no ROADMAP.
@@ -438,6 +444,11 @@ O verificador do token de acesso **fixa a lista de algoritmos aceitos**. Sem iss
 declarando `alg: none` — ou trocando HMAC por RSA — seria aceito pela biblioteca. Há um teste
 que apresenta exatamente esse token e exige a recusa.
 
+**O refresh token vai num cookie `httpOnly`** (`refresh_token`, `SameSite=Strict`, `Path=/api/v1/auth`,
+`Secure` em produção), nunca no corpo da resposta: o JavaScript da página não o vê, e um script
+injetado não tem como roubá-lo. A renovação e o logout leem o cookie; o corpo fica como
+alternativa para clientes de API sem cookie.
+
 O refresh token leva o tenant como prefixo (`{tenantId}.{aleatório}`). É uma **dica de
 roteamento, não uma credencial**: sem ela seria impossível encontrar a linha, já que a tabela é
 protegida por RLS e o contexto viria justamente do token. Trocar o prefixo muda o token inteiro
@@ -474,8 +485,14 @@ conferir permissão comparando strings, sem tabela de tradução no meio.
 `requireAuth()` é a única forma exportada de proteger uma rota, e devolve a cadeia pronta:
 
 ```ts
-app.get('/produtos', { preHandler: requireAuth('products:read') }, handler)
+app.get('/produtos', { onRequest: requireAuth('products:read') }, handler)
 ```
+
+**Em `onRequest`, nunca em `preHandler`.** O Fastify valida o corpo antes do `preHandler`: ali,
+quem não está logado receberia 400 com o formato esperado da rota, e o servidor leria o corpo de
+quem nem se identificou. `tests/route-guard.test.ts` percorre o inventário de rotas registradas e
+exige 401 sem login em toda rota do painel — e que toda rota aberta esteja numa lista com o
+motivo.
 
 Autenticar e autorizar em duas peças separadas permitiria montá-las na ordem errada, e
 `[authorize('x'), authenticate]` falharia em silêncio — `authorize` não encontraria usuário e o
@@ -887,8 +904,9 @@ carrinho do Zustand, e monta o formulário com React Hook Form + Zod.
 
 ### 9.6 Painel do estabelecimento
 
-`features/admin/`. A **sessão** (`session.ts`) guarda o token de acesso só na memória e o refresh
-token no `localStorage`, junto do slug — a sessão é de um estabelecimento. `comSessao` chama a
+`features/admin/`. A **sessão** (`session.ts`) guarda o token de acesso só na memória; o refresh token fica
+no cookie `httpOnly` da API, e as chamadas de autenticação o enviam (`credentials: 'include'`).
+No `localStorage` ficam só o slug e quem está logado — a sessão é de um estabelecimento. `comSessao` chama a
 API com o token e, num 401, renova uma vez e repete; a renovação é única mesmo com várias
 chamadas simultâneas, porque duas apresentariam o mesmo refresh token e o servidor as trataria
 como roubo.
@@ -1009,6 +1027,9 @@ do `requireAuth` (token, usuário recarregado, permissão `orders:read`). Fecha 
 token em 5 s, com token inválido ou quando ele expira (o painel renova e reconecta), e `4003` sem
 permissão (o painel desiste). A origem é conferida no handshake, porque o navegador não aplica
 CORS a WebSocket. Um ping a cada 30 s derruba conexão morta.
+
+**Usuário alterado:** desativar ou mudar o papel de alguém emite `USUARIO_ALTERADO`, e as
+conexões dele fecham com `4001` na hora — o painel se autentica de novo com o que valer agora.
 
 **Perda de avisos:** um aviso emitido com a conexão fora se perde. O painel relê a lista ao
 conectar e a cada minuto.
