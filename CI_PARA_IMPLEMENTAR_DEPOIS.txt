@@ -1,3 +1,4 @@
+# Criar esse arquivo em: .github/workflows/ci.yml
 # Confere cada PR e cada commit na main: formatação, typecheck, lint, testes e build.
 #
 # Os passos são os do `pnpm verify`, separados para o GitHub mostrar qual falhou. O
