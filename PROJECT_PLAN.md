@@ -1,8 +1,9 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-09-29
-**Fase atual:** 15 — concluída, aguardando validação
-**Próxima:** a definir — as telas de gestão que faltam para o MVP (ver "O que falta para o MVP")
+**Atualizado em:** 2026-09-30
+**Fase atual:** 15 — concluída
+**Próxima:** 16 — CI no GitHub, aguardando autorização. As fases 16 a 28 fecham o MVP (ver "O que
+falta para o MVP")
 
 ---
 
@@ -47,9 +48,9 @@ foi para um cookie `httpOnly`; toda rota do painel recusa quem não está logado
 corpo, e um teste-guarda confere isso pelo inventário de rotas; desativar ou mudar o papel de um
 usuário fecha a conexão ao vivo dele na hora.
 
-**Ainda não existe:** tela para cardápio, configurações e usuários, e a criação de
-estabelecimento pelo Super Admin — o lojista ainda configura tudo pela API. Ver "O que falta
-para o MVP".
+**Ainda não existe:** o cadastro do estabelecimento pela página inicial e as telas de
+configuração, cardápio, usuários e clientes — hoje o estabelecimento nasce pelo seed e é
+configurado pela API. As fases 16 a 28 fecham o MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -75,6 +76,19 @@ para o MVP".
 | 13  | WebSocket e pedidos em tempo real                                                                                   | ✅ Concluída |
 | 14  | Limites por plano                                                                                                   | ✅ Concluída |
 | 15  | Testes de segurança, hardening e refinamento                                                                        | ✅ Concluída |
+| 16  | CI no GitHub e ajustes nos docs                                                                                     | ⬜ Próxima   |
+| 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ⬜           |
+| 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ⬜           |
+| 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜           |
+| 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜           |
+| 21  | Estrutura do painel e configuração do estabelecimento                                                               | ⬜           |
+| 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
+| 23  | Categorias e produtos                                                                                               | ⬜           |
+| 24  | Grupos de opção, adicionais e combos                                                                                | ⬜           |
+| 25  | Usuários e senha                                                                                                    | ⬜           |
+| 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
+| 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
+| 28  | Colocar no ar                                                                                                       | ⬜           |
 
 Três movimentos em relação à ordem sugerida originalmente, cada um porque algo posterior
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
@@ -148,15 +162,128 @@ de uma constante); nenhum HTML injetado sem escape no web; o único link externo
 
 As 15 fases estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
 (MVP.md, "Como saber que acabou"). Os passos 4 a 7 funcionam de ponta a ponta — cardápio no
-celular, pedido, WhatsApp, painel ao vivo, status. Os passos 1 a 3 só funcionam **pela API**:
+celular, pedido, WhatsApp, painel ao vivo, status. Os passos 1 a 3 só funcionam **pela API**, e
+o sistema ainda não está no ar. As fases 16 a 28 fecham essa distância.
 
-1. **Criação de estabelecimento pelo Super Admin** — hoje só pelo seed.
-2. **Telas de configuração** — estabelecimento, logo e capa, horários, entrega, pagamentos.
-3. **Telas de cardápio** — categorias, produtos, grupos de opção, combos, imagens.
-4. **Tela de usuários** — a gestão existe na API (Fase 14).
+### Decisões do Junio (2026-09-30)
 
-A API de tudo isso já existe e está testada; o que falta são as telas e o fluxo do Super Admin.
-A proposta de fases fica para a próxima conversa, com o Junio.
+- **Cadastro aberto, no plano gratuito, sem pagamento**, no lugar de "o Super Admin cria o
+  estabelecimento". É o primeiro passo da visão de futuro — landing page, escolher o plano,
+  assinar, cadastrar-se e usar na hora; a assinatura paga continua no ROADMAP. O Super Admin
+  passa a moderar por comando.
+- **CI primeiro**, separado do resto do deploy.
+- **Entram no MVP**, além do checklist original: troca e recuperação de senha, tratamento de
+  imagens no upload, termos de uso e privacidade, landing page e colocar no ar.
+- **Auditoria: basta o registro**, que já existe. A consulta no painel foi para o ROADMAP.
+- **Ficam no ROADMAP:** busca de CEP, região de entrega ligada ao endereço, OTP e conta do
+  cliente, retenção e eliminação de dados, checkout que lembra os dados no aparelho, o
+  acompanhamento do pedido pelo cliente (o Junio vai pensar em como fazer) e o robô no WhatsApp.
+
+Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
+vazio**, como faria alguém que nunca viu o sistema.
+
+### Fase 16 — CI no GitHub
+
+- Workflow com typecheck, lint, testes e build em cada PR e na `main`.
+- O PostgreSQL sobe pelo mesmo `docker compose` do desenvolvimento, para os scripts de
+  `docker/postgres/` criarem as duas roles e o banco `cardapio_test`. Testes com
+  `--concurrency=1`. Sem segredos: só os valores de desenvolvimento do `.env.example`.
+- Ajustes nos docs: o cabeçalho do SECURITY.md ainda diz "Fase 7b", a tabela de testes de
+  isolamento está partida em duas e falta o canal para relatar vulnerabilidade; a nota "o envio
+  é da Fase 11" no MVP.md; a frase do README sobre bibliotecas que "ainda não aparecem"; a
+  revisão agendada de `packages/shared` no ROADMAP, que já aconteceu.
+
+### Fase 17 — Envio de e-mail e cadastro pela API
+
+- **`EmailService`** no padrão do `StorageService`: provedor SMTP, o Mailpit no
+  `docker-compose.yml` para ver os e-mails em desenvolvimento, e um provedor falso nos testes.
+- **`criarEstabelecimento`**, numa transação só: estabelecimento, assinatura do plano FREE, dono
+  com o papel OWNER e configurações iniciais. Extraído de `semearEstabelecimentos`
+  (`apps/api/src/db/seed.ts`); o seed e `criarTenantComUsuario` passam a usá-lo.
+- **Uma nova origem nomeada no `TenantContext`** — a arquitetura proíbe construtor genérico.
+- **`POST /api/v1/public/signup`:** nome do estabelecimento, slug, nome do dono, e-mail, senha e
+  a versão dos termos aceita. Slugs reservados numa lista em `packages/shared` — `/cadastro`,
+  `/termos` e as demais páginas colidiriam com `/:tenantSlug`. Limite por IP e campo-armadilha
+  contra robôs. Já entra logado, com o cookie da Fase 15. Nunca responde "e-mail já
+  cadastrado".
+- **Confirmação de e-mail:** token aleatório, guardado como hash, que expira e vale uma vez. O
+  painel funciona na hora; **o cardápio só fica público depois da confirmação** — até lá, o
+  mesmo 404. Com reenvio.
+- **Aviso à plataforma** por e-mail a cada novo cadastro. **Aceite dos termos na auditoria**,
+  com a versão e o IP. Rotas abertas novas em `ROTAS_ABERTAS`, com o motivo.
+- A avaliar: limite de produtos ou de armazenamento no plano gratuito, contra abuso.
+
+### Fase 18 — Telas do cadastro
+
+- `/` vira a landing page, no lugar da página de teste do ambiente, com "Começar grátis" e
+  "Entrar". "Entrar" pede o endereço do estabelecimento, porque o login precisa do slug.
+- `/cadastro` sugere o endereço do cardápio a partir do nome e confere se está livre.
+- `/termos` e `/privacidade` com texto provisório até o Junio entregar o final;
+  `/confirmar-email` recebe o link do e-mail.
+- O checkout ganha um aviso de privacidade, com link, para os dados do cliente final.
+
+### Fase 19 — Comandos do Super Admin
+
+- Um comando `pnpm` para listar estabelecimentos, suspender, reativar, trocar o plano e reenviar
+  a confirmação. Roda no servidor, e cada ação fica registrada.
+- A tabela `platform_admins` fica para o painel da plataforma, no ROADMAP.
+
+### Fase 20 — Tratamento de imagens no upload
+
+- Gira conforme a orientação da câmera, remove todos os metadados — inclusive o GPS —, reduz o
+  tamanho por uso (logo, capa, produto) e converte para WebP. Candidato: `sharp`, conferindo a
+  política de scripts de instalação do pnpm 10 (DEVELOPMENT.md).
+- Testes: foto com GPS sai sem EXIF; foto grande sai reduzida; PNG transparente continua
+  transparente.
+
+### Fase 21 — Estrutura do painel e configuração do estabelecimento
+
+- Navegação entre Pedidos, Cardápio, Configurações, Usuários e Clientes, conforme as permissões.
+- Tela de configurações: nome (rota nova — o nome fica em `tenants` e nenhuma rota o altera),
+  descrição, contato, WhatsApp, endereço, tempo de preparo, pedido mínimo, "recebendo pedidos",
+  logo e capa.
+- O início do painel ganha a lista "o que falta para receber pedidos": e-mail confirmado,
+  WhatsApp, horários, entrega ou retirada, forma de pagamento e pelo menos um produto.
+
+### Fases 22 a 24 — Configurações restantes e cardápio
+
+- **22:** horários, entrega e retirada, formas de pagamento.
+- **23:** categorias e produtos, com imagem. Reordenação de produtos em lote
+  (`PUT /products/order`), como a de categorias, se a tela precisar.
+- **24:** grupos de opção, adicionais e combos.
+- Todas sobre rotas que já existem: `admin-settings.ts`, `admin-catalog.ts` e
+  `admin-customization.ts`.
+
+### Fase 25 — Usuários e senha
+
+- Tela de usuários sobre a API da Fase 14.
+- Cada pessoa troca a própria senha, e o dono redefine a de um atendente.
+- "Esqueci minha senha" por e-mail, com o envio da Fase 17.
+
+### Fase 26 — Clientes e histórico de pedidos
+
+- API nova com `customers:read`, permissão que já existe: lista com busca por nome e telefone, e
+  o detalhe com os endereços e os pedidos. A lista de pedidos passa a filtrar por cliente.
+- Tela, e o acesso a dado pessoal registrado na auditoria (SECURITY.md, seção 11).
+
+### Fase 27 — Acessibilidade e percurso completo
+
+- Revisão de todas as telas: teclado, foco nas janelas, rótulos, contraste, leitor de tela.
+  Verificação automática com `axe` nos testes do web.
+- O percurso completo, do zero, num estabelecimento novo — do cadastro ao status do pedido — e o
+  checklist do MVP.md fechado.
+
+### Fase 28 — Colocar no ar
+
+Pode virar duas fases.
+
+- Escolher a hospedagem, no início da fase.
+- Dockerfiles de produção, HTTPS e a CSP da aplicação web.
+- Backup do banco e das imagens, com a restauração testada.
+- **Seed essencial de produção** — papéis, formas de pagamento e planos, sem os estabelecimentos
+  de demonstração. Hoje o plano FREE só existe porque o seed de demonstração o cria.
+- SMTP de produção com SPF e DKIM; rate limit compartilhado, se houver mais de uma instância; os
+  textos jurídicos finais.
 
 ---
 
@@ -278,11 +405,11 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pendências conhecidas
 
-| Item                                                                          | Quando resolve                  |
-| ----------------------------------------------------------------------------- | ------------------------------- |
-| Rate limit conta em memória — vira limite por instância se houver mais de uma | Deploy                          |
-| Sem Dockerfile para API e web                                                 | Deploy                          |
-| Sem CI                                                                        | A definir                       |
-| Nenhuma rota HTTP expõe tenants ainda — a fase é de fundação                  | Fases 5 e 8                     |
-| Contrato do cardápio público copiado no web, fora do `packages/shared`        | Quando o contrato mudar de novo |
-| Checkout não lembra os dados no aparelho ao voltar ao cardápio                | ROADMAP                         |
+| Item                                                                          | Quando resolve                           |
+| ----------------------------------------------------------------------------- | ---------------------------------------- |
+| Sem CI                                                                        | Fase 16                                  |
+| Sem Dockerfile para API e web                                                 | Fase 28                                  |
+| Rate limit conta em memória — vira limite por instância se houver mais de uma | Fase 28, se houver mais de uma instância |
+| Plano FREE só existe porque o seed de demonstração o cria                     | Fase 28 (seed essencial de produção)     |
+| Contrato do cardápio público copiado no web, fora do `packages/shared`        | Quando o contrato mudar de novo          |
+| Checkout não lembra os dados no aparelho ao voltar ao cardápio                | ROADMAP                                  |

@@ -40,9 +40,8 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Autenticação e contas
 
-- Tela de gestão de usuários no painel — hoje só pela API (Fase 14)
-- Convite de usuário por e-mail e troca de senha pela própria pessoa — hoje o dono define a senha
-  inicial
+- Convite de usuário por e-mail — hoje o dono define a senha inicial, e a pessoa a troca depois
+  (Fase 25)
 - Transferência da posse do estabelecimento (papel `OWNER`)
 
 - OTP por SMS e WhatsApp
@@ -60,7 +59,8 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   nome completo, endereços completos (CEP, rua, número, complemento, referência) para conferir e
   editar. O comportamento mascarado continua valendo para quem pede sem login.
 - Papéis personalizados por estabelecimento — hoje OWNER, ADMIN e STAFF são globais
-- Painel da plataforma para o Super Admin — hoje existe só a estrutura de dados
+- Painel da plataforma para o Super Admin — no MVP ele age por comando (Fase 19); a tabela
+  `platform_admins` fica para este painel
 
 ## Endereço e entrega
 
@@ -97,6 +97,10 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ### Do tenant (assinatura da plataforma)
 
+- **Assinar um plano pago no cadastro.** A visão do Junio: a pessoa navega pela landing page,
+  escolhe o plano, assina, faz o cadastro e já começa a usar. O MVP faz o cadastro só no plano
+  gratuito (Fases 17 e 18); falta escolher um plano pago e pagar, o que depende da cobrança
+  recorrente e do gateway abaixo.
 - Cobrança de excedente e mudança de plano pelo próprio lojista — os limites já são aplicados
   (Fase 14), mas passar deles hoje só bloqueia
 
@@ -114,6 +118,20 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Impressão automática na cozinha
 - Painel de cozinha (KDS)
 - WhatsApp Business API oficial, substituindo o link `wa.me`
+- **Robô no WhatsApp para responder os clientes.** Pedido do Junio. Depende da WhatsApp Business
+  API oficial (item acima): com ela, as mensagens dos clientes chegam ao sistema, e o robô
+  responde. Pode reaproveitar o que já existe:
+  - horário, aberto ou fechado, taxa de entrega, pedido mínimo e formas de pagamento, que vêm do
+    cardápio público (Fase 8a);
+  - o link do cardápio;
+  - o status do pedido, junto com o acompanhamento pelo cliente (em "Experiência do cliente").
+
+  A definir: o que o robô responde e quando passa a conversa para uma pessoa; um número por
+  estabelecimento ou um só da plataforma; o custo por conversa cobrado pela Meta; e os dados
+  pessoais que passam pela conversa (LGPD).
+
+- Consulta do registro de auditoria no painel. O registro existe desde a Fase 4, e a permissão
+  `audit:read` já está no RBAC; no MVP basta o registro (decisão do Junio).
 
 ## Experiência do cliente
 
@@ -128,6 +146,17 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   - a página mostra só o que o cliente pode ver: status, itens e valores, sem o endereço completo
     de um endereço salvo (a mesma regra da identificação por telefone);
   - hoje a confirmação não sobrevive a recarregar a página; o link de acompanhamento resolve isso.
+
+  **O Junio vai pensar melhor em como fazer** — saiu do plano do MVP por isso. A ideia dele é
+  guardar os dados dos pedidos no `localStorage`, como outros sites fazem. Pontos para essa
+  decisão:
+  - o status muda no servidor: o navegador guarda o pedido para mostrar, mas a atualização do
+    status continua vindo da API;
+  - num aparelho compartilhado, quem usar o navegador depois vê o nome, o telefone e o endereço
+    dos pedidos anteriores;
+  - o `localStorage` pode ser editado por qualquer um: serve para exibir, como o carrinho, e
+    nunca como fonte de verdade.
+
 - Notificações push
 - Avaliação do estabelecimento
 - Avaliação de produtos
@@ -188,7 +217,6 @@ evolução com impacto no carrinho e no cálculo do pedido.
 
 ## Plataforma e multi-tenancy
 
-- Autosserviço de cadastro de estabelecimento
 - Subdomínio por tenant — `tenant.dominio.com`
 - Domínio próprio do tenant
 - Cores do estabelecimento no cardápio público: guardar o tema em `tenant_settings`, devolvê-lo
@@ -202,21 +230,14 @@ evolução com impacto no carrinho e no cálculo do pedido.
 
 ## Infraestrutura
 
-- Content-Security-Policy da aplicação web no servidor que a hospedar — a API já manda a sua; a
-  da web depende do deploy (o Vite de desenvolvimento usa scripts inline)
-
 - Storage externo (S3 ou equivalente), atrás do `StorageService` que já existe
-- **Processamento de imagem no upload:** remover metadados EXIF (podem conter a localização GPS
-  de onde a foto foi tirada), redimensionar e converter para WebP. Hoje uma foto de celular de
-  5 MB é entregue inteira ao cliente no 4G
 - Limpeza periódica de arquivos órfãos — sobram quando a remoção do arquivo antigo falha depois
   do commit
 - Cota de armazenamento por plano
-- Dockerfiles de produção para API e web
 - Armazenamento compartilhado para o rate limit (Redis) — hoje o contador vive na memória do
-  processo, o que vira um limite por instância assim que houver mais de uma
-- CI/CD
-- Backup automatizado e restauração testada
+  processo, o que vira um limite por instância assim que houver mais de uma. A Fase 28 decide se
+  já é preciso
+- Deploy contínuo (CD) — o CI entra na Fase 16
 - Métricas e tracing distribuído
 
 ## SEO e descoberta

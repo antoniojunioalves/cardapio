@@ -10,29 +10,39 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### Plataforma
 
-- [ ] Super Admin cria tenants (estrutura mínima, sem painel completo)
+- [ ] Cadastro aberto do estabelecimento, no plano gratuito e sem pagamento, com confirmação de
+      e-mail — _Fases 17 e 18_
+- [ ] Página inicial do produto, com "Começar grátis" e "Entrar" — _Fase 18_
+- [ ] Termos de uso e política de privacidade, aceitos no cadastro — _Fase 18_
+- [ ] Super Admin lista, suspende, reativa e troca o plano de um estabelecimento, por comando —
+      _Fase 19_
 - [x] Modelo de planos preparado — `plans`, `plan_features`, `subscriptions` — sem cobrança
 
 ### Administração do estabelecimento
 
 - [x] Login de usuário administrativo
-- [x] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF` — _pela API; sem tela ainda_
-- [ ] Configuração do estabelecimento: nome, logo, descrição, contato, WhatsApp
-- [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia
-- [ ] Taxa de entrega: valor fixo ou por região
-- [ ] Retirada no estabelecimento, quando habilitada
-- [ ] Pedido mínimo
-- [ ] Formas de pagamento habilitáveis por tenant
-- [ ] Categorias com ordenação
-- [ ] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem
-- [ ] Grupos de opções com mínimo, máximo e obrigatoriedade
-- [ ] Adicionais com alteração de preço
-- [ ] Combos
-- [ ] Upload de imagens
+- [x] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF` — _pela API; a tela é
+      da Fase 25_
+- [ ] Troca da própria senha, redefinição pelo dono e "Esqueci minha senha" por e-mail —
+      _Fase 25_
+- [ ] Painel com navegação e a lista do que falta para receber pedidos — _Fase 21_
+- [ ] Configuração do estabelecimento: nome, logo, descrição, contato, WhatsApp — _Fase 21_
+- [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia — _Fase 22_
+- [ ] Taxa de entrega: valor fixo ou por região — _Fase 22_
+- [ ] Retirada no estabelecimento, quando habilitada — _Fase 22_
+- [ ] Pedido mínimo — _Fase 21_
+- [ ] Formas de pagamento habilitáveis por tenant — _Fase 22_
+- [ ] Categorias com ordenação — _Fase 23_
+- [ ] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem — _Fase 23_
+- [ ] Grupos de opções com mínimo, máximo e obrigatoriedade — _Fase 24_
+- [ ] Adicionais com alteração de preço — _Fase 24_
+- [ ] Combos — _Fase 24_
+- [ ] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — _tratamento
+      na Fase 20; telas nas Fases 21 e 23_
 - [x] Lista de pedidos com atualização de status
 - [x] Pedidos novos chegando em tempo real
-- [ ] Lista de clientes e histórico de pedidos
-- [ ] Registro de auditoria das ações administrativas
+- [ ] Lista de clientes e histórico de pedidos — _Fase 26_
+- [x] Registro de auditoria das ações administrativas — _a consulta no painel está no ROADMAP_
 
 ### Cardápio público
 
@@ -55,7 +65,12 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Preço, taxa, total e disponibilidade calculados sempre no backend
 - [x] Snapshot dos dados do produto dentro do pedido
 - [x] Validação com Zod em toda fronteira
-- [ ] Mobile-first e acessível
+- [ ] Mobile-first e acessível — _Fase 27_
+
+### No ar
+
+- [ ] CI: typecheck, lint, testes e build a cada PR — _Fase 16_
+- [ ] Hospedagem, HTTPS, backup e seed essencial de produção — _Fase 28_
 
 ---
 
@@ -86,14 +101,15 @@ Cada item aqui foi considerado e adiado de propósito. Estão detalhados em
 
 - Estoque e baixa automática
 - Impressão térmica ou automática na cozinha
-- Acompanhamento de status pelo cliente
+- Acompanhamento de status pelo cliente — o Junio vai pensar em como fazer
+- Consulta do registro de auditoria no painel — o registro existe
 - Avaliações de estabelecimento ou de produto
 
 ### Crescimento
 
 - Cupons, promoções, fidelidade, pontos, cashback
 - Relatórios avançados e analytics
-- Cadastro autosserviço de estabelecimento — no MVP quem cria tenant é o Super Admin
+- Assinar um plano pago no cadastro — no MVP o cadastro é só no plano gratuito
 
 ### Plataforma
 
@@ -103,6 +119,8 @@ Cada item aqui foi considerado e adiado de propósito. Estão detalhados em
 - Storage externo (S3) — no MVP o armazenamento é local
 - Multi-unidade e franquias
 - WhatsApp Business API — no MVP é um link `wa.me`
+- Robô no WhatsApp para responder os clientes
+- Painel da plataforma para o Super Admin — no MVP, comandos
 - Editor de temas — a arquitetura existe, a interface não
 
 ---
@@ -111,7 +129,7 @@ Cada item aqui foi considerado e adiado de propósito. Estão detalhados em
 
 Uma pessoa que nunca viu o sistema consegue, do zero:
 
-1. Receber um tenant criado pelo Super Admin
+1. Cadastrar o estabelecimento pela página inicial, no plano gratuito, e confirmar o e-mail
 2. Entrar, configurar o estabelecimento, horários, entrega e pagamentos
 3. Cadastrar categorias, produtos, opções, adicionais e combos
 4. Abrir `/{tenantSlug}` no celular
@@ -119,9 +137,9 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 6. Ver o pedido aparecer no painel **sem recarregar a página**
 7. Atualizar o status
 
-E os testes provam que o Tenant A não enxerga nada do Tenant B.
+E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
+não só na máquina de desenvolvimento.
 
 > **Situação ao fim da Fase 15:** os passos 4 a 7 funcionam de ponta a ponta, e os testes provam
-> o isolamento. Os passos 1 a 3 funcionam só pela API — faltam a criação de estabelecimento pelo
-> Super Admin e as telas de configuração, cardápio e usuários. Ver PROJECT_PLAN.md, "O que falta
-> para o MVP".
+> o isolamento. Os passos 1 a 3 funcionam só pela API, e o sistema ainda não está no ar. As fases
+> 16 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".
