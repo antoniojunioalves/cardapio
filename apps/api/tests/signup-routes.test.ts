@@ -39,7 +39,7 @@ function cadastro(sobrescrever: Record<string, unknown> = {}) {
     slug,
     ownerName: 'Maria Dona',
     email: `${slug}@Exemplo.com`,
-    password: 'senha-forte-123',
+    password: 'Senha-forte-123',
     termsVersion: VERSAO_DOS_TERMOS,
     ...sobrescrever,
   }
@@ -222,10 +222,12 @@ describe('cadastro pela página', () => {
     expect(reservado.body).toContain('Este endereço é reservado. Escolha outro.')
   })
 
-  it('termos de outra versão, senha curta e campo-armadilha são recusados sem criar nada', async () => {
+  it('termos de outra versão, senha fraca e campo-armadilha são recusados sem criar nada', async () => {
     const recusados = [
       cadastro({ termsVersion: '2020-01-01' }),
       cadastro({ password: '1234567' }),
+      cadastro({ password: 'senha-sem-maiuscula-1' }),
+      cadastro({ password: 'SenhaSemEspecial1' }),
       cadastro({ website: 'http://spam.example' }),
     ]
 

@@ -1,6 +1,6 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 17**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 18**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
 cookie `httpOnly`, RBAC por permissão, auditoria append-only, headers de segurança, CORS
 restrito, limites de requisição, validação de ambiente e o cadastro aberto de estabelecimento,
@@ -186,8 +186,14 @@ Anonimização, exportação de dados e política de retenção não estão impl
 ROADMAP. O MVP não implementa fluxo jurídico completo de titular de dados.
 
 Observação importante sobre papéis: o **tenant é o controlador** dos dados dos seus clientes; a
-plataforma é **operadora**. Isso precisa estar refletido nos termos de uso antes de qualquer
-cliente real entrar.
+plataforma é **operadora**. Os termos de uso e a política de privacidade (`/termos` e
+`/privacidade`, Fase 18) já dizem isso, e o cadastro registra a versão aceita — mas o **texto ainda
+é provisório**: o definitivo, com orientação jurídica, precisa estar no lugar antes de qualquer
+cliente real entrar (Fase 28).
+
+**Transparência no checkout:** antes de enviar o pedido, o cliente lê que nome, telefone e
+endereço vão para o estabelecimento, com o link da política de privacidade — que conta, inclusive,
+que um telefone conhecido mostra o primeiro nome e os endereços mascarados (seção 5).
 
 ---
 
@@ -274,11 +280,21 @@ estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por i
   estabelecimento novo: o mesmo e-mail pode cadastrar outro, e a resposta nunca diz "já existe".
 - **Limites:** 10 cadastros por hora por IP, um campo-armadilha que só robô preenche, endereços
   reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
+- **Senha forte no cadastro:** pelo menos 8 caracteres, com letra maiúscula, minúscula e caractere
+  especial (`REGRAS_DA_SENHA`, a mesma lista na API e na tela). Guardada com argon2id, como
+  sempre. A criação de usuários do painel ainda pede só os 8 caracteres — a mesma regra chega lá
+  na Fase 25.
 - **O aceite dos termos vai para a auditoria**, com a versão aceita e o IP. Versão diferente da
   atual é recusada: ninguém aceita um texto que não viu.
 - **Tudo numa transação**, e os e-mails só depois do commit. Sem o plano gratuito no banco, o
   cadastro responde 503 em vez de criar estabelecimento sem plano.
 - `EMAIL_DRIVER=memory`, que descartaria todo e-mail, é recusado em produção na inicialização.
+
+**Na tela (Fase 18):** a página de confirmação tira o token do endereço assim que o lê — ele não
+fica no histórico nem vai junto se o link for copiado — e o manda uma vez só, no corpo. O
+campo-armadilha fica fora da tela, do teclado e do leitor de tela (`aria-hidden`, `tabIndex=-1`),
+para nenhuma pessoa preenchê-lo sem querer. O cadastro chama a API com `credentials`, como o login:
+o refresh token vem no cookie `httpOnly` e nunca passa pelo JavaScript da página.
 
 **O que ainda não há:** captcha (só se aparecer abuso — ROADMAP) e moderação além da suspensão por
 comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
@@ -402,9 +418,9 @@ foi fechado como qualquer outra fronteira:
 
 ## Como relatar uma vulnerabilidade
 
-O repositório é público, e o produto ainda não tem usuários. **Não abra uma issue pública** para
-relatar uma vulnerabilidade: ela ficaria visível para todo mundo antes da correção.
+O repositório ainda é público, e o produto ainda não tem usuários. **Não abra uma issue pública**
+para relatar uma vulnerabilidade: ela ficaria visível para todo mundo antes da correção.
 
-O canal previsto é o relato privado de vulnerabilidades do GitHub (aba _Security_ → _Report a
-vulnerability_). Ele ainda está desligado — ligá-lo é configuração do repositório. O prazo de
-resposta entra na Fase 28, junto com o deploy, antes do primeiro estabelecimento real.
+**Antes da publicação oficial, o repositório fica privado** — decisão do Junio, obrigatória na Fase 28. A partir daí o relato privado de vulnerabilidades do GitHub deixa de fazer sentido (só quem tem
+acesso vê o código), e o canal passa a ser um contato de segurança no próprio produto, com o prazo
+de resposta — os dois definidos na Fase 28, antes do primeiro estabelecimento real.

@@ -9,9 +9,10 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 17 concluída** — o estabelecimento já se cadastra pela API, no plano
-gratuito, e o cardápio é publicado quando o dono confirma o e-mail. As fases 18 a 28 fecham o
-MVP — telas do cadastro e de gestão, e o sistema no ar (ver
+**Status atual: Fase 18 concluída** — o estabelecimento se cadastra pela página inicial
+([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
+publicado quando o dono confirma o e-mail. As fases 19 a 28 fecham o MVP — telas de gestão e o
+sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
@@ -78,7 +79,7 @@ pnpm dev                 # sobe API e frontend juntos
 
 Depois disso:
 
-- Frontend — <http://localhost:5173>
+- Frontend — <http://localhost:5173> (página inicial, cadastro em `/cadastro`)
 - API — <http://localhost:3333/health>
 - Documentação da API — <http://localhost:3333/docs>
 - E-mails enviados pela API (Mailpit) — <http://localhost:8025>

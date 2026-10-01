@@ -176,6 +176,8 @@ describe('estados da página', () => {
     expect(
       screen.getByText('Não encontramos este estabelecimento. Confira o endereço.'),
     ).toBeVisible()
+    // Genérica: vale para qualquer endereço, sem dizer se este espera confirmação.
+    expect(screen.getByText(/depois que você confirmar o e-mail/)).toBeVisible()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 

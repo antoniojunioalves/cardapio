@@ -10,10 +10,11 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### Plataforma
 
-- [ ] Cadastro aberto do estabelecimento, no plano gratuito e sem pagamento, com confirmação de
-      e-mail — _a API ficou pronta na Fase 17; as telas são da Fase 18_
-- [ ] Página inicial do produto, com "Começar grátis" e "Entrar" — _Fase 18_
-- [ ] Termos de uso e política de privacidade, aceitos no cadastro — _Fase 18_
+- [x] Cadastro aberto do estabelecimento, no plano gratuito e sem pagamento, com confirmação de
+      e-mail
+- [x] Página inicial do produto, com "Começar grátis" e "Entrar"
+- [x] Termos de uso e política de privacidade, aceitos no cadastro — _texto provisório; o
+      definitivo entra antes do lançamento (Fase 28)_
 - [ ] Super Admin lista, suspende, reativa e troca o plano de um estabelecimento, por comando —
       _Fase 19_
 - [x] Modelo de planos preparado — `plans`, `plan_features`, `subscriptions` — sem cobrança
@@ -141,7 +142,7 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 17:** os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o
-> isolamento. O passo 1 funciona pela API — cadastro, e-mail de confirmação e publicação —, e os
-> passos 2 e 3 também só pela API; o sistema ainda não está no ar. As fases 18 a 28 fecham o MVP —
+> **Situação ao fim da Fase 18:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
+> — e os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o isolamento. Os passos 2 e 3
+> ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 19 a 28 fecham o MVP —
 > ver PROJECT_PLAN.md, "O que falta para o MVP".

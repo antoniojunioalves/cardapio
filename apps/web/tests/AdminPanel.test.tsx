@@ -6,7 +6,7 @@ import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
 import { apagarSessaoAntiga, comSessao, useSessaoStore } from '../src/features/admin/session'
 import type { PedidoDoPainel } from '../src/features/admin/types'
 import { cardapioDoZe } from './helpers/cardapio'
-import { abrir } from './helpers/pagina'
+import { abrir, mockarRotas, type Resposta } from './helpers/pagina'
 
 // --- WebSocket falso ---------------------------------------------------------
 
@@ -493,6 +493,114 @@ describe('aviso do plano', () => {
 
     await waitFor(() => {
       expect(chamadas(fetch, '/admin/plan').length).toBeGreaterThan(antes)
+    })
+  })
+})
+
+describe('aviso de confirmação do cadastro', () => {
+  const DONO = {
+    ...SESSAO,
+    user: {
+      ...SESSAO.user,
+      permissions: ['orders:read', 'orders:update', 'settings:read', 'settings:update'],
+    },
+  }
+
+  /** O painel do dono, com a confirmação respondendo na ordem; a última se repete. */
+  async function abrirComConfirmacao(
+    situacoes: Resposta[],
+    reenvio: Resposta = { status: 202, corpo: { email: 'ze@exemplo.com' } },
+    sessao = DONO,
+  ) {
+    let consultas = 0
+    const fetch = mockarRotas((url, metodo) => {
+      if (url.endsWith('/admin/email-confirmation/resend') && metodo === 'POST') return reenvio
+      if (url.endsWith('/admin/email-confirmation')) {
+        const resposta = situacoes[Math.min(consultas, situacoes.length - 1)]
+        consultas += 1
+        return resposta ?? 'falha-de-rede'
+      }
+      if (url.endsWith('/admin/plan')) return { status: 200, corpo: LIVRE }
+      if (url.includes('/admin/orders')) return { status: 200, corpo: [] }
+      return { status: 200, corpo: cardapioDoZe() }
+    })
+    useSessaoStore.getState().guardar('lanchonete-do-ze', sessao)
+    abrir('/lanchonete-do-ze/admin/pedidos')
+    await screen.findByRole('heading', { level: 1, name: 'Pedidos' })
+    return fetch
+  }
+
+  const PENDENTE: Resposta = { status: 200, corpo: { status: 'PENDING', email: 'ze@exemplo.com' } }
+  const CONFIRMADO: Resposta = {
+    status: 200,
+    corpo: { status: 'CONFIRMED', email: 'ze@exemplo.com' },
+  }
+  const titulo = 'Seu cardápio ainda não está no ar'
+
+  it('enquanto o e-mail não é confirmado, o aviso diz para onde foi o link e reenvia', async () => {
+    const fetch = await abrirComConfirmacao([PENDENTE])
+
+    expect(await screen.findByRole('heading', { name: titulo })).toBeVisible()
+    expect(screen.getByText('ze@exemplo.com')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reenviar e-mail' }))
+
+    expect(await screen.findByText('Enviamos um novo link para ze@exemplo.com.')).toBeVisible()
+    expect(chamadas(fetch, '/email-confirmation/resend', 'POST')).toHaveLength(1)
+  })
+
+  it('reenviar cedo demais mostra a espera que a API pede', async () => {
+    await abrirComConfirmacao([PENDENTE], {
+      status: 429,
+      corpo: {
+        error: {
+          code: 'RESEND_TOO_SOON',
+          message: 'Aguarde 42 segundos para pedir outro e-mail.',
+        },
+      },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reenviar e-mail' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Aguarde 42 segundos para pedir outro e-mail.',
+    )
+  })
+
+  it('cadastro confirmado: nenhum aviso', async () => {
+    const fetch = await abrirComConfirmacao([CONFIRMADO])
+
+    await waitFor(() => {
+      expect(chamadas(fetch, '/admin/email-confirmation')).toHaveLength(1)
+    })
+    expect(screen.queryByRole('heading', { name: titulo })).not.toBeInTheDocument()
+  })
+
+  it('atendente, sem acesso às configurações, nem consulta', async () => {
+    const fetch = await abrirComConfirmacao([PENDENTE], undefined, SESSAO)
+
+    await waitFor(() => {
+      expect(chamadas(fetch, '/admin/orders').length).toBeGreaterThan(0)
+    })
+    expect(chamadas(fetch, '/admin/email-confirmation')).toHaveLength(0)
+    expect(screen.queryByRole('heading', { name: titulo })).not.toBeInTheDocument()
+  })
+
+  it('confirmado em outro lugar: o reenvio recusado faz o aviso sumir', async () => {
+    await abrirComConfirmacao([PENDENTE, CONFIRMADO], {
+      status: 409,
+      corpo: {
+        error: {
+          code: 'ALREADY_CONFIRMED',
+          message: 'O e-mail já foi confirmado, e o cardápio está publicado.',
+        },
+      },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reenviar e-mail' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: titulo })).not.toBeInTheDocument()
     })
   })
 })
