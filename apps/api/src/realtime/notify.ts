@@ -5,7 +5,7 @@ import type { TenantTransaction } from '../tenant/with-tenant.js'
 import type { EventoDoCanal } from './channel.js'
 
 /**
- * Eventos de pedido pelo `LISTEN`/`NOTIFY` do PostgreSQL.
+ * Eventos do painel pelo `LISTEN`/`NOTIFY` do PostgreSQL.
  *
  * **O aviso sai de dentro da transação do pedido**, e o PostgreSQL só o
  * entrega **depois do commit**. Um pedido que volta no rollback nunca vira
@@ -33,6 +33,7 @@ function lerEvento(texto: string | undefined): EventoDoCanal | null {
     if (dado.tipo === 'USUARIO_ALTERADO') {
       return typeof dado.userId === 'string' ? (dado as unknown as EventoDoCanal) : null
     }
+    if (dado.tipo === 'ESTABELECIMENTO_SUSPENSO') return dado as unknown as EventoDoCanal
     if (dado.tipo !== 'PEDIDO_CRIADO' && dado.tipo !== 'STATUS_MUDOU') return null
     return typeof dado.pedidoId === 'string' ? (dado as unknown as EventoDoCanal) : null
   } catch {

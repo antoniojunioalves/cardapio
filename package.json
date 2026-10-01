@@ -24,6 +24,7 @@
     "db:migrate": "pnpm --filter @repo/api db:migrate",
     "db:seed": "pnpm --filter @repo/api db:seed",
     "postman": "pnpm --filter @repo/api postman",
+    "plataforma": "pnpm --filter @repo/api plataforma",
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {

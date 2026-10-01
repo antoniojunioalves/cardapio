@@ -197,7 +197,7 @@ Um `tenantId` que chegue no corpo, na query string ou num header é **ignorado**
 
 ### 2.7 Como um TenantContext nasce
 
-Não existe construtor genérico. Há cinco funções, e cada uma nomeia uma origem legítima:
+Não existe construtor genérico. Há seis funções, e cada uma nomeia uma origem legítima:
 
 ```ts
 tenantContextFromUser(tenantId) // área administrativa: do vínculo do usuário no banco
@@ -205,12 +205,14 @@ tenantContextFromPublicSlug(tenantId) // área pública: do tenantSlug da URL, j
 tenantContextFromToken(tenantId) // refresh token e link de confirmação: do prefixo do token
 tenantContextFromSignup(tenantId) // cadastro: o estabelecimento que está sendo criado
 tenantContextFromLoginEmail(tenantId) // login: o estabelecimento do e-mail de quem entra
+tenantContextFromPlatform(tenantId) // comando da plataforma: o estabelecimento escolhido no servidor
 ```
 
 A de token e a de cadastro entraram na Fase 17. A de token nomeia o que a renovação de sessão já
 fazia (ela usava a de slug público); a de cadastro existe porque ali não há tenant anterior de onde
 tirar o contexto — o id é gerado pelo banco antes da transação que cria o estabelecimento (6.8). A
-de login entrou na Fase 18b, quando o login deixou de receber o slug (6.9).
+de login entrou na Fase 18b, quando o login deixou de receber o slug (6.9). A da plataforma, na
+Fase 19, para os comandos do Super Admin (6.6) — nenhuma rota HTTP a usa.
 
 A ausência de um `tenantContextFrom(qualquerCoisa)` é o ponto. Para usar um `tenantId` vindo do
 corpo da requisição seria preciso inventar mais uma função e batizá-la de algo como
@@ -497,6 +499,15 @@ silêncio a revogação e o registro de auditoria que acabaram de ser escritos. 
 anularia. A detecção vira um valor de retorno, a transação confirma, e só então o erro é
 lançado.
 
+**Sessão encerrada por nós é apagada, não revogada.** `revoked_at` é a marca da rotação — é ela
+que faz um token reapresentado valer como sinal de roubo. Quando quem encerra a sessão é o próprio
+sistema (o dono desativa um usuário, a plataforma suspende o estabelecimento), a linha é
+**apagada**: o aparelho que ficou com aquele token recebe "sessão inválida", como qualquer token
+desconhecido. Marcada como revogada, ela cairia na detecção de reuso — um alerta de roubo falso
+na auditoria e, com a pessoa reativada, a derrubada das sessões novas dela pelo aparelho antigo.
+Foi assim até a Fase 19, e há teste para os três casos: desativado, usuário reativado e
+estabelecimento reativado.
+
 ### 6.4 Papéis e permissões
 
 Papéis e permissões são **globais**: OWNER, ADMIN e STAFF significam o mesmo em todo
@@ -546,8 +557,47 @@ De quebra, fica impossível um usuário de tenant virar super admin por um UPDAT
 coluna booleana.
 
 No MVP, o Super Admin não cria estabelecimentos: o cadastro é aberto, pela página inicial (6.8), e
-a plataforma modera por comando — suspender, reativar, trocar o plano (Fase 19). A tabela fica para
-o painel da plataforma, no ROADMAP.
+a plataforma modera por comando. A tabela fica para o painel da plataforma, no ROADMAP.
+
+**Os comandos (Fase 19)** — `pnpm plataforma <ação>`, em `src/platform/`:
+
+| Ação                          | O que faz                                                        |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `listar [--status …]`         | os estabelecimentos, com status, plano, dono e usuários ativos   |
+| `suspender <slug> --motivo …` | tira o cardápio do ar, impede o login e encerra as sessões       |
+| `reativar <slug>`             | desfaz a suspensão                                               |
+| `plano <slug> <CÓDIGO>`       | encerra a assinatura vigente e abre outra, guardando o histórico |
+| `reenviar-confirmacao <slug>` | manda um link novo de confirmação ao dono                        |
+
+**Não há rota HTTP para nada disso.** O comando roda no servidor, com o `.env` da API: quem não
+tem acesso ao servidor não alcança as ações, e não existe credencial de Super Admin a vazar. Ele
+conecta com a mesma role da API, sem `BYPASSRLS` — cada ação abre o contexto do estabelecimento
+(`tenantContextFromPlatform`) como qualquer outra. A única consulta nova fora de contexto é a
+listagem do registro de estabelecimentos, que nenhuma rota usa.
+
+Três peças, como as outras features: `args.ts` interpreta a linha de comando (puro, testado sem
+banco), `service.ts` executa a ação e `commands.ts` monta a resposta em texto. O `cli.ts` só liga
+as três e define o código de saída: 0 deu certo, 1 a ação foi recusada, 2 o comando foi digitado
+errado.
+
+**Toda ação que altera algo vai para a auditoria do estabelecimento**, sem usuário — não foi
+ninguém de lá — e com o operador (`--operador`, ou o usuário do sistema) e o motivo nos detalhes.
+
+**Suspender corta quem já estava logado**, por três caminhos na mesma transação:
+
+- apaga todos os refresh tokens abertos do estabelecimento — a sessão não se renova (6.3);
+- o status passa a `SUSPENDED`, e `loadAuthenticatedUser`, que roda a cada requisição, deixa de
+  carregar usuário de estabelecimento suspenso — o token de acesso para de valer na hora, e não em
+  até 15 minutos;
+- emite `ESTABELECIMENTO_SUSPENSO`, que fecha as conexões ao vivo dele (seção 11).
+
+A renovação também recusa o estabelecimento suspenso, **antes** da detecção de reuso (6.3): é a
+segunda barreira, para o caso de a suspensão não ter passado pelo comando.
+
+**Reativar devolve o status de antes da suspensão**, que a própria suspensão registrou na
+auditoria — ou `ACTIVE`, se o dono confirmou o e-mail nesse meio-tempo. Um cardápio que nunca foi
+confirmado não vai ao ar por ter sido reativado. As sessões antigas não voltam: as pessoas entram
+de novo.
 
 ### 6.8 Cadastro de estabelecimento
 
@@ -1186,6 +1236,11 @@ CORS a WebSocket. Um ping a cada 30 s derruba conexão morta.
 
 **Usuário alterado:** desativar ou mudar o papel de alguém emite `USUARIO_ALTERADO`, e as
 conexões dele fecham com `4001` na hora — o painel se autentica de novo com o que valer agora.
+
+**Estabelecimento suspenso:** a suspensão pela plataforma (6.6) emite `ESTABELECIMENTO_SUSPENSO`,
+e **todas** as conexões daquele estabelecimento fecham com `4001`. O painel tenta se autenticar de
+novo, é recusado e volta ao login. O comando roda em outro processo, e o aviso chega mesmo assim:
+é o `NOTIFY` do banco que o leva a cada instância da API.
 
 **Perda de avisos:** um aviso emitido com a conexão fora se perde. O painel relê a lista ao
 conectar e a cada minuto.

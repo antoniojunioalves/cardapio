@@ -15,7 +15,7 @@ import {
   definirPapel,
   inserirUsuario,
   listarUsuarios as listarDoBanco,
-  revogarSessoes,
+  encerrarSessoes,
   type UsuarioComPapel,
 } from './repository.js'
 
@@ -177,7 +177,7 @@ export async function desativarUsuario(
     if (!alvo.isActive) return alvo
 
     await definirAtivo(tx, id, false)
-    await revogarSessoes(tx, id)
+    await encerrarSessoes(tx, id)
     // Fecha a conexão ao vivo dele já, e não quando o token expirar.
     await avisarPedido(tx, { tipo: 'USUARIO_ALTERADO', tenantId: context.tenantId, userId: id })
     await recordAudit(tx, context, {

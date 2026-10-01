@@ -347,10 +347,13 @@ export async function situacaoDaConfirmacao(
  * confirmação **dele** que publica o cardápio. Os links anteriores continuam
  * valendo até expirar — são 256 bits aleatórios, e invalidá-los só criaria um
  * caso a mais para dar errado. Entre um envio e outro, um minuto.
+ *
+ * Quem pede é um usuário do painel ou a plataforma, por comando — aí sem
+ * usuário, e com o operador nos detalhes da auditoria.
  */
 export async function reenviarConfirmacao(
   context: TenantContext,
-  solicitanteId: string,
+  solicitante: { userId: string } | { operador: string },
 ): Promise<{ email: string }> {
   const resultado = await withTenant(context, async (tx) => {
     const estabelecimento = await buscarEstabelecimento(tx, context.tenantId)
@@ -371,7 +374,9 @@ export async function reenviarConfirmacao(
       action: 'email_confirmation.resent',
       entityType: 'user',
       entityId: dono.id,
-      actorUserId: solicitanteId,
+      ...('userId' in solicitante
+        ? { actorUserId: solicitante.userId }
+        : { metadata: { por: 'plataforma', operador: solicitante.operador } }),
     })
 
     return { tipo: 'emitido', token, email: dono.email, slug: estabelecimento.slug } as const

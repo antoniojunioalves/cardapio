@@ -1,9 +1,9 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-10-01
-**Fase atual:** 18c — concluída, aguardando validação
-**Próxima:** 19 — comandos do Super Admin: listar, suspender, reativar, trocar o plano. As fases 19 a
-28 fecham o MVP (ver "O que falta para o MVP")
+**Fase atual:** 19 — concluída, aguardando validação
+**Próxima:** 20 — tratamento de imagens no upload e os limites do plano gratuito. As fases 20 a 28
+fecham o MVP (ver "O que falta para o MVP")
 
 ---
 
@@ -75,8 +75,12 @@ pedidos de hoje e os avisos do estabelecimento; o menu lateral — gaveta no cel
 grande — leva aos Pedidos e vai ganhar um item a cada tela nova. O pedido novo toca e aparece no
 menu em qualquer tela do painel.
 
+**A plataforma modera por comando (Fase 19).** `pnpm plataforma` lista os estabelecimentos,
+suspende (com motivo), reativa, troca o plano e reenvia a confirmação. Suspender tira o cardápio
+do ar e derruba na hora quem estava logado. Tudo fica na auditoria do estabelecimento.
+
 **Ainda não existe:** as telas de configuração, cardápio, usuários e clientes — o estabelecimento
-se cadastra pela página, mas ainda é configurado pela API. As fases 19 a 28 fecham o MVP; ver "O
+se cadastra pela página, mas ainda é configurado pela API. As fases 20 a 28 fecham o MVP; ver "O
 que falta para o MVP".
 
 ---
@@ -108,8 +112,8 @@ que falta para o MVP".
 | 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ✅ Concluída |
 | 18b | Login só com e-mail e senha: e-mail único na plataforma, `/entrar` como login único                                 | ✅ Concluída |
 | 18c | Painel do estabelecimento: moldura com menu lateral, tela Início e resumo dos pedidos                               | ✅ Concluída |
-| 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜ Próxima   |
-| 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜           |
+| 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ✅ Concluída |
+| 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜ Próxima   |
 | 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ⬜           |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
 | 23  | Categorias e produtos                                                                                               | ⬜           |
@@ -123,6 +127,81 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 19 — concluída
+
+O Super Admin age por comando: `pnpm plataforma <ação>`, rodado no servidor. Sem tela e sem rota
+HTTP — quem não tem acesso ao servidor não alcança as ações.
+
+### Microtasks
+
+| #   | Tarefa                                                                                                   | Status |
+| --- | -------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | `listar`, com status, plano, dono, e-mail confirmado e usuários ativos; filtro por status                | ✅     |
+| 2   | `suspender`, com motivo obrigatório: status, sessões encerradas e conexões ao vivo fechadas              | ✅     |
+| 3   | Middleware e renovação de sessão passam a recusar estabelecimento suspenso                               | ✅     |
+| 4   | `reativar`: devolve o status de antes da suspensão                                                       | ✅     |
+| 5   | `plano`: encerra a assinatura vigente e abre outra, com histórico                                        | ✅     |
+| 6   | `reenviar-confirmacao`, pelo mesmo caminho do painel                                                     | ✅     |
+| 7   | Auditoria de cada ação, sem usuário, com o operador e o motivo; origem `tenantContextFromPlatform`       | ✅     |
+| 8   | Testes: linha de comando, as cinco ações, o corte das sessões e o isolamento entre estabelecimentos      | ✅     |
+| 9   | Sessão encerrada por nós é apagada, não revogada: sem alerta falso de roubo nem derrubada da sessão nova | ✅     |
+
+### Decisões e achados desta fase
+
+**Suspender derruba quem já estava logado** — o achado da Fase 17, fechado. Três caminhos na mesma
+transação: as sessões abertas são apagadas, o status vira `SUSPENDED` (e o usuário deixa de ser
+carregado a cada requisição, então o token de acesso para de valer na hora) e um aviso fecha as
+conexões ao vivo. O comando roda em outro processo e a API em execução recebe o aviso pelo
+`NOTIFY` do banco.
+
+**Sessão encerrada por nós é apagada, não revogada** (correção pedida pelo Junio na validação).
+`revoked_at` é a marca da rotação: token revogado que reaparece é sinal de roubo e derruba todas
+as sessões da pessoa. A desativação de usuário (Fase 14) e a suspensão marcavam as sessões como
+revogadas, e isso tinha dois efeitos errados: a renovação recusada deixava um
+`auth.refresh_reuse_detected` falso na auditoria; e, com a pessoa ou o estabelecimento
+**reativado**, o aparelho que ficou com a sessão antiga derrubava as sessões novas. Agora a linha
+é apagada, e o token que reaparece recebe só "sessão inválida". Os três casos foram reproduzidos
+em teste antes da correção.
+
+**Reativar devolve o status de antes da suspensão**, que a suspensão registra na auditoria. A
+primeira regra — publicar só se o dono confirmou o e-mail — tiraria do ar os estabelecimentos do
+seed, que estão ativos sem e-mail confirmado; a listagem no banco de desenvolvimento mostrou o
+caso antes de a regra ir para os testes.
+
+**O motivo da suspensão é obrigatório**, e fica na auditoria. O dono ainda não o vê: ao tentar
+entrar, lê "Este estabelecimento está suspenso. Fale com o suporte." Avisar por e-mail e mostrar
+o motivo estão no ROADMAP, porque dependem do contato de suporte (Fase 28).
+
+**O operador vai para a auditoria** (`--operador`, ou o usuário do sistema). Não é autenticação:
+quem roda o comando já tem acesso ao servidor. A tabela `platform_admins` continua para o painel
+da plataforma, no ROADMAP.
+
+**Sem privilégio a mais no banco.** O comando usa a role da API e abre o contexto de cada
+estabelecimento. A única consulta nova fora de contexto é a listagem do registro, que nenhuma
+rota usa.
+
+Nenhuma rota mudou: a coleção do Postman continua a mesma.
+
+### Verificação executada
+
+| Verificação                                                         | Resultado                                                                                                                                                                                                               |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                                                       | **757 testes** (527 API + 202 web + 28 shared); formatação, typecheck, lint e build                                                                                                                                     |
+| Clone limpo, `--frozen-lockfile`                                    | os mesmos 757 testes, formatação, typecheck, lint e build                                                                                                                                                               |
+| Middleware sem olhar o status                                       | falha "derruba quem já estava logado"                                                                                                                                                                                   |
+| Renovação sem recusar o suspenso                                    | falha "segunda barreira: suspenso por fora do comando, a sessão aberta também não renova"                                                                                                                               |
+| Suspensão sem encerrar as sessões                                   | falham o da auditoria, o do corte e "a sessão de antes não volta a valer"                                                                                                                                               |
+| Sessões marcadas como revogadas, como era (desativação e suspensão) | falham os três testes do alerta falso de roubo e o do corte                                                                                                                                                             |
+| Suspensão sem o aviso ao vivo                                       | falha "fecha na hora as conexões ao vivo"                                                                                                                                                                               |
+| Reativação só pelo e-mail confirmado                                | falha "publicado sem e-mail confirmado volta ao ar"                                                                                                                                                                     |
+| Comando de verdade, com uma API rodando na porta 3334               | num estabelecimento descartável: plano, suspender (a sessão aberta na API caiu: 401; login: 403), reativar e reenviar (e-mail no Mailpit); a auditoria ficou com as quatro ações. Descartável e e-mails apagados no fim |
+| Comando compilado (`node dist/platform/cli.js`)                     | roda, como rodará em produção                                                                                                                                                                                           |
+| Validação do Junio                                                  | a fazer                                                                                                                                                                                                                 |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
 
 ---
 
@@ -357,10 +436,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 18 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+As fases 1 a 19 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
 (MVP.md, "Como saber que acabou"). O passo 1 — cadastrar pela página inicial e confirmar o e-mail
 — e os passos 4 a 7 funcionam de ponta a ponta. Os passos 2 e 3 só funcionam **pela API**, e o
-sistema ainda não está no ar. As fases 19 a 28 fecham essa distância.
+sistema ainda não está no ar. As fases 20 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -388,14 +467,6 @@ sistema ainda não está no ar. As fases 19 a 28 fecham essa distância.
 
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
-
-### Fase 19 — Comandos do Super Admin
-
-- Um comando `pnpm` para listar estabelecimentos, suspender, reativar, trocar o plano e reenviar
-  a confirmação. Roda no servidor, e cada ação fica registrada.
-- A tabela `platform_admins` fica para o painel da plataforma, no ROADMAP.
-- **Suspender precisa derrubar quem já está logado** (achado da Fase 17): hoje o middleware e a
-  renovação de sessão não olham o status do estabelecimento.
 
 ### Fase 20 — Tratamento de imagens no upload
 
@@ -625,7 +696,6 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Suspender não derruba as sessões abertas — o middleware não olha o status do estabelecimento                                                                      | Fase 19                                  |
 | Limites do plano gratuito: 20 produtos e 10 categorias (decididos)                                                                                                | Fase 20                                  |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |
