@@ -47,7 +47,7 @@ async function entrar(f: TenantDeTeste): Promise<string> {
     await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { tenantSlug: f.slug, email: f.email, password: SENHA_PADRAO },
+      payload: { email: f.email, password: SENHA_PADRAO },
     })
   ).json<{ accessToken: string }>().accessToken
 }

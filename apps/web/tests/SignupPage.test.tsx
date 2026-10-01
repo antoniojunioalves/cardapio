@@ -256,6 +256,42 @@ describe('cadastro', () => {
     expect(useSessaoStore.getState().slug).toBeNull()
   })
 
+  it('e-mail que já tem conta vira erro no próprio campo, com o caminho para entrar', async () => {
+    mockarApi({
+      cadastro: {
+        status: 409,
+        corpo: {
+          error: {
+            code: 'EMAIL_TAKEN',
+            message: 'Este e-mail já tem uma conta. Entre para acessar o painel.',
+          },
+        },
+      },
+    })
+    abrir('/cadastro')
+    preencher()
+
+    enviar()
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true')
+    })
+    expect(
+      screen.getByText('Este e-mail já tem uma conta. Entre para acessar o painel.'),
+    ).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Entrar no painel' })).toHaveAttribute(
+      'href',
+      '/entrar',
+    )
+    expect(useSessaoStore.getState().slug).toBeNull()
+
+    // Corrigido o e-mail, o atalho para entrar some junto com o erro.
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'outra@exemplo.com' } })
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: 'Entrar no painel' })).not.toBeInTheDocument()
+    })
+  })
+
   it('termos que mudaram enquanto a página estava aberta pedem um novo aceite', async () => {
     mockarApi({
       cadastro: {

@@ -4,7 +4,7 @@
  * Guardar a origem não é decoração: ela aparece nos logs e na auditoria, e
  * permite responder "como este pedido soube que era o tenant X?" meses depois.
  */
-export type TenantSource = 'authenticated-user' | 'public-slug' | 'token' | 'signup'
+export type TenantSource = 'authenticated-user' | 'public-slug' | 'token' | 'signup' | 'login-email'
 
 export interface TenantContext {
   readonly tenantId: string
@@ -47,12 +47,21 @@ export function tenantContextFromSignup(tenantId: string): TenantContext {
   return { tenantId, source: 'signup' }
 }
 
+/**
+ * O estabelecimento de quem está entrando, achado pelo e-mail. O id vem do
+ * banco (`auth/login-lookup.ts`), nunca do corpo da requisição — e só vira
+ * sessão se a senha conferir dentro desse contexto.
+ */
+export function tenantContextFromLoginEmail(tenantId: string): TenantContext {
+  return { tenantId, source: 'login-email' }
+}
+
 /*
  * Não existe um construtor genérico de TenantContext, e a ausência é o ponto.
  *
  * As funções acima nomeiam as ÚNICAS origens legítimas de um tenant. Não
  * há como escrever `tenantContextFrom(request.body.tenantId)` — seria preciso
- * inventar uma terceira função e batizá-la de algo como
+ * inventar mais uma função e batizá-la de algo como
  * `tenantContextFromRequestBody`, o que deixaria o problema visível em qualquer
  * revisão de código. É mais difícil errar por acidente do que por decisão.
  */

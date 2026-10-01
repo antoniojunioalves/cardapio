@@ -275,7 +275,7 @@ describe('resolução do estabelecimento', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { tenantSlug: pizzaria.slug, email: pizzaria.email, password: SENHA_PADRAO },
+      payload: { email: pizzaria.email, password: SENHA_PADRAO },
     })
     const token = login.json<{ accessToken: string }>().accessToken
     expect(token).toBeTruthy()

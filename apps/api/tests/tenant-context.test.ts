@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDatabase, db } from '../src/db/index.js'
 import { tenants } from '../src/db/schema/index.js'
 import {
+  tenantContextFromLoginEmail,
   tenantContextFromPublicSlug,
   tenantContextFromSignup,
   tenantContextFromToken,
@@ -51,6 +52,10 @@ describe('TenantContext', () => {
 
   it('registra que o tenant é o que o cadastro está criando', () => {
     expect(tenantContextFromSignup(tenantId)).toEqual({ tenantId, source: 'signup' })
+  })
+
+  it('registra que o tenant veio do e-mail de quem está entrando', () => {
+    expect(tenantContextFromLoginEmail(tenantId)).toEqual({ tenantId, source: 'login-email' })
   })
 })
 

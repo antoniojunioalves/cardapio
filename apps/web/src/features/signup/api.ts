@@ -1,14 +1,11 @@
 import type { Cadastro } from '@repo/shared'
 import { useQuery } from '@tanstack/react-query'
 
-import { useSessaoStore, type UsuarioDoPainel } from '@/features/admin/session'
+import { useSessaoStore, type RespostaDeSessao } from '@/features/admin/session'
 import { getJson, requisitar } from '@/services/api'
 
 /** A resposta de `POST /api/v1/public/signup`: a sessão, como no login, e o estabelecimento. */
-export interface EstabelecimentoCadastrado {
-  accessToken: string
-  user: UsuarioDoPainel & { tenantId: string }
-  establishment: { id: string; slug: string; name: string; status: 'PENDING' }
+export interface EstabelecimentoCadastrado extends RespostaDeSessao {
   /** Falso quando o servidor de e-mail falhou: o cadastro vale, e o painel oferece o reenvio. */
   confirmationEmailSent: boolean
 }
@@ -25,7 +22,7 @@ export async function cadastrar(dados: Cadastro): Promise<EstabelecimentoCadastr
     body: dados,
     comCookie: true,
   })
-  useSessaoStore.getState().guardar(resposta.establishment.slug, resposta)
+  useSessaoStore.getState().guardar(resposta)
   return resposta
 }
 

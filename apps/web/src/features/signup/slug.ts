@@ -1,4 +1,4 @@
-import { SLUG_FORMATO, SLUG_MAXIMO } from '@repo/shared'
+import { SLUG_MAXIMO } from '@repo/shared'
 
 /**
  * O endereço do cardápio sugerido a partir do nome do estabelecimento:
@@ -17,17 +17,4 @@ export function sugerirSlug(nome: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, SLUG_MAXIMO)
     .replace(/-+$/, '')
-}
-
-/**
- * O endereço digitado para entrar no painel. Aceita o endereço sozinho
- * (`lanchonete-do-ze`) ou o link inteiro colado
- * (`https://…/lanchonete-do-ze/admin`). Devolve `null` se não der para tirar
- * um endereço válido dali.
- */
-export function extrairSlugDigitado(texto: string): string | null {
-  const semOrigem = texto.trim().replace(/^[a-z]+:\/\/[^/]+/i, '')
-  const primeiro = semOrigem.split('/').find((parte) => parte.length > 0)
-  const slug = primeiro?.toLowerCase() ?? ''
-  return slug.length <= SLUG_MAXIMO && SLUG_FORMATO.test(slug) ? slug : null
 }

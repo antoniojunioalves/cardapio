@@ -66,7 +66,7 @@ beforeAll(async () => {
     await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { tenantSlug: dono.slug, email: dono.email, password: SENHA_PADRAO },
+      payload: { email: dono.email, password: SENHA_PADRAO },
     })
   ).json<{ accessToken: string }>().accessToken
 

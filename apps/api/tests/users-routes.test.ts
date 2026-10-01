@@ -39,11 +39,11 @@ interface Usuario {
   role: { code: string } | null
 }
 
-async function entrar(tenantSlug: string, email: string, password = SENHA_PADRAO) {
+async function entrar(email: string, password = SENHA_PADRAO) {
   return app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
-    payload: { tenantSlug, email, password },
+    payload: { email, password },
   })
 }
 
@@ -99,7 +99,7 @@ beforeAll(async () => {
     await definirPapel(tx, loja.tenantId, loja.userId, dono?.id ?? '')
     await tx.insert(subscriptions).values({ tenantId: loja.tenantId, planId: planoId })
   })
-  tokenDoDono = (await entrar(loja.slug, loja.email)).json<{ accessToken: string }>().accessToken
+  tokenDoDono = (await entrar(loja.email)).json<{ accessToken: string }>().accessToken
 })
 
 afterAll(async () => {
@@ -118,7 +118,7 @@ describe('criar usuário', () => {
     expect(resposta.json()).toMatchObject({ email, isActive: true, role: { code: 'STAFF' } })
     expect(resposta.body).not.toContain('password')
 
-    expect((await entrar(loja.slug, email, 'senha-inicial-123')).statusCode).toBe(200)
+    expect((await entrar(email, 'senha-inicial-123')).statusCode).toBe(200)
   })
 
   it('e-mail repetido é recusado', async () => {
@@ -134,6 +134,21 @@ describe('criar usuário', () => {
     })
     expect(repetido.statusCode).toBe(409)
     expect(repetido.json()).toMatchObject({ error: { code: 'USER_EMAIL_TAKEN' } })
+  })
+
+  it('e-mail que já é de outro estabelecimento é recusado', async () => {
+    // O e-mail é o login, único na plataforma: se pudesse se repetir, entrar
+    // só com e-mail e senha não saberia em qual estabelecimento.
+    await liberarVagas()
+
+    const deOutro = await chamar('POST', '/users', tokenDoDono, {
+      name: 'Emprestado',
+      email: outraLoja.email,
+      password: 'senha-inicial-123',
+      role: 'STAFF',
+    })
+    expect(deOutro.statusCode).toBe(409)
+    expect(deOutro.json()).toMatchObject({ error: { code: 'USER_EMAIL_TAKEN' } })
   })
 
   it('o papel OWNER não é dado pela API', async () => {
@@ -174,9 +189,7 @@ describe('desativar', () => {
     await liberarVagas()
     const { resposta, email } = await criar('STAFF')
     const id = resposta.json<Usuario>().id
-    const sessao = sessaoDe<{ accessToken: string }>(
-      await entrar(loja.slug, email, 'senha-inicial-123'),
-    )
+    const sessao = sessaoDe<{ accessToken: string }>(await entrar(email, 'senha-inicial-123'))
 
     expect((await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)).statusCode).toBe(200)
 
@@ -187,7 +200,7 @@ describe('desativar', () => {
       payload: { refreshToken: sessao.refreshToken },
     })
     expect(refresh.statusCode).toBe(401)
-    expect((await entrar(loja.slug, email, 'senha-inicial-123')).statusCode).toBe(403)
+    expect((await entrar(email, 'senha-inicial-123')).statusCode).toBe(403)
 
     // Segunda barreira: a renovação já recusa usuário inativo, mas nenhum
     // refresh token dele fica válido no banco.
@@ -228,7 +241,7 @@ describe('conexão ao vivo', () => {
     await liberarVagas()
     const { resposta, email } = await criar('STAFF')
     const token = sessaoDe<{ accessToken: string }>(
-      await entrar(loja.slug, email, 'senha-inicial-123'),
+      await entrar(email, 'senha-inicial-123'),
     ).accessToken
     const conexao = await aoVivo(token)
 
@@ -242,7 +255,7 @@ describe('conexão ao vivo', () => {
     await liberarVagas()
     const { resposta, email } = await criar('STAFF')
     const token = sessaoDe<{ accessToken: string }>(
-      await entrar(loja.slug, email, 'senha-inicial-123'),
+      await entrar(email, 'senha-inicial-123'),
     ).accessToken
     const conexao = await aoVivo(token)
 
@@ -257,7 +270,7 @@ describe('o administrador', () => {
   async function comoAdmin() {
     await liberarVagas()
     const { resposta, email } = await criar('ADMIN')
-    const token = (await entrar(loja.slug, email, 'senha-inicial-123')).json<{
+    const token = (await entrar(email, 'senha-inicial-123')).json<{
       accessToken: string
     }>().accessToken
     return { token, id: resposta.json<Usuario>().id }
@@ -296,7 +309,7 @@ describe('regras gerais', () => {
   it('atendente não vê a lista de usuários', async () => {
     await liberarVagas()
     const { email } = await criar('STAFF')
-    const token = (await entrar(loja.slug, email, 'senha-inicial-123')).json<{
+    const token = (await entrar(email, 'senha-inicial-123')).json<{
       accessToken: string
     }>().accessToken
     expect((await chamar('GET', '/users', token)).statusCode).toBe(403)

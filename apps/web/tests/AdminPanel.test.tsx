@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { acoesDoPedido } from '../src/features/admin/orders'
 import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
-import { apagarSessaoAntiga, comSessao, useSessaoStore } from '../src/features/admin/session'
+import { comSessao, useSessaoStore } from '../src/features/admin/session'
 import type { PedidoDoPainel } from '../src/features/admin/types'
 import { cardapioDoZe } from './helpers/cardapio'
-import { abrir, mockarRotas, type Resposta } from './helpers/pagina'
+import { abrir, abrirComLocal, localAtual, mockarRotas, type Resposta } from './helpers/pagina'
 
 // --- WebSocket falso ---------------------------------------------------------
 
@@ -116,6 +116,7 @@ const SESSAO = {
     email: 'ze@exemplo.com',
     permissions: ['orders:read', 'orders:update'],
   },
+  establishment: { id: 't', slug: 'lanchonete-do-ze', name: 'Lanchonete do Zé', status: 'ACTIVE' },
 }
 
 interface Api {
@@ -157,7 +158,7 @@ const chamadas = (fetch: ReturnType<typeof mockarApi>, trecho: string, metodo = 
   )
 
 function logar() {
-  useSessaoStore.getState().guardar('lanchonete-do-ze', SESSAO)
+  useSessaoStore.getState().guardar(SESSAO)
 }
 
 async function abrirPainel(api: Api) {
@@ -182,33 +183,34 @@ afterEach(() => {
 // --- Testes ------------------------------------------------------------------
 
 describe('login do painel', () => {
+  function preencher(email: string, senha: string) {
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: email } })
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: senha } })
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
+  }
+
   it('e-mail ou senha errados dizem isso', async () => {
     mockarApi({ pedidos: [], login: { status: 401, corpo: { error: { code: 'UNAUTHORIZED' } } } })
-    abrir('/lanchonete-do-ze/admin')
+    abrirComLocal('/entrar')
 
-    fireEvent.change(await screen.findByLabelText('E-mail'), {
-      target: { value: 'ze@exemplo.com' },
-    })
-    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'errada' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
+    preencher('ze@exemplo.com', 'errada')
 
     expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha não conferem.')
+    expect(localAtual()).toBe('/entrar')
   })
 
-  it('entra, vai para os pedidos, e nenhum token fica guardado no navegador', async () => {
+  it('entra só com e-mail e senha, e vai para o painel do estabelecimento que a API devolveu', async () => {
     const fetch = mockarApi({ pedidos: [] })
-    abrir('/lanchonete-do-ze/admin')
+    abrirComLocal('/entrar')
 
-    fireEvent.change(await screen.findByLabelText('E-mail'), {
-      target: { value: 'ze@exemplo.com' },
-    })
-    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'cardapio123' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
+    preencher(' ze@exemplo.com ', 'cardapio123')
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
+    expect(localAtual()).toBe('/lanchonete-do-ze/admin/pedidos')
+
+    // Nenhum endereço de estabelecimento vai na requisição: quem diz é a API.
     const [login] = chamadas(fetch, '/auth/login', 'POST')
     expect(JSON.parse(login?.[1]?.body as string)).toEqual({
-      tenantSlug: 'lanchonete-do-ze',
       email: 'ze@exemplo.com',
       password: 'cardapio123',
     })
@@ -220,17 +222,58 @@ describe('login do painel', () => {
     expect(guardado).not.toContain('token-de-acesso')
   })
 
-  it('sem sessão, o painel manda para o login', async () => {
-    mockarApi({ pedidos: [] })
-    abrir('/lanchonete-do-ze/admin/pedidos')
-    expect(await screen.findByRole('heading', { name: 'Painel do estabelecimento' })).toBeVisible()
+  it.each([
+    ['Este estabelecimento está suspenso. Fale com o suporte.'],
+    ['Esta conta está desativada. Fale com o administrador.'],
+  ])('com a senha certa, diz por que não entra: %s', async (mensagem) => {
+    mockarApi({
+      pedidos: [],
+      login: { status: 403, corpo: { error: { code: 'FORBIDDEN', message: mensagem } } },
+    })
+    abrirComLocal('/entrar')
+
+    preencher('ze@exemplo.com', 'cardapio123')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(mensagem)
+    expect(localAtual()).toBe('/entrar')
   })
 
-  it('sessão de outro estabelecimento não abre este painel', async () => {
-    useSessaoStore.getState().guardar('pizzaria-da-esquina', SESSAO)
+  it('muitas tentativas pedem para esperar', async () => {
+    mockarApi({ pedidos: [], login: { status: 429, corpo: { error: { code: 'RATE_LIMITED' } } } })
+    abrirComLocal('/entrar')
+
+    preencher('ze@exemplo.com', 'cardapio123')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Muitas tentativas.')
+  })
+
+  it('quem já entrou neste aparelho vai direto para o painel, sem digitar nada', async () => {
+    logar()
     mockarApi({ pedidos: [] })
-    abrir('/lanchonete-do-ze/admin/pedidos')
-    expect(await screen.findByRole('heading', { name: 'Painel do estabelecimento' })).toBeVisible()
+    abrirComLocal('/entrar')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
+    expect(localAtual()).toBe('/lanchonete-do-ze/admin/pedidos')
+  })
+
+  it('sem sessão, o painel manda para o login', async () => {
+    mockarApi({ pedidos: [] })
+    abrirComLocal('/lanchonete-do-ze/admin/pedidos')
+
+    expect(await screen.findByRole('heading', { name: 'Entrar no painel' })).toBeVisible()
+    expect(localAtual()).toBe('/entrar')
+  })
+
+  it('sessão de outro estabelecimento não abre este painel: a pessoa cai no dela', async () => {
+    useSessaoStore.getState().guardar({
+      ...SESSAO,
+      establishment: { ...SESSAO.establishment, slug: 'pizzaria-da-esquina' },
+    })
+    mockarApi({ pedidos: [] })
+    abrirComLocal('/lanchonete-do-ze/admin/pedidos')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
+    expect(localAtual()).toBe('/pizzaria-da-esquina/admin/pedidos')
   })
 })
 
@@ -378,7 +421,7 @@ describe('pedidos ao vivo', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
 
-    expect(await screen.findByRole('heading', { name: 'Painel do estabelecimento' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Entrar no painel' })).toBeVisible()
     expect(socket.fechadoPeloPainel).toBe(true)
     expect(useSessaoStore.getState().slug).toBeNull()
     // O logout leva o cookie, para a API revogar e apagá-lo.
@@ -388,12 +431,6 @@ describe('pedidos ao vivo', () => {
 })
 
 describe('sessão', () => {
-  it('apaga o refresh token que versões antigas guardavam no navegador', () => {
-    localStorage.setItem('sessao-do-painel', '{"state":{"refreshToken":"antigo"}}')
-    apagarSessaoAntiga()
-    expect(localStorage.getItem('sessao-do-painel')).toBeNull()
-  })
-
   it('um 401 renova a sessão uma vez e repete a chamada', async () => {
     logar()
     let lista = 0
@@ -524,7 +561,7 @@ describe('aviso de confirmação do cadastro', () => {
       if (url.includes('/admin/orders')) return { status: 200, corpo: [] }
       return { status: 200, corpo: cardapioDoZe() }
     })
-    useSessaoStore.getState().guardar('lanchonete-do-ze', sessao)
+    useSessaoStore.getState().guardar(sessao)
     abrir('/lanchonete-do-ze/admin/pedidos')
     await screen.findByRole('heading', { level: 1, name: 'Pedidos' })
     return fetch

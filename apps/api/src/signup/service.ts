@@ -126,6 +126,17 @@ export async function criarEstabelecimento(
     name: dados.dono.nome,
     email: dados.dono.email.toLowerCase(),
     passwordHash: dados.dono.senhaHash,
+  }).catch((error: unknown) => {
+    const violacao = violacaoDoBanco(error)
+    if (violacao?.code === UNICIDADE && violacao.constraint === 'users_email') {
+      // O e-mail é o login, único na plataforma. Dizer que ele já existe revela
+      // quem tem conta — o preço de entrar só com e-mail e senha (SECURITY.md).
+      throw new ConflictError(
+        'Este e-mail já tem uma conta. Entre para acessar o painel.',
+        'EMAIL_TAKEN',
+      )
+    }
+    throw error
   })
   await vincularPapel(tx, { tenantId: context.tenantId, userId: dono.id, roleId: papel.id })
 
@@ -143,8 +154,8 @@ export async function criarEstabelecimento(
 // --- Cadastro pela página ------------------------------------------------------
 
 export interface ResultadoDoCadastro {
+  /** A sessão já traz o estabelecimento criado, como a do login. */
   sessao: Session
-  estabelecimento: { id: string; slug: string; name: string; status: 'PENDING' }
   /** Falso quando o servidor de e-mail falhou: o cadastro vale, e o painel oferece o reenvio. */
   emailDeConfirmacaoEnviado: boolean
 }
@@ -158,9 +169,8 @@ export interface ResultadoDoCadastro {
  * teria sido enviado sobre um cadastro que não existe.
  *
  * O cardápio nasce `PENDING` e só fica público quando o dono confirmar o
- * e-mail. O e-mail nunca é recusado por já existir: e-mail é único por
- * estabelecimento, e cada cadastro cria um estabelecimento novo — então a
- * resposta não revela quem tem conta.
+ * e-mail. Um e-mail que já tem conta é recusado com `EMAIL_TAKEN`: o e-mail é
+ * o login, único na plataforma (`criarEstabelecimento`).
  */
 export async function cadastrarEstabelecimento(
   dados: Cadastro,
@@ -215,16 +225,7 @@ export async function cadastrarEstabelecimento(
     )
   }
 
-  return {
-    sessao,
-    estabelecimento: {
-      id: tenantId,
-      slug: dados.slug,
-      name: dados.establishmentName,
-      status: 'PENDING',
-    },
-    emailDeConfirmacaoEnviado,
-  }
+  return { sessao, emailDeConfirmacaoEnviado }
 }
 
 /** Livre para um cadastro novo: nem reservado, nem de outro estabelecimento. */

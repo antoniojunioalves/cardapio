@@ -1,7 +1,7 @@
 import { slugSchema } from '@repo/shared'
 import { describe, expect, it } from 'vitest'
 
-import { extrairSlugDigitado, sugerirSlug } from '../src/features/signup/slug'
+import { sugerirSlug } from '../src/features/signup/slug'
 
 describe('endereço sugerido pelo nome', () => {
   it('tira acentos, espaços e símbolos', () => {
@@ -31,27 +31,5 @@ describe('endereço sugerido pelo nome', () => {
   it('nome só de símbolos não sugere nada — a validação pede o endereço', () => {
     expect(sugerirSlug('!!!')).toBe('')
     expect(slugSchema.safeParse(sugerirSlug('!!!')).success).toBe(false)
-  })
-})
-
-describe('endereço digitado para entrar', () => {
-  it('aceita o endereço sozinho, com maiúsculas e espaços', () => {
-    expect(extrairSlugDigitado('  Lanchonete-do-Ze ')).toBe('lanchonete-do-ze')
-  })
-
-  it('aceita o link inteiro colado, até o do painel', () => {
-    expect(extrairSlugDigitado('https://cardapio.exemplo/lanchonete-do-ze')).toBe(
-      'lanchonete-do-ze',
-    )
-    expect(extrairSlugDigitado('http://localhost:5173/lanchonete-do-ze/admin')).toBe(
-      'lanchonete-do-ze',
-    )
-    expect(extrairSlugDigitado('/lanchonete-do-ze/')).toBe('lanchonete-do-ze')
-  })
-
-  it('recusa o que não pode ser um endereço', () => {
-    for (const texto of ['', '   ', 'lanchonete do ze', 'açaí', 'https://cardapio.exemplo/']) {
-      expect(extrairSlugDigitado(texto), texto).toBeNull()
-    }
   })
 })

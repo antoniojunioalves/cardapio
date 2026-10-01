@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
+  check,
   foreignKey,
   index,
   pgPolicy,
@@ -15,11 +16,25 @@ import { currentTenantId, primaryId, timestamps } from './shared.js'
 import { tenants } from './tenants.js'
 
 /**
- * Usuário administrativo de um estabelecimento.
+ * O e-mail de quem está entrando, lido do contexto da transação. Só o login o
+ * define (`auth/login-lookup.ts`). O `nullif` faz a variável vazia — o que
+ * sobra numa conexão do pool depois que a transação termina — não casar com
+ * linha nenhuma.
+ */
+const emailEmLogin = sql`nullif(current_setting('app.login_email', true), '')`
+
+/**
+ * Usuário administrativo de um estabelecimento: o dono e os funcionários, cada
+ * um com o seu e-mail e a sua senha.
  *
- * O e-mail é único **por tenant**, e não globalmente: a mesma pessoa pode
- * administrar dois estabelecimentos com o mesmo endereço de e-mail. É por isso
- * que o login pede o `tenantSlug` — sem ele, um e-mail repetido seria ambíguo.
+ * O e-mail é único **na plataforma inteira**, e sempre em minúsculas: o login
+ * pede só e-mail e senha, e é o e-mail que diz de qual estabelecimento a
+ * pessoa é. Quem tem dois estabelecimentos usa um e-mail em cada.
+ *
+ * Por isso a tabela tem duas policies. `tenant_isolation` é a de todas as
+ * tabelas. `login_por_email` deixa **ler** a linha do e-mail que está entrando,
+ * e nenhuma outra — é o que permite achar o estabelecimento antes de existir
+ * contexto de tenant. Ela não deixa alterar nem listar nada.
  *
  * `passwordHash` guarda o resultado completo do argon2id, que já carrega o
  * algoritmo, os parâmetros e o salt na própria string. Não há coluna de salt
@@ -46,7 +61,9 @@ export const users = pgTable(
     ...timestamps,
   },
   (table) => [
-    unique('users_tenant_email').on(table.tenantId, table.email),
+    unique('users_email').on(table.email),
+    // Sem isto, `Ze@exemplo.com` e `ze@exemplo.com` seriam duas contas.
+    check('users_email_minusculo', sql`${table.email} = lower(${table.email})`),
     // Alvo das chaves estrangeiras compostas: outras tabelas referenciam
     // (tenant_id, id), e não só id, para que o banco exija que a referência
     // fique dentro do mesmo estabelecimento. Ver `tests/rls-guard.test.ts`.
@@ -58,6 +75,12 @@ export const users = pgTable(
       to: 'public',
       using: sql`${table.tenantId} = ${currentTenantId}`,
       withCheck: sql`${table.tenantId} = ${currentTenantId}`,
+    }),
+    pgPolicy('login_por_email', {
+      as: 'permissive',
+      for: 'select',
+      to: 'public',
+      using: sql`${table.email} = ${emailEmLogin}`,
     }),
   ],
 ).enableRLS()

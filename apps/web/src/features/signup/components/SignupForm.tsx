@@ -61,6 +61,9 @@ function errosPorCampo(detalhes: unknown): Partial<Record<Campo, string>> {
   return erros
 }
 
+/** O e-mail é o login, um por pessoa: quem já tem conta entra, em vez de se cadastrar de novo. */
+const CONTA_EXISTENTE = 'conta-existente'
+
 function mensagemDaFalha(erro: unknown): string {
   if (!(erro instanceof ApiError)) {
     return 'Não foi possível falar com o servidor. Confira a conexão e tente de novo.'
@@ -137,6 +140,10 @@ export function SignupForm({ aoCadastrar }: SignupFormProps) {
     } catch (erro) {
       if (erro instanceof ApiError && erro.code === 'SLUG_TAKEN') {
         setError('slug', { message: erro.message }, { shouldFocus: true })
+        return
+      }
+      if (erro instanceof ApiError && erro.code === 'EMAIL_TAKEN') {
+        setError('email', { type: CONTA_EXISTENTE, message: erro.message }, { shouldFocus: true })
         return
       }
       const porCampo = erro instanceof ApiError ? errosPorCampo(erro.details) : {}
@@ -220,6 +227,11 @@ export function SignupForm({ aoCadastrar }: SignupFormProps) {
         erro={erros.email?.message}
         {...register('email')}
       />
+      {erros.email?.type === CONTA_EXISTENTE && (
+        <Link to="/entrar" className="text-body font-semibold text-primary hover:underline">
+          Entrar no painel
+        </Link>
+      )}
       <div className="flex flex-col gap-1">
         <label htmlFor={idDaSenha} className="text-body font-semibold text-content">
           Senha

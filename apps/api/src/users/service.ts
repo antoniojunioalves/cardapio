@@ -104,8 +104,10 @@ export async function criarUsuario(
     })
   } catch (erro) {
     const violacao = violacaoDoBanco(erro)
-    if (violacao?.code === UNICIDADE && violacao.constraint === 'users_tenant_email') {
-      throw new ConflictError('Já existe um usuário com esse e-mail.', 'USER_EMAIL_TAKEN')
+    // O e-mail é o login, único na plataforma: pode estar em uso neste
+    // estabelecimento ou em outro, e a mensagem não diz em qual.
+    if (violacao?.code === UNICIDADE && violacao.constraint === 'users_email') {
+      throw new ConflictError('Este e-mail já está em uso.', 'USER_EMAIL_TAKEN')
     }
     throw erro
   }

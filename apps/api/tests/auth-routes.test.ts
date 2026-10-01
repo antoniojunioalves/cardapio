@@ -3,8 +3,8 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../src/app.js'
-import { closeDatabase } from '../src/db/index.js'
-import { auditLogs, refreshTokens } from '../src/db/schema/index.js'
+import { closeDatabase, db } from '../src/db/index.js'
+import { auditLogs, refreshTokens, tenants } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
@@ -38,15 +38,12 @@ function entrar(corpo: Record<string, unknown>) {
 interface RespostaSessao {
   accessToken: string
   user: { id: string; tenantId: string; email: string; permissions: string[] }
+  establishment: { id: string; slug: string; name: string; status: string }
 }
 
 describe('POST /api/v1/auth/login', () => {
-  it('autentica e devolve sessão com as permissões efetivas', async () => {
-    const resposta = await entrar({
-      tenantSlug: fixture.slug,
-      email: fixture.email,
-      password: SENHA_PADRAO,
-    })
+  it('autentica só com e-mail e senha, e devolve sessão com as permissões efetivas', async () => {
+    const resposta = await entrar({ email: fixture.email, password: SENHA_PADRAO })
 
     expect(resposta.statusCode).toBe(200)
 
@@ -60,19 +57,31 @@ describe('POST /api/v1/auth/login', () => {
     expect(sessao.refreshToken.startsWith(`${fixture.tenantId}.`)).toBe(true)
   })
 
-  it('nunca devolve o hash da senha', async () => {
-    const resposta = await entrar({
-      tenantSlug: fixture.slug,
-      email: fixture.email,
-      password: SENHA_PADRAO,
+  it('devolve o estabelecimento a que a pessoa pertence, para o painel saber aonde ir', async () => {
+    const resposta = await entrar({ email: fixture.email, password: SENHA_PADRAO })
+
+    expect(sessaoDe<RespostaSessao>(resposta).establishment).toMatchObject({
+      id: fixture.tenantId,
+      slug: fixture.slug,
+      status: 'ACTIVE',
     })
+  })
+
+  it('aceita o e-mail com maiúsculas', async () => {
+    const resposta = await entrar({ email: fixture.email.toUpperCase(), password: SENHA_PADRAO })
+
+    expect(resposta.statusCode).toBe(200)
+  })
+
+  it('nunca devolve o hash da senha', async () => {
+    const resposta = await entrar({ email: fixture.email, password: SENHA_PADRAO })
 
     expect(resposta.body).not.toContain('argon2')
     expect(resposta.body).not.toContain('passwordHash')
   })
 
   it('registra a entrada na auditoria', async () => {
-    await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO })
+    await entrar({ email: fixture.email, password: SENHA_PADRAO })
 
     const registros = await withTenant(tenantContextFromUser(fixture.tenantId), (tx) =>
       tx.select({ action: auditLogs.action, actor: auditLogs.actorUserId }).from(auditLogs),
@@ -84,22 +93,14 @@ describe('POST /api/v1/auth/login', () => {
   })
 
   it('recusa senha errada com mensagem genérica', async () => {
-    const resposta = await entrar({
-      tenantSlug: fixture.slug,
-      email: fixture.email,
-      password: 'senha-errada',
-    })
+    const resposta = await entrar({ email: fixture.email, password: 'senha-errada' })
 
     expect(resposta.statusCode).toBe(401)
     expect(resposta.json<{ error: { code: string } }>().error.code).toBe('UNAUTHORIZED')
   })
 
   it('responde a e-mail inexistente igual a senha errada', async () => {
-    const resposta = await entrar({
-      tenantSlug: fixture.slug,
-      email: 'ninguem@exemplo.com',
-      password: SENHA_PADRAO,
-    })
+    const resposta = await entrar({ email: 'ninguem@exemplo.com', password: SENHA_PADRAO })
 
     // Mesma resposta da senha errada: o endpoint não pode servir de oráculo
     // de quais e-mails estão cadastrados.
@@ -107,18 +108,27 @@ describe('POST /api/v1/auth/login', () => {
     expect(resposta.json<{ error: { code: string } }>().error.code).toBe('UNAUTHORIZED')
   })
 
-  it('responde a estabelecimento inexistente igual a senha errada', async () => {
-    const resposta = await entrar({
-      tenantSlug: 'nao-existe-este-slug',
-      email: fixture.email,
-      password: SENHA_PADRAO,
-    })
+  it('ignora um estabelecimento mandado no corpo: o tenant é o do e-mail', async () => {
+    const outro = await criarTenantComUsuario()
 
-    expect(resposta.statusCode).toBe(401)
+    try {
+      const resposta = await entrar({
+        email: fixture.email,
+        password: SENHA_PADRAO,
+        tenantSlug: outro.slug,
+        tenantId: outro.tenantId,
+      })
+
+      const sessao = sessaoDe<RespostaSessao>(resposta)
+      expect(sessao.user.tenantId).toBe(fixture.tenantId)
+      expect(sessao.establishment.slug).toBe(fixture.slug)
+    } finally {
+      await removerTenantDeTeste(outro)
+    }
   })
 
   it('valida o corpo antes de tocar no banco', async () => {
-    const resposta = await entrar({ tenantSlug: fixture.slug, email: 'não-é-email' })
+    const resposta = await entrar({ email: 'não-é-email' })
 
     expect(resposta.statusCode).toBe(400)
     expect(resposta.json<{ error: { code: string } }>().error.code).toBe('VALIDATION_ERROR')
@@ -137,11 +147,7 @@ describe('conta desativada', () => {
   })
 
   it('só revela que está desativada depois de a senha conferir', async () => {
-    const comSenhaCerta = await entrar({
-      tenantSlug: desativado.slug,
-      email: desativado.email,
-      password: SENHA_PADRAO,
-    })
+    const comSenhaCerta = await entrar({ email: desativado.email, password: SENHA_PADRAO })
 
     expect(comSenhaCerta.statusCode).toBe(403)
     expect(comSenhaCerta.json<{ error: { message: string } }>().error.message).toContain(
@@ -150,13 +156,55 @@ describe('conta desativada', () => {
 
     // Quem não sabe a senha continua recebendo o 401 genérico — a informação
     // só chega a quem já provou ser o dono da conta.
-    const comSenhaErrada = await entrar({
-      tenantSlug: desativado.slug,
-      email: desativado.email,
-      password: 'chute',
-    })
+    const comSenhaErrada = await entrar({ email: desativado.email, password: 'chute' })
 
     expect(comSenhaErrada.statusCode).toBe(401)
+  })
+})
+
+describe('estabelecimento suspenso', () => {
+  let suspenso: TenantDeTeste
+
+  beforeAll(async () => {
+    suspenso = await criarTenantComUsuario()
+    await db.update(tenants).set({ status: 'SUSPENDED' }).where(eq(tenants.id, suspenso.tenantId))
+  })
+
+  afterAll(async () => {
+    await removerTenantDeTeste(suspenso)
+  })
+
+  it('só revela a suspensão depois de a senha conferir', async () => {
+    const comSenhaCerta = await entrar({ email: suspenso.email, password: SENHA_PADRAO })
+
+    expect(comSenhaCerta.statusCode).toBe(403)
+    expect(comSenhaCerta.json<{ error: { message: string } }>().error.message).toContain('suspenso')
+    expect(comSenhaCerta.cookies).toEqual([])
+
+    // Sem a senha, não dá para descobrir que o e-mail é de um estabelecimento
+    // suspenso — nem que o e-mail existe.
+    const comSenhaErrada = await entrar({ email: suspenso.email, password: 'chute' })
+
+    expect(comSenhaErrada.statusCode).toBe(401)
+    expect(comSenhaErrada.json<{ error: { code: string } }>().error.code).toBe('UNAUTHORIZED')
+  })
+
+  it('não abre sessão nem registra a entrada', async () => {
+    await entrar({ email: suspenso.email, password: SENHA_PADRAO })
+
+    const { sessoes, entradas } = await withTenant(
+      tenantContextFromUser(suspenso.tenantId),
+      async (tx) => ({
+        sessoes: await tx.select({ id: refreshTokens.id }).from(refreshTokens),
+        entradas: await tx
+          .select({ id: auditLogs.id })
+          .from(auditLogs)
+          .where(eq(auditLogs.action, 'auth.login')),
+      }),
+    )
+
+    expect(sessoes).toEqual([])
+    expect(entradas).toEqual([])
   })
 })
 
@@ -179,7 +227,7 @@ describe('GET /api/v1/auth/me', () => {
 
   it('devolve o usuário autenticado e suas permissões', async () => {
     const { accessToken } = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     const resposta = await app.inject({
@@ -196,7 +244,7 @@ describe('GET /api/v1/auth/me', () => {
 describe('renovação de sessão', () => {
   it('rotaciona: o token antigo para de valer e o novo funciona', async () => {
     const primeira = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     const renovada = await app.inject({
@@ -219,10 +267,10 @@ describe('renovação de sessão', () => {
 
   it('reapresentar um token já rotacionado derruba todas as sessões do usuário', async () => {
     const sessaoA = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
     const sessaoB = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     // Rotaciona a sessão A normalmente.
@@ -263,7 +311,7 @@ describe('renovação de sessão', () => {
 describe('POST /api/v1/auth/logout', () => {
   it('revoga o refresh token e é idempotente', async () => {
     const sessao = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     const saida = await app.inject({
@@ -294,7 +342,7 @@ describe('POST /api/v1/auth/logout', () => {
 describe('o banco nunca guarda o refresh token em claro', () => {
   it('guarda apenas o hash', async () => {
     const sessao = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     const linhas = await withTenant(tenantContextFromUser(fixture.tenantId), (tx) =>
@@ -311,7 +359,7 @@ describe('limite de tentativas de login', () => {
     const comLimite = await buildApp()
     await comLimite.ready()
 
-    const alvo = { tenantSlug: fixture.slug, email: fixture.email, password: 'errada' }
+    const alvo = { email: fixture.email, password: 'errada' }
     const codigos: number[] = []
 
     for (let i = 0; i < 7; i += 1) {
@@ -334,7 +382,6 @@ describe('limite de tentativas de login', () => {
 describe('refresh token em cookie', () => {
   it('vai só no cookie httpOnly e SameSite=Strict, restrito às rotas de autenticação', async () => {
     const resposta = await entrar({
-      tenantSlug: fixture.slug,
       email: fixture.email,
       password: SENHA_PADRAO,
     })
@@ -347,7 +394,7 @@ describe('refresh token em cookie', () => {
 
   it('a renovação funciona só com o cookie, e troca o cookie', async () => {
     const primeira = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     const renovada = await app.inject({
@@ -370,7 +417,7 @@ describe('refresh token em cookie', () => {
 
   it('o logout revoga e apaga o cookie', async () => {
     const sessao = sessaoDe<RespostaSessao>(
-      await entrar({ tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO }),
+      await entrar({ email: fixture.email, password: SENHA_PADRAO }),
     )
 
     const saida = await app.inject({

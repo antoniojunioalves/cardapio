@@ -144,6 +144,20 @@ Comportamento verificado em execução real (PostgreSQL 18.6, role `cardapio_app
 | Tenant A, `UPDATE` mirando linha de B   | `UPDATE 0`                  |
 | Tenant A, `INSERT` com `tenant_id` de B | rejeitado pelo `WITH CHECK` |
 
+**Uma tabela tem uma segunda policy: `users`.** O login pede só e-mail e senha (6.9), então precisa
+achar o estabelecimento de um e-mail antes de existir contexto de tenant:
+
+```sql
+CREATE POLICY login_por_email ON users FOR SELECT
+  USING (email = nullif(current_setting('app.login_email', true), ''));
+```
+
+Policies permissivas se somam, então esta é uma porta a mais — do tamanho exato de uma linha. Quem
+define `app.login_email` lê a linha daquele e-mail e nenhuma outra; não lista, não altera, não
+apaga, e não enxerga nenhuma outra tabela. Sem a variável, nada muda. `tests/rls-guard.test.ts`
+lista as policies que não filtram por `app.tenant_id` (`POLICIES_FORA_DO_TENANT`): uma nova, ou esta
+deixando de ser só de leitura, falha no teste.
+
 ### 2.5 Onde fica a fronteira da transação
 
 O contexto é injetado com `set_config('app.tenant_id', $1, true)` — o terceiro argumento `true`
@@ -167,6 +181,7 @@ Requisição
    ├─ TenantContext ....... qual tenant? NUNCA vindo do corpo ou da query
    │                         · área admin:    do usuário autenticado
    │                         · área pública:  do tenantSlug da URL, resolvido no backend
+   │                         · login:         do e-mail de quem entra, resolvido no backend
    │
    ├─ Autorização ......... este usuário pode fazer isto neste tenant? (RBAC)
    │
@@ -182,21 +197,23 @@ Um `tenantId` que chegue no corpo, na query string ou num header é **ignorado**
 
 ### 2.7 Como um TenantContext nasce
 
-Não existe construtor genérico. Há quatro funções, e cada uma nomeia uma origem legítima:
+Não existe construtor genérico. Há cinco funções, e cada uma nomeia uma origem legítima:
 
 ```ts
 tenantContextFromUser(tenantId) // área administrativa: do vínculo do usuário no banco
 tenantContextFromPublicSlug(tenantId) // área pública: do tenantSlug da URL, já resolvido
 tenantContextFromToken(tenantId) // refresh token e link de confirmação: do prefixo do token
 tenantContextFromSignup(tenantId) // cadastro: o estabelecimento que está sendo criado
+tenantContextFromLoginEmail(tenantId) // login: o estabelecimento do e-mail de quem entra
 ```
 
-As duas últimas entraram na Fase 17. A de token nomeia o que a renovação de sessão já fazia (ela
-usava a de slug público); a de cadastro existe porque ali não há tenant anterior de onde tirar o
-contexto — o id é gerado pelo banco antes da transação que cria o estabelecimento (6.8).
+A de token e a de cadastro entraram na Fase 17. A de token nomeia o que a renovação de sessão já
+fazia (ela usava a de slug público); a de cadastro existe porque ali não há tenant anterior de onde
+tirar o contexto — o id é gerado pelo banco antes da transação que cria o estabelecimento (6.8). A
+de login entrou na Fase 18b, quando o login deixou de receber o slug (6.9).
 
 A ausência de um `tenantContextFrom(qualquerCoisa)` é o ponto. Para usar um `tenantId` vindo do
-corpo da requisição seria preciso inventar uma terceira função e batizá-la de algo como
+corpo da requisição seria preciso inventar mais uma função e batizá-la de algo como
 `tenantContextFromRequestBody` — o que torna o problema visível em qualquer revisão de código.
 Errar por acidente fica mais difícil do que errar por decisão.
 
@@ -566,6 +583,33 @@ produção, memória nos testes.
 mesmo nível das páginas do produto (`/cadastro`, `/termos`), e a API pública tem `/signup` ao lado de
 `/:tenantSlug`. Um estabelecimento num desses endereços ficaria inacessível.
 
+**E-mail que já tem conta é recusado** (409 `EMAIL_TAKEN`): o e-mail é o login, único na plataforma
+(6.9). A recusa vem da restrição do banco, dentro da transação — nada é criado e nenhum e-mail sai.
+
+### 6.9 Entrar só com e-mail e senha
+
+O login não recebe o estabelecimento (Fase 18b): o dono pode não saber o endereço do próprio
+cardápio. `POST /api/v1/auth/login` recebe `email` e `password`, e a resposta — como a da renovação
+e a do cadastro — traz `establishment: { id, slug, name, status }`, de onde o painel tira o endereço.
+
+**O e-mail é único na plataforma inteira**, e sempre em minúsculas (`users_email` e
+`users_email_minusculo`, no banco). É ele que diz de qual estabelecimento a pessoa é. Cada
+estabelecimento continua com vários usuários — o dono e os funcionários, cada um com o seu e-mail e
+a sua senha —, mas o mesmo e-mail não existe em dois estabelecimentos: quem tem dois usa um e-mail
+em cada. Uma pessoa em vários estabelecimentos com uma conta só está no ROADMAP.
+
+**Como o tenant é achado.** `users` está sob RLS, e nenhuma role ignora RLS. `tenantDoEmail`
+(`auth/login-lookup.ts`) abre uma transação, define `app.login_email` e lê só o `tenant_id` da linha
+que a policy `login_por_email` libera (2.4). É a segunda consulta do sistema que roda fora de
+contexto de tenant, pelo mesmo motivo da resolução do slug (2.8): é ela que estabelece o contexto.
+Não há tabela global de e-mails — seria uma lista de dados pessoais legível sem contexto.
+
+**A ordem das verificações** é a mesma de antes, com uma a mais no fim: e-mail inexistente e senha
+errada respondem o mesmo 401, gastando o mesmo tempo de argon2; só **depois** de a senha conferir a
+conta desativada e o estabelecimento suspenso recebem um 403 com o motivo. Antes da Fase 18b a
+suspensão era respondida antes da senha, porque o slug já era público; agora diria a qualquer um
+que aquele e-mail tem conta.
+
 ### 6.7 Auditoria
 
 `audit_logs` é **append-only pela própria estrutura**: só existem policies de `select` e
@@ -890,19 +934,18 @@ src/
 
 ### 9.3 Rotas e dados
 
-| Rota                          | Página                                                 |
-| ----------------------------- | ------------------------------------------------------ |
-| `/`                           | página inicial do produto                              |
-| `/cadastro`                   | cadastro do estabelecimento                            |
-| `/entrar`                     | pergunta o endereço e leva ao login do estabelecimento |
-| `/confirmar-email`            | confirmação do e-mail pelo link (`#token=…`)           |
-| `/termos`, `/privacidade`     | termos de uso e política de privacidade                |
-| `/:tenantSlug`                | cardápio público                                       |
-| `/:tenantSlug/checkout`       | finalizar pedido                                       |
-| `/:tenantSlug/pedido-enviado` | confirmação do pedido                                  |
-| `/:tenantSlug/admin`          | login do painel                                        |
-| `/:tenantSlug/admin/pedidos`  | pedidos ao vivo                                        |
-| qualquer outra                | não encontrado                                         |
+| Rota                          | Página                                       |
+| ----------------------------- | -------------------------------------------- |
+| `/`                           | página inicial do produto                    |
+| `/cadastro`                   | cadastro do estabelecimento                  |
+| `/entrar`                     | login do painel, com e-mail e senha          |
+| `/confirmar-email`            | confirmação do e-mail pelo link (`#token=…`) |
+| `/termos`, `/privacidade`     | termos de uso e política de privacidade      |
+| `/:tenantSlug`                | cardápio público                             |
+| `/:tenantSlug/checkout`       | finalizar pedido                             |
+| `/:tenantSlug/pedido-enviado` | confirmação do pedido                        |
+| `/:tenantSlug/admin/pedidos`  | pedidos ao vivo                              |
+| qualquer outra                | não encontrado                               |
 
 No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
 faz o "voltar" do celular fechar a janela em vez de sair do cardápio.
@@ -961,7 +1004,9 @@ carrinho do Zustand, e monta o formulário com React Hook Form + Zod.
 
 `features/admin/`. A **sessão** (`session.ts`) guarda o token de acesso só na memória; o refresh token fica
 no cookie `httpOnly` da API, e as chamadas de autenticação o enviam (`credentials: 'include'`).
-No `localStorage` ficam só o slug e quem está logado — a sessão é de um estabelecimento. `comSessao` chama a
+No `localStorage` ficam só o slug e quem está logado — a sessão é de um estabelecimento, e o slug vem
+da resposta da API (`establishment.slug`), nunca digitado. O login é um só, em `/entrar`: quem já
+tem sessão é levado ao painel do seu estabelecimento, e o painel sem sessão volta para lá. `comSessao` chama a
 API com o token e, num 401, renova uma vez e repete; a renovação é única mesmo com várias
 chamadas simultâneas, porque duas apresentariam o mesmo refresh token e o servidor as trataria
 como roubo.
@@ -1006,7 +1051,8 @@ parâmetro, e é por isso que esses endereços estão em `SLUGS_RESERVADOS` (6.8
 termos e o fuso, que a tela preenche. O endereço do cardápio é sugerido pelo nome até a pessoa
 editá-lo, e conferido na API 400 ms depois da última tecla. A chamada leva `credentials`, como o
 login: o refresh token vem num cookie. Deu certo, a sessão já está aberta, e a pessoa cai no
-painel — com o recado de que o e-mail não saiu, se for o caso, no estado da navegação.
+painel — com o recado de que o e-mail não saiu, se for o caso, no estado da navegação. E-mail que
+já tem conta (`EMAIL_TAKEN`) vira erro no próprio campo, com o atalho para `/entrar`.
 
 **A confirmação** lê o token do fragmento e o tira do endereço na hora; o POST sai uma vez por
 token (chave do React Query). **O painel** mostra o aviso de confirmação a quem tem

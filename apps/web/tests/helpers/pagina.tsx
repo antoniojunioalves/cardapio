@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 import { AppRoutes } from '../../src/App'
 import type { CardapioPublico } from '../../src/features/menu/types'
 import { cardapioDoZe } from './cardapio'
+import { OndeEstou } from './OndeEstou'
 
 export type Resposta = { status: number; corpo: unknown } | 'falha-de-rede'
 
@@ -83,6 +84,22 @@ export function abrir(caminho: string): RenderResult {
     </QueryClientProvider>,
   )
 }
+
+/** Como `abrir`, com um marcador do endereço atual — para conferir aonde a navegação levou. */
+export function abrirComLocal(caminho: string): RenderResult {
+  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[caminho]}>
+        <AppRoutes />
+        <OndeEstou />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+/** O endereço em que a navegação está, na página aberta por `abrirComLocal`. */
+export const localAtual = () => screen.getByTestId('local').textContent
 
 /** Abre a página do cardápio e espera ele carregar. `sufixo` vai depois do slug: `?produto=…`. */
 export async function abrirCardapio(

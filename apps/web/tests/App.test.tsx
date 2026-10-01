@@ -1,11 +1,9 @@
 import { app as product } from '@repo/config'
 import { VERSAO_DOS_TERMOS } from '@repo/shared'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router'
+import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { App, AppRoutes } from '../src/App'
+import { App } from '../src/App'
 import { useSessaoStore } from '../src/features/admin/session'
 import { abrir, mockarRotas } from './helpers/pagina'
 
@@ -77,51 +75,21 @@ describe('termos e privacidade', () => {
   })
 })
 
-function OndeEstou() {
-  return <output data-testid="local">{useLocation().pathname}</output>
-}
+describe('endereços do painel', () => {
+  it('/{endereço}/admin não existe: o login é um só, em /entrar', () => {
+    const fetch = mockarRotas(() => ({ status: 200, corpo: {} }))
+    abrir('/lanchonete-do-ze/admin')
 
-/** A aplicação inteira em `/entrar`, com um marcador que mostra para onde a navegação foi. */
-function abrirEntrar() {
-  // O login do estabelecimento busca o nome dele no cardápio público.
-  mockarRotas(() => ({ status: 404, corpo: { error: { code: 'NOT_FOUND' } } }))
-  render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter initialEntries={['/entrar']}>
-        <AppRoutes />
-        <OndeEstou />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-}
-
-describe('entrar pela página inicial', () => {
-  it('pergunta o endereço e leva ao login daquele estabelecimento', () => {
-    abrirEntrar()
-
-    fireEvent.change(screen.getByLabelText('Endereço do cardápio'), {
-      target: { value: 'http://localhost:5173/lanchonete-do-ze/admin' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
-
-    expect(screen.getByTestId('local')).toHaveTextContent('/lanchonete-do-ze/admin')
+    expect(screen.getByRole('heading', { level: 1, name: 'Não encontrado' })).toBeVisible()
+    expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('endereço impossível diz como é o formato, sem sair da página', () => {
-    abrirEntrar()
+  it('/entrar pede só e-mail e senha', () => {
+    abrir('/entrar')
 
-    fireEvent.change(screen.getByLabelText('Endereço do cardápio'), {
-      target: { value: 'lanchonete do zé' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
-
-    expect(screen.getByText(/como lanchonete-do-ze/)).toBeVisible()
-    expect(screen.getByTestId('local')).toHaveTextContent('/entrar')
-  })
-
-  it('quem já entrou neste aparelho encontra o endereço preenchido', () => {
-    useSessaoStore.setState({ slug: 'pizzaria-da-esquina' })
-    abrirEntrar()
-    expect(screen.getByLabelText('Endereço do cardápio')).toHaveValue('pizzaria-da-esquina')
+    expect(screen.getByRole('heading', { level: 1, name: 'Entrar no painel' })).toBeVisible()
+    expect(screen.getByLabelText('E-mail')).toBeVisible()
+    expect(screen.getByLabelText('Senha')).toBeVisible()
+    expect(screen.queryByLabelText('Endereço do cardápio')).not.toBeInTheDocument()
   })
 })

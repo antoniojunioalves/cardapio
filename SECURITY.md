@@ -1,6 +1,6 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 18**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 18b**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
 cookie `httpOnly`, RBAC por permissão, auditoria append-only, headers de segurança, CORS
 restrito, limites de requisição, validação de ambiente e o cadastro aberto de estabelecimento,
@@ -29,8 +29,9 @@ Detalhes de implementação em [ARCHITECTURE.md](ARCHITECTURE.md#2-multi-tenancy
 valem como norma do projeto:
 
 1. **`tenantId` vindo do cliente é ignorado.** Não existe rota que aceite tenant por query,
-   corpo ou header. O tenant vem do usuário autenticado (área administrativa) ou do `tenantSlug`
-   da URL resolvido no servidor (área pública).
+   corpo ou header. O tenant vem do usuário autenticado (área administrativa), do `tenantSlug`
+   da URL resolvido no servidor (área pública) ou, no login, do e-mail de quem entra, também
+   resolvido no servidor.
 2. **A aplicação conecta ao banco com role sem `SUPERUSER` e sem `BYPASSRLS`.** Sem isso, toda
    policy de RLS é ignorada em silêncio e o isolamento existe apenas no papel.
 3. **A aplicação não é dona das tabelas e não tem DDL.** O dono de uma tabela pode remover o RLS
@@ -39,7 +40,8 @@ valem como norma do projeto:
    vez. Por isso são duas roles: `cardapio_migrator` (dona, DDL, usada só em migrations) e
    `cardapio_app` (somente DML). **Já em vigor**, com testes que falham se alguém afrouxar.
 4. **Toda tabela com `tenant_id` tem RLS habilitado e forçado.** Um teste-guarda consulta o
-   catálogo do PostgreSQL e falha o CI se alguma tabela escapar.
+   catálogo do PostgreSQL e falha o CI se alguma tabela escapar. O mesmo teste lista as policies
+   que não filtram pelo tenant: hoje, uma só — a leitura por e-mail do login (seção 3).
 5. **Repositório de dado com escopo de tenant só é acessível via `withTenant(ctx, …)`.**
 6. **Toda chave estrangeira entre tabelas tenant-scoped inclui o `tenant_id` dos dois lados.** A
    checagem de FK do PostgreSQL roda por fora do RLS: com uma FK simples, o Tenant A cria um
@@ -99,11 +101,37 @@ mesmos testes se repetem. Recurso sem eles não é considerado pronto.
   todas as sessões do usuário.
 - **Lista de algoritmos fixa** na verificação do JWT — fecha a família de ataques de confusão de
   algoritmo, inclusive `alg: none`. Há um teste que apresenta esse token e exige a recusa.
+- **Entra só com e-mail e senha** (Fase 18b): a pessoa não informa o estabelecimento, e a API
+  não aceita nenhum. O e-mail é único na plataforma — é ele que diz de qual estabelecimento a
+  pessoa é — e o banco o exige em minúsculas, para `Ze@…` e `ze@…` não virarem duas contas.
 - **Tempo de resposta equalizado** para e-mail inexistente, para o login não virar oráculo de
   quais endereços estão cadastrados.
+- **Conta desativada e estabelecimento suspenso só são ditos depois de a senha conferir.** Antes
+  disso a resposta é sempre o mesmo 401. Com o login por estabelecimento, a suspensão era
+  respondida antes da senha, porque o endereço já era público; sem o endereço, responder antes
+  diria a qualquer um que aquele e-mail tem conta.
 - **Limite dedicado de 5 tentativas por minuto** no login, bem abaixo do limite global.
 - Segredos exclusivamente por variável de ambiente, com mínimo de 32 caracteres validado na
   inicialização. Nunca no código, nunca no repositório.
+
+**A leitura por e-mail, e o tamanho dela.** `users` está sob RLS, e para achar o estabelecimento
+de um e-mail o login precisa ler antes de existir contexto de tenant. Não há role que ignore RLS
+nem tabela global de e-mails: há uma segunda policy em `users`, `login_por_email`, só de
+`SELECT`, que libera a linha cujo e-mail é igual a `app.login_email`. Quem define a variável com
+o e-mail de quem está entrando lê aquela linha e nenhuma outra. Há teste para cada limite: não
+lista, não altera, não apaga, não abre outra tabela, e a variável não sobrevive à transação.
+
+**O que o e-mail único custa.** Entrar só com e-mail e senha exige que o e-mail identifique uma
+conta — e por isso dois lugares passam a dizer que um e-mail já existe:
+
+- **o cadastro** responde 409 `EMAIL_TAKEN` (antes, o mesmo e-mail podia cadastrar outro
+  estabelecimento, e a resposta nunca revelava quem tinha conta). Mitigação: o limite de 10
+  cadastros por hora por IP. É o que a maioria dos produtos faz; a alternativa — responder igual e
+  avisar só por e-mail — não cabe num cadastro que já entra logado.
+- **a criação de usuário no painel** responde 409 `USER_EMAIL_TAKEN` também quando o e-mail é de
+  outro estabelecimento, sem dizer de qual. Só quem tem `users:create` chega a essa resposta.
+
+O login continua sem revelar nada.
 
 O que **não** está implementado: 2FA, bloqueio de conta após N falhas e histórico de senhas.
 Estão no ROADMAP.
@@ -130,7 +158,7 @@ imediato em vez de esperar o token expirar.
 
 **Ainda não vale para o estabelecimento suspenso** (achado da Fase 17): o middleware e a
 renovação de sessão não olham o status do tenant. A suspensão tira o cardápio do ar e impede um
-login novo, mas quem já estava logado continua no painel. Resolve na Fase 19, junto dos comandos
+login novo (depois de a senha conferir), mas quem já estava logado continua no painel. Resolve na Fase 19, junto dos comandos
 de suspensão.
 
 ---
@@ -276,8 +304,9 @@ estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por i
 - **Confirmar só sai de `PENDING`:** um link guardado não desfaz uma suspensão da plataforma.
 - **O reenvio vai sempre para o e-mail do dono**, seja quem for que peça, com um minuto entre
   envios contado no banco — um atendente não publica o cardápio com o próprio e-mail.
-- **Não revela quem tem conta.** E-mail é único por estabelecimento, e cada cadastro cria um
-  estabelecimento novo: o mesmo e-mail pode cadastrar outro, e a resposta nunca diz "já existe".
+- **E-mail que já tem conta é recusado** (409 `EMAIL_TAKEN`), sem criar nada e sem enviar e-mail.
+  Isso revela que o e-mail tem conta — o custo de entrar só com e-mail e senha, explicado na
+  seção 3.
 - **Limites:** 10 cadastros por hora por IP, um campo-armadilha que só robô preenche, endereços
   reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
 - **Senha forte no cadastro:** pelo menos 8 caracteres, com letra maiúscula, minúscula e caractere
@@ -320,15 +349,17 @@ comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
   (o usuário é recarregado a cada uma), todos os refresh tokens dele são revogados e a conexão
   ao vivo dele fecha na hora.
 - Senha inicial definida pelo dono (mínimo de 8 caracteres), com argon2id; a resposta nunca traz
-  o hash. E-mail repetido no estabelecimento é recusado.
+  o hash. E-mail já em uso — neste estabelecimento ou em outro — é recusado, sem dizer onde.
 - Usuário de outro estabelecimento responde 404.
 
 ### Sessão do painel no navegador — **em vigor**
 
 O token de acesso fica só na memória da página; o refresh token, no cookie `httpOnly` — o
 tablet da cozinha continua logado depois de recarregar, e um script injetado não tem como ler o
-token. Quitada na Fase 15 a dívida de quando ele ficava no `localStorage`; a chave antiga é
-apagada ao carregar o painel.
+token. Quitada na Fase 15 a dívida de quando ele ficava no `localStorage`.
+
+O login é um só, em `/entrar`. O endereço do estabelecimento nunca é digitado nem enviado: vem da
+resposta da API, e é ele que o painel guarda.
 
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é

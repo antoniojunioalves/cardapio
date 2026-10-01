@@ -23,7 +23,7 @@ async function autenticar(fixture: TenantDeTeste): Promise<string> {
   const resposta = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
-    payload: { tenantSlug: fixture.slug, email: fixture.email, password: SENHA_PADRAO },
+    payload: { email: fixture.email, password: SENHA_PADRAO },
   })
   return resposta.json<{ accessToken: string }>().accessToken
 }

@@ -14,8 +14,9 @@ import { ApiError, requisitar } from '@/services/api'
  * - No `localStorage` fica só o que não é segredo: o slug e quem está logado,
  *   para o painel saber que há sessão a renovar depois de recarregar.
  *
- * A sessão é de **um** estabelecimento: abrir o painel de outro slug pede
- * login de novo.
+ * A sessão é de **um** estabelecimento, e quem diz qual é a API: o login pede
+ * só e-mail e senha, e a resposta traz o estabelecimento da pessoa. É do slug
+ * dele que o painel tira o endereço.
  */
 
 export interface UsuarioDoPainel {
@@ -25,16 +26,18 @@ export interface UsuarioDoPainel {
   permissions: string[]
 }
 
-interface RespostaDeSessao {
+/** O que o login, a renovação e o cadastro devolvem. */
+export interface RespostaDeSessao {
   accessToken: string
   user: UsuarioDoPainel & { tenantId: string }
+  establishment: { id: string; slug: string; name: string; status: string }
 }
 
 interface EstadoDaSessao {
   slug: string | null
   usuario: UsuarioDoPainel | null
   accessToken: string | null
-  guardar: (slug: string, resposta: RespostaDeSessao) => void
+  guardar: (resposta: RespostaDeSessao) => void
   encerrar: () => void
 }
 
@@ -44,9 +47,9 @@ export const useSessaoStore = create<EstadoDaSessao>()(
       slug: null,
       usuario: null,
       accessToken: null,
-      guardar: (slug, resposta) => {
+      guardar: (resposta) => {
         set({
-          slug,
+          slug: resposta.establishment.slug,
           accessToken: resposta.accessToken,
           usuario: {
             id: resposta.user.id,
@@ -72,29 +75,17 @@ export const useSessaoStore = create<EstadoDaSessao>()(
   ),
 )
 
-/**
- * Até a Fase 14, o refresh token ficava no `localStorage`, na chave
- * `sessao-do-painel`. A chave nova não o lê, mas o antigo continuaria ali, ao
- * alcance de um script injetado. Apagado ao carregar o painel.
- */
-export function apagarSessaoAntiga(): void {
-  try {
-    localStorage.removeItem('sessao-do-painel')
-  } catch {
-    /* navegador sem localStorage: não há o que apagar */
-  }
-}
-apagarSessaoAntiga()
-
 const sessao = () => useSessaoStore.getState()
 
-export async function entrar(slug: string, email: string, senha: string): Promise<void> {
+/** Entra com e-mail e senha. Devolve o slug do estabelecimento da pessoa, para o painel ir até ele. */
+export async function entrar(email: string, senha: string): Promise<string> {
   const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/login', {
     method: 'POST',
-    body: { tenantSlug: slug, email, password: senha },
+    body: { email, password: senha },
     comCookie: true,
   })
-  sessao().guardar(slug, resposta)
+  sessao().guardar(resposta)
+  return resposta.establishment.slug
 }
 
 export async function sair(): Promise<void> {
@@ -116,14 +107,13 @@ let renovacaoEmAndamento: Promise<string> | null = null
  */
 export function renovarSessao(): Promise<string> {
   renovacaoEmAndamento ??= (async () => {
-    const { slug } = sessao()
-    if (!slug) throw new ApiError(401, 'Sessão encerrada.')
+    if (!sessao().slug) throw new ApiError(401, 'Sessão encerrada.')
     try {
       const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/refresh', {
         method: 'POST',
         comCookie: true,
       })
-      sessao().guardar(slug, resposta)
+      sessao().guardar(resposta)
       return resposta.accessToken
     } catch (erro) {
       if (erro instanceof ApiError && erro.status === 401) sessao().encerrar()

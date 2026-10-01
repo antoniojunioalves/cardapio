@@ -175,7 +175,7 @@ describe('cadastro pela página', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { tenantSlug: corpo.slug, email: corpo.email, password: corpo.password },
+      payload: { email: corpo.email, password: corpo.password },
     })
     expect(login.statusCode).toBe(200)
 
@@ -205,9 +205,28 @@ describe('cadastro pela página', () => {
     expect(aviso?.texto).toContain(para)
   })
 
-  it('o mesmo e-mail pode cadastrar outro estabelecimento — a resposta nunca revela quem tem conta', async () => {
+  it('e-mail que já tem conta responde 409 e não cria nada — o e-mail é o login, único na plataforma', async () => {
     const { corpo } = await cadastrarComSucesso()
-    await cadastrarComSucesso({ email: corpo.email })
+    caixaDeSaida().limpar()
+
+    // Maiúsculas e minúsculas são o mesmo e-mail.
+    for (const email of [corpo.email, corpo.email.toUpperCase()]) {
+      const segundo = cadastro({ email })
+      const resposta = await cadastrar(segundo)
+
+      expect(resposta.statusCode).toBe(409)
+      expect(resposta.json<{ error: { code: string } }>().error.code).toBe('EMAIL_TAKEN')
+      expect(resposta.cookies).toEqual([])
+
+      // Nem estabelecimento pela metade: o endereço continua livre.
+      const criados = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.slug, segundo.slug))
+      expect(criados).toEqual([])
+    }
+
+    expect(caixaDeSaida().enviados).toEqual([])
   })
 
   it('endereço em uso responde 409; endereço reservado, 400 com o motivo', async () => {
@@ -413,7 +432,7 @@ describe('reenvio da confirmação', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { tenantSlug: corpo.slug, email: admin.email, password: admin.password },
+      payload: { email: admin.email, password: admin.password },
     })
     const tokenDoAdmin = login.json<{ accessToken: string }>().accessToken
 

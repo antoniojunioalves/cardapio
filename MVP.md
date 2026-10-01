@@ -21,7 +21,7 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 
 ### Administração do estabelecimento
 
-- [x] Login de usuário administrativo
+- [x] Login de usuário administrativo, só com e-mail e senha — o sistema acha o estabelecimento
 - [x] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF` — _pela API; a tela é
       da Fase 25_
 - [ ] Troca da própria senha, redefinição pelo dono e "Esqueci minha senha" por e-mail —
@@ -142,7 +142,7 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 18:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
+> **Situação ao fim da Fase 18b:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
 > — e os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o isolamento. Os passos 2 e 3
 > ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 19 a 28 fecham o MVP —
 > ver PROJECT_PLAN.md, "O que falta para o MVP".
