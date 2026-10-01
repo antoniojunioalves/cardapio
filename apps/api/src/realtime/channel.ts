@@ -28,7 +28,16 @@ export interface EventoDeUsuario {
   userId: string
 }
 
-export type EventoDoCanal = EventoDePedido | EventoDeUsuario
+/**
+ * A plataforma suspendeu o estabelecimento: todas as conexões dele fecham na
+ * hora. O painel tenta se autenticar de novo e é recusado.
+ */
+export interface EventoDeEstabelecimento {
+  tipo: 'ESTABELECIMENTO_SUSPENSO'
+  tenantId: string
+}
+
+export type EventoDoCanal = EventoDePedido | EventoDeUsuario | EventoDeEstabelecimento
 
 /** O que a conexão recebe: sem `tenantId`, que é interno. */
 export type MensagemAoPainel =
@@ -83,6 +92,11 @@ export class CanalDePedidos {
       for (const assinatura of doTenant.filter((a) => a.userId === evento.userId)) {
         assinatura.encerrar()
       }
+      return
+    }
+
+    if (evento.tipo === 'ESTABELECIMENTO_SUSPENSO') {
+      for (const assinatura of doTenant) assinatura.encerrar()
       return
     }
 

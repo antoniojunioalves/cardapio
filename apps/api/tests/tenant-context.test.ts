@@ -5,6 +5,7 @@ import { closeDatabase, db } from '../src/db/index.js'
 import { tenants } from '../src/db/schema/index.js'
 import {
   tenantContextFromLoginEmail,
+  tenantContextFromPlatform,
   tenantContextFromPublicSlug,
   tenantContextFromSignup,
   tenantContextFromToken,
@@ -56,6 +57,10 @@ describe('TenantContext', () => {
 
   it('registra que o tenant veio do e-mail de quem está entrando', () => {
     expect(tenantContextFromLoginEmail(tenantId)).toEqual({ tenantId, source: 'login-email' })
+  })
+
+  it('registra que o tenant foi escolhido por um comando da plataforma', () => {
+    expect(tenantContextFromPlatform(tenantId)).toEqual({ tenantId, source: 'platform' })
   })
 })
 

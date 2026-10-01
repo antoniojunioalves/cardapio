@@ -212,6 +212,31 @@ describe('usuário alterado', () => {
   })
 })
 
+describe('estabelecimento suspenso', () => {
+  it('fecha todas as conexões daquele estabelecimento, e nenhuma de outro', () => {
+    const canal = new CanalDePedidos()
+    const encerradas: string[] = []
+    const recebidas: unknown[] = []
+    for (const [tenant, usuario] of [
+      ['a', 'u1'],
+      ['a', 'u2'],
+      ['b', 'u3'],
+    ] as const) {
+      canal.assinar(
+        tenant,
+        usuario,
+        (m) => recebidas.push(m),
+        () => encerradas.push(usuario),
+      )
+    }
+
+    canal.publicar({ tipo: 'ESTABELECIMENTO_SUSPENSO', tenantId: 'a' })
+
+    expect(encerradas).toEqual(['u1', 'u2'])
+    expect(recebidas).toEqual([])
+  })
+})
+
 describe('autenticação da conexão', () => {
   it('token inválido fecha com 4001', async () => {
     const { obs } = await conectar('nao-e-um-token')

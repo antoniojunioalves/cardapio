@@ -58,7 +58,9 @@ export function adminEmailConfirmationRoutes(instance: FastifyInstance): void {
       onRequest: requireAuth('settings:update'),
     },
     async (request, reply) => {
-      const resultado = await reenviarConfirmacao(tenantContextOf(request), currentUser(request).id)
+      const resultado = await reenviarConfirmacao(tenantContextOf(request), {
+        userId: currentUser(request).id,
+      })
       return reply.status(202).send(resultado)
     },
   )

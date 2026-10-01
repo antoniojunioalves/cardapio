@@ -221,6 +221,13 @@ export async function refreshSession(refreshToken: string): Promise<Session> {
 
     if (!registro) throw new UnauthorizedError('Sessão inválida.')
 
+    // Estabelecimento suspenso não renova sessão. A suspensão já apaga as
+    // sessões abertas; esta é a segunda barreira, e vem **antes** da detecção
+    // de reuso para a recusa não virar um alerta de roubo.
+    if ((await carregarEstabelecimento(tx, context)).status === 'SUSPENDED') {
+      throw new UnauthorizedError('Sessão inválida.')
+    }
+
     if (registro.revokedAt) {
       await tx
         .update(refreshTokens)
@@ -300,6 +307,10 @@ export async function logout(refreshToken: string): Promise<void> {
  * usuário passe a valer **imediatamente**, e não só quando o token dele
  * expirar. Num sistema onde funcionário é desligado, quinze minutos de acesso
  * extra é tempo demais.
+ *
+ * O mesmo vale para o estabelecimento: suspenso pela plataforma, nenhum usuário
+ * dele é carregado — a suspensão corta quem já estava logado na requisição
+ * seguinte, na mesma consulta.
  */
 export async function loadAuthenticatedUser(
   context: TenantContext,
@@ -307,12 +318,19 @@ export async function loadAuthenticatedUser(
 ): Promise<AuthenticatedUser | null> {
   return withTenant(context, async (tx) => {
     const [usuario] = await tx
-      .select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive })
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        isActive: users.isActive,
+        statusDoEstabelecimento: tenants.status,
+      })
       .from(users)
+      .innerJoin(tenants, eq(tenants.id, users.tenantId))
       .where(eq(users.id, userId))
       .limit(1)
 
-    if (!usuario?.isActive) return null
+    if (!usuario?.isActive || usuario.statusDoEstabelecimento === 'SUSPENDED') return null
 
     return {
       id: usuario.id,

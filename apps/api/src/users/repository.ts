@@ -120,13 +120,19 @@ export async function definirAtivo(
 }
 
 /**
- * Revoga todas as sessões do usuário. O token de acesso ainda aberto deixa de
- * valer na próxima requisição (o usuário é recarregado a cada uma); sem
- * refresh, a sessão não se renova.
+ * Encerra todas as sessões abertas do usuário. O token de acesso ainda aberto
+ * deixa de valer na próxima requisição (o usuário é recarregado a cada uma);
+ * sem refresh, a sessão não se renova.
+ *
+ * **Apaga, em vez de marcar como revogada.** `revokedAt` é a marca da rotação:
+ * um token revogado que reaparece é sinal de roubo, e derruba todas as sessões
+ * da pessoa. Uma sessão encerrada por nós não é isso — o aparelho que ficou
+ * com ela só precisa ouvir "sessão inválida". Marcada como revogada, ela
+ * acusaria um roubo falso na auditoria e, com a pessoa reativada, derrubaria
+ * as sessões novas dela.
  */
-export async function revogarSessoes(tx: TenantTransaction, userId: string): Promise<void> {
+export async function encerrarSessoes(tx: TenantTransaction, userId: string): Promise<void> {
   await tx
-    .update(refreshTokens)
-    .set({ revokedAt: sql`now()` })
+    .delete(refreshTokens)
     .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)))
 }

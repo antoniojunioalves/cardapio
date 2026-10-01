@@ -96,6 +96,12 @@ export const users = pgTable(
  *
  * `revokedAt` em vez de apagar a linha: é o que permite detectar o reuso de um
  * token já rotacionado, que é sinal de token roubado.
+ *
+ * `revokedAt` é marcado pela **rotação**, pelo **logout** e pela própria
+ * detecção de reuso. Quando somos nós que
+ * encerramos a sessão — usuário desativado, estabelecimento suspenso —, a linha
+ * é apagada: o token que reaparecer depois recebe "sessão inválida", sem alerta
+ * de roubo e sem derrubar as sessões novas da pessoa.
  */
 export const refreshTokens = pgTable(
   'refresh_tokens',

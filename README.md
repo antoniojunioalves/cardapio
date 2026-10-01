@@ -11,7 +11,7 @@ pelo WhatsApp do estabelecimento.
 
 **Status atual: Fase 18 concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
-publicado quando o dono confirma o e-mail. As fases 19 a 28 fecham o MVP — telas de gestão e o
+publicado quando o dono confirma o e-mail. As fases 20 a 28 fecham o MVP — telas de gestão e o
 sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
@@ -109,6 +109,7 @@ para o banco errado, o que é pior do que falhar na inicialização.
 | `pnpm db:migrate`   | Aplica as migrations no banco                                   |
 | `pnpm db:seed`      | Popula dados de demonstração (idempotente)                      |
 | `pnpm postman`      | Regenera a coleção do Postman a partir das rotas                |
+| `pnpm plataforma`   | Super Admin: listar, suspender, reativar, trocar o plano        |
 
 Para rodar num pacote só: `pnpm --filter @repo/api test`
 

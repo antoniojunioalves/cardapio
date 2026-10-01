@@ -213,6 +213,49 @@ describe('desativar', () => {
     expect(validos).toEqual([])
   })
 
+  /** As ações de auditoria registradas em nome do usuário. */
+  const acoesDe = async (userId: string) =>
+    (
+      await withTenant(tenantContextFromUser(loja.tenantId), (tx) =>
+        tx
+          .select({ action: auditLogs.action })
+          .from(auditLogs)
+          .where(eq(auditLogs.entityId, userId)),
+      )
+    ).map((r) => r.action)
+
+  const renovar = (refreshToken: string) =>
+    app.inject({ method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken } })
+
+  it('a renovação recusada de quem foi desativado não vira "token roubado" na auditoria', async () => {
+    await liberarVagas()
+    const { resposta, email } = await criar('STAFF')
+    const id = resposta.json<Usuario>().id
+    const sessao = sessaoDe<{ accessToken: string }>(await entrar(email, 'senha-inicial-123'))
+    await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)
+
+    expect((await renovar(sessao.refreshToken)).statusCode).toBe(401)
+
+    // Quem encerrou a sessão foi o dono, ao desativar: reapresentá-la não é roubo.
+    expect(await acoesDe(id)).not.toContain('auth.refresh_reuse_detected')
+  })
+
+  it('reativado, o aparelho antigo não derruba a sessão nova nem acusa roubo', async () => {
+    await liberarVagas()
+    const { resposta, email } = await criar('STAFF')
+    const id = resposta.json<Usuario>().id
+    const antiga = sessaoDe<{ accessToken: string }>(await entrar(email, 'senha-inicial-123'))
+    await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)
+    await chamar('POST', `/users/${id}/reactivate`, tokenDoDono)
+    const nova = sessaoDe<{ accessToken: string }>(await entrar(email, 'senha-inicial-123'))
+
+    // O celular que ficou com a sessão de antes tenta renovar.
+    expect((await renovar(antiga.refreshToken)).statusCode).toBe(401)
+
+    expect(await acoesDe(id)).not.toContain('auth.refresh_reuse_detected')
+    expect((await renovar(nova.refreshToken)).statusCode).toBe(200)
+  })
+
   it('ninguém desativa a própria conta', async () => {
     const proprio = await chamar('POST', `/users/${loja.userId}/deactivate`, tokenDoDono)
     expect(proprio.statusCode).toBe(409)

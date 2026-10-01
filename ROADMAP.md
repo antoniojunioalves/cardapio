@@ -65,6 +65,9 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Papéis personalizados por estabelecimento — hoje OWNER, ADMIN e STAFF são globais
 - Painel da plataforma para o Super Admin — no MVP ele age por comando (Fase 19); a tabela
   `platform_admins` fica para este painel
+- Avisar o dono por e-mail quando o estabelecimento é suspenso ou reativado, e mostrar o motivo a
+  ele. Hoje o motivo fica só na auditoria, e quem tenta entrar lê "Fale com o suporte". Depende do
+  contato de suporte, que é da Fase 28.
 
 ## Endereço e entrega
 

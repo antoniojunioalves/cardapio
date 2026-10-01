@@ -4,7 +4,8 @@
  * Guardar a origem não é decoração: ela aparece nos logs e na auditoria, e
  * permite responder "como este pedido soube que era o tenant X?" meses depois.
  */
-export type TenantSource = 'authenticated-user' | 'public-slug' | 'token' | 'signup' | 'login-email'
+export type TenantSource =
+  'authenticated-user' | 'public-slug' | 'token' | 'signup' | 'login-email' | 'platform'
 
 export interface TenantContext {
   readonly tenantId: string
@@ -54,6 +55,16 @@ export function tenantContextFromSignup(tenantId: string): TenantContext {
  */
 export function tenantContextFromLoginEmail(tenantId: string): TenantContext {
   return { tenantId, source: 'login-email' }
+}
+
+/**
+ * O estabelecimento sobre o qual a plataforma age por comando — suspender,
+ * reativar, trocar o plano (`platform/service.ts`). O id vem do registro de
+ * estabelecimentos, achado pelo endereço que o operador informou no servidor;
+ * nenhuma rota HTTP usa esta origem.
+ */
+export function tenantContextFromPlatform(tenantId: string): TenantContext {
+  return { tenantId, source: 'platform' }
 }
 
 /*

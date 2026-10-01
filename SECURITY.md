@@ -98,7 +98,10 @@ mesmos testes se repetem. Recurso sem eles não é considerado pronto.
 - **`requireAuth` em `onRequest`:** o 401 vem antes de o corpo ser lido e validado. Um
   teste-guarda percorre o inventário de rotas e exige isso de toda rota do painel.
 - **Rotação de refresh com detecção de reuso:** reapresentar um token já rotacionado revoga
-  todas as sessões do usuário.
+  todas as sessões do usuário. Só token **rotacionado** conta como reuso: sessão encerrada por nós
+  — usuário desativado, estabelecimento suspenso — é apagada, e reapresentá-la dá só "sessão
+  inválida". Antes da Fase 19 ela ficava como revogada, e o aparelho antigo de alguém reativado
+  acusava um roubo falso e derrubava as sessões novas da pessoa.
 - **Lista de algoritmos fixa** na verificação do JWT — fecha a família de ataques de confusão de
   algoritmo, inclusive `alg: none`. Há um teste que apresenta esse token e exige a recusa.
 - **Entra só com e-mail e senha** (Fase 18b): a pessoa não informa o estabelecimento, e a API
@@ -156,10 +159,25 @@ forma exportada de proteger uma rota.
 O usuário é **recarregado do banco a cada requisição**, então desativar alguém tem efeito
 imediato em vez de esperar o token expirar.
 
-**Ainda não vale para o estabelecimento suspenso** (achado da Fase 17): o middleware e a
-renovação de sessão não olham o status do tenant. A suspensão tira o cardápio do ar e impede um
-login novo (depois de a senha conferir), mas quem já estava logado continua no painel. Resolve na Fase 19, junto dos comandos
-de suspensão.
+**O mesmo vale para o estabelecimento suspenso** (Fase 19): o status vem na mesma consulta, e
+usuário de estabelecimento suspenso não é carregado. A suspensão tira o cardápio do ar, impede o
+login (dito só depois de a senha conferir), encerra as sessões e fecha as conexões ao vivo — quem
+já estava logado cai na requisição seguinte, e não quando o token expirar.
+
+### Ações da plataforma (Super Admin) — **em vigor**
+
+- **Sem rota HTTP.** Listar, suspender, reativar, trocar o plano e reenviar a confirmação são um
+  comando (`pnpm plataforma`), rodado no servidor. Não há tela, endpoint nem credencial de Super
+  Admin: quem não tem acesso ao servidor não alcança as ações.
+- **Sem privilégio a mais no banco.** O comando usa a role da API, sem `BYPASSRLS`, e abre o
+  contexto de cada estabelecimento como qualquer outra operação.
+- **Tudo vai para a auditoria** do estabelecimento, com o operador e — na suspensão — o motivo,
+  que é obrigatório.
+- **A renovação de sessão de um suspenso não é tratada como roubo:** as sessões abertas são
+  apagadas na suspensão, e a renovação ainda recusa o suspenso antes da detecção de reuso.
+- **Reativar não publica cardápio não confirmado:** volta o status de antes da suspensão.
+- **O que ainda não há:** aviso ao dono por e-mail quando o estabelecimento é suspenso ou
+  reativado, e o motivo à vista dele — hoje ele só lê "Fale com o suporte". Está no ROADMAP.
 
 ---
 
@@ -346,7 +364,7 @@ comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
 - O papel `OWNER` não é dado nem tirado pela API; ninguém muda o próprio papel nem se desativa;
   só o dono altera a conta do dono.
 - **Desativar encerra o acesso na hora**: o token de acesso para de valer na próxima requisição
-  (o usuário é recarregado a cada uma), todos os refresh tokens dele são revogados e a conexão
+  (o usuário é recarregado a cada uma), todas as sessões abertas dele são apagadas e a conexão
   ao vivo dele fecha na hora.
 - Senha inicial definida pelo dono (mínimo de 8 caracteres), com argon2id; a resposta nunca traz
   o hash. E-mail já em uso — neste estabelecimento ou em outro — é recusado, sem dizer onde.

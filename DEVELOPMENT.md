@@ -55,6 +55,7 @@ mudança simplesmente não acontece e o sintoma é um erro de permissão inexpli
 | `pnpm db:migrate`   | Aplica as migrations, com a role que tem DDL                           |
 | `pnpm db:seed`      | Três estabelecimentos e dois planos de demonstração; idempotente       |
 | `pnpm postman`      | Regenera a coleção do Postman a partir das rotas; não precisa do banco |
+| `pnpm plataforma`   | Ações do Super Admin sobre os estabelecimentos — ver "Plataforma"      |
 
 Num pacote só:
 
@@ -67,6 +68,32 @@ pnpm --filter @repo/web dev
 
 Os testes rodam **um pacote por vez** (`--concurrency=1` no script): em paralelo, a suíte da API
 e a do web disputam memória, e no WSL o processo já foi derrubado por isso (código 137).
+
+---
+
+## Plataforma
+
+O Super Admin age por comando, no servidor — não há tela nem rota para isto:
+
+```bash
+pnpm plataforma listar                                   # todos
+pnpm plataforma listar --status suspenso                 # ativo | suspenso | pendente
+pnpm plataforma suspender lanchonete-do-ze --motivo "conteúdo impróprio"
+pnpm plataforma reativar lanchonete-do-ze
+pnpm plataforma plano lanchonete-do-ze PREMIUM
+pnpm plataforma reenviar-confirmacao lanchonete-do-ze
+```
+
+Toda ação que altera algo aceita `--operador "<nome>"`, que vai para a auditoria; sem ele, vale o
+usuário do sistema. Sem argumentos, o comando mostra a ajuda. Sai com 0 se deu certo, 1 se a ação
+foi recusada (endereço que não existe, já suspenso) e 2 se o comando foi digitado errado.
+
+O comando usa o `.env` e a role da API. Suspender derruba na hora quem está logado naquele
+estabelecimento, inclusive numa API que esteja rodando em outro processo.
+
+Ação nova: um caso em `interpretar` (`src/platform/args.ts`), a função em `service.ts` — com
+`tenantContextFromPlatform`, `withTenant` e `recordAudit`, sem usuário e com o operador nos
+detalhes — e a frase de resposta em `commands.ts`.
 
 ---
 
