@@ -1,7 +1,7 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-09-30
-**Fase atual:** 18 — concluída, aguardando validação
+**Atualizado em:** 2026-10-01
+**Fase atual:** 18b — concluída, aguardando validação
 **Próxima:** 19 — comandos do Super Admin: listar, suspender, reativar, trocar o plano. As fases 19 a
 28 fecham o MVP (ver "O que falta para o MVP")
 
@@ -33,8 +33,8 @@ rotas do painel (`/api/v1/admin/orders`), com auditoria.
 WhatsApp", com a mensagem pronta — número, itens, opções, valores, entrega, pagamento e cliente —,
 montada no servidor. Endereço escolhido da lista sai mascarado; digitado na hora, completo.
 
-**O estabelecimento recebe os pedidos ao vivo.** Em `/{tenantSlug}/admin` o lojista entra, e em
-`/{tenantSlug}/admin/pedidos` vê os pedidos chegarem sem recarregar — com endereço completo,
+**O estabelecimento recebe os pedidos ao vivo.** Em `/entrar` o lojista entra só com e-mail e
+senha, e em `/{tenantSlug}/admin/pedidos` vê os pedidos chegarem sem recarregar — com endereço completo,
 itens, pagamento e botões de status —, com alerta sonoro opcional e o número de pedidos novos no
 título da aba.
 
@@ -61,9 +61,13 @@ Mailpit (http://localhost:8025).
 **E pela página inicial (Fase 18).** Em `/`, a página do produto leva a `/cadastro`, que sugere
 o endereço do cardápio pelo nome e confere se está livre enquanto a pessoa digita; o cadastro já
 abre o painel, onde um aviso lembra de confirmar o e-mail — com o botão de reenviar. O link do
-e-mail abre `/confirmar-email`, que publica o cardápio. `/entrar` leva ao login de um
-estabelecimento, e `/termos` e `/privacidade` têm o texto (provisório) que o cadastro aceita. O
+e-mail abre `/confirmar-email`, que publica o cardápio. `/termos` e `/privacidade` têm o texto
+(provisório) que o cadastro aceita. O
 checkout avisa para onde vão os dados do cliente.
+
+**Entra-se só com e-mail e senha (Fase 18b).** `/entrar` não pergunta o estabelecimento: o
+e-mail é único na plataforma, a API acha de qual estabelecimento a pessoa é e a tela segue para o
+painel dele. Vale para o dono e para os funcionários, cada um com o seu e-mail e a sua senha.
 
 **Ainda não existe:** as telas de configuração, cardápio, usuários e clientes — o estabelecimento
 se cadastra pela página, mas ainda é configurado pela API. As fases 19 a 28 fecham o MVP; ver "O
@@ -96,6 +100,7 @@ que falta para o MVP".
 | 16  | CI no GitHub e ajustes nos docs — _o workflow ficou guardado até a Fase 28_                                         | ✅ Concluída |
 | 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ✅ Concluída |
 | 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ✅ Concluída |
+| 18b | Login só com e-mail e senha: e-mail único na plataforma, `/entrar` como login único                                 | ✅ Concluída |
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜ Próxima   |
 | 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜           |
 | 21  | Estrutura do painel e configuração do estabelecimento                                                               | ⬜           |
@@ -114,6 +119,79 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 
 ---
 
+## Fase 18b — concluída
+
+Pedido do Junio antes de seguir para a Fase 19: o dono pode não saber o endereço do próprio
+cardápio, então o login pede **só e-mail e senha**, e o sistema acha o estabelecimento.
+
+### Decisões do Junio (2026-10-01)
+
+- **O mesmo e-mail não existe em dois estabelecimentos.** É o e-mail que diz de qual
+  estabelecimento a pessoa é. Cada estabelecimento continua com vários usuários — o dono e os
+  funcionários, cada um com o seu e-mail e a sua senha —, e todos entram pela mesma tela. Quem tem
+  dois estabelecimentos usa um e-mail em cada.
+- **`/{endereço}/admin` deixou de existir.** O login é um só, em `/entrar`. Sem redirecionamento
+  para link antigo: a aplicação é nova, e o código fica mais simples.
+- **Estabelecimento suspenso só é dito depois de a senha conferir.** Antes disso, a resposta é
+  sempre "e-mail ou senha não conferem".
+
+### Microtasks
+
+| #   | Tarefa                                                                                                    | Status |
+| --- | --------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Banco: e-mail único na plataforma e em minúsculas; policy `login_por_email`, só de leitura (migration 22) | ✅     |
+| 2   | `tenantDoEmail` e a origem `tenantContextFromLoginEmail`; o login deixa de receber `tenantSlug`           | ✅     |
+| 3   | A sessão — login, renovação e cadastro — traz o estabelecimento (`establishment`)                         | ✅     |
+| 4   | Cadastro e criação de usuário recusam e-mail que já tem conta (`EMAIL_TAKEN`, `USER_EMAIL_TAKEN`)         | ✅     |
+| 5   | Web: `/entrar` vira o login; sai `/{endereço}/admin`; o painel sem sessão volta para `/entrar`            | ✅     |
+| 6   | Coleção do Postman: login só com e-mail e senha, guardando o `tenantSlug` da resposta                     | ✅     |
+| 7   | Testes: isolamento da leitura por e-mail, guarda das policies, login, cadastro, usuários e telas          | ✅     |
+
+### Decisões e achados desta fase
+
+**Como a API acha o estabelecimento sem furar o isolamento.** `users` está sob RLS, e nenhuma role
+ignora RLS. A saída foi uma segunda policy em `users`, só de `SELECT`: quem define
+`app.login_email` lê a linha daquele e-mail e nenhuma outra. Não há tabela global de e-mails, que
+seria uma lista de dados pessoais legível sem contexto. O teste-guarda passou a listar as policies
+que não filtram pelo tenant — uma nova aparece na revisão.
+
+**O cadastro passou a dizer que um e-mail já tem conta.** Antes, o mesmo e-mail podia cadastrar
+outro estabelecimento, e a resposta nunca revelava quem tinha conta. É o custo de entrar só com
+e-mail e senha, e está em SECURITY.md, seção 3. O limite de 10 cadastros por hora por IP continua.
+
+**Quem já tem sessão e abre `/entrar` vai direto para o painel.** Não é redirecionamento de link
+antigo: o dono não sabe o endereço do painel, e sem isso digitaria a senha a cada visita.
+
+**Sessão de outro estabelecimento não abre o painel de um endereço alheio:** a pessoa cai no
+painel do dela.
+
+**Saiu código que só servia a versões anteriores:** a tela de login por estabelecimento, a leitura
+do endereço digitado em `/entrar` e a limpeza da chave antiga do `localStorage`.
+
+**Para a Fase 25:** o "esqueci minha senha" acha a conta pelo e-mail com `tenantDoEmail`.
+
+**Banco de desenvolvimento com e-mail repetido:** a migration 22 falha num banco que tenha o mesmo
+e-mail em dois estabelecimentos. O DEVELOPMENT.md diz como achar e resolver.
+
+A coleção do Postman mudou — importe de novo.
+
+### Verificação executada
+
+| Verificação                        | Resultado                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm verify`                      | **696 testes** (479 API + 189 web + 28 shared); formatação, typecheck, lint e build                                            |
+| Clone limpo, `--frozen-lockfile`   | os mesmos 696 testes, formatação, typecheck, lint e build                                                                      |
+| Sem a policy `login_por_email`     | o login, a leitura por e-mail e a guarda das policies falham (18 testes)                                                       |
+| Sem a unicidade global do e-mail   | falham o teste do banco, o do cadastro e os dois da criação de usuário                                                         |
+| Suspensão conferida antes da senha | falha "só revela a suspensão depois de a senha conferir"                                                                       |
+| API de verdade, na porta 3334      | login do seed só com e-mail e senha devolve `lanchonete-do-ze`; renovação idem; cadastro com e-mail existente dá `EMAIL_TAKEN` |
+| Página no navegador                | a fazer na validação                                                                                                           |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado: o
+Junio pediu para ver tudo antes.
+
+---
+
 ## Fase 18 — concluída
 
 ### Microtasks
@@ -122,7 +200,7 @@ imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
 | --- | ---------------------------------------------------------------------------------------------------- | ------ |
 | 1   | Página inicial em `/`, no lugar da página de teste do ambiente, com a moldura das páginas do produto | ✅     |
 | 2   | `/cadastro`: regras de `@repo/shared`, endereço sugerido pelo nome e conferido enquanto se digita    | ✅     |
-| 3   | `/entrar`: pergunta o endereço — aceita o link colado — e leva ao login daquele estabelecimento      | ✅     |
+| 3   | `/entrar`: pergunta o endereço e leva ao login daquele estabelecimento — _trocado na Fase 18b_       | ✅     |
 | 4   | `/confirmar-email`: token do fragmento, tirado do endereço depois de lido; um POST só                | ✅     |
 | 5   | `/termos` e `/privacidade`, com texto provisório e a versão em vigor                                 | ✅     |
 | 6   | Painel: aviso "seu cardápio ainda não está no ar", com reenvio, para quem cuida das configurações    | ✅     |
@@ -268,7 +346,8 @@ vazio**, como faria alguém que nunca viu o sistema.
 - As regras de senha do cadastro (`REGRAS_DA_SENHA`, Fase 18) passam a valer para toda senha do
   painel: criação de usuário, troca e redefinição.
 - "Esqueci minha senha" por e-mail, com o envio da Fase 17 — e o mesmo desenho do link de
-  confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link.
+  confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link. A conta é
+  achada pelo e-mail com `tenantDoEmail` (Fase 18b), e a resposta é a mesma exista o e-mail ou não.
 
 ### Fase 26 — Clientes e histórico de pedidos
 

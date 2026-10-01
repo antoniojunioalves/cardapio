@@ -114,6 +114,70 @@ describe('guarda de Row-Level Security', () => {
   })
 })
 
+/**
+ * Policies que NÃO filtram por `app.tenant_id`, com o comando e o motivo de
+ * cada uma.
+ *
+ * Policies permissivas se somam: uma a mais numa tabela é uma porta a mais.
+ * A guarda acima só conta se existe policy; esta olha o que cada uma libera.
+ * Uma policy nova que não dependa do tenant, ou uma destas mudando de "só
+ * leitura" para outra coisa, falha aqui e aparece na revisão.
+ */
+const POLICIES_FORA_DO_TENANT: Record<string, { comando: string; motivo: string }> = {
+  'users.login_por_email': {
+    comando: 'SELECT',
+    motivo:
+      'o login pede só e-mail e senha: lê a linha do e-mail que está entrando, para achar o ' +
+      'estabelecimento antes de existir contexto de tenant (`auth/login-lookup.ts`)',
+  },
+}
+
+interface PolicyInfo {
+  [coluna: string]: unknown
+  policy: string
+  comando: string
+  expressoes: string
+}
+
+describe('guarda das policies', () => {
+  async function inspecionarPolicies(): Promise<PolicyInfo[]> {
+    const resultado = await db.execute<PolicyInfo>(sql`
+      SELECT
+        c.relname || '.' || p.polname AS policy,
+        CASE p.polcmd
+          WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT' WHEN 'w' THEN 'UPDATE'
+          WHEN 'd' THEN 'DELETE' ELSE 'ALL'
+        END AS comando,
+        coalesce(pg_get_expr(p.polqual, p.polrelid), '') || ' ' ||
+          coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') AS expressoes
+      FROM pg_policy p
+      JOIN pg_class c ON c.oid = p.polrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+      ORDER BY 1
+    `)
+
+    return resultado.rows
+  }
+
+  it('toda policy filtra pelo tenant, menos as declaradas de propósito', async () => {
+    const policies = await inspecionarPolicies()
+    expect(policies.length).toBeGreaterThan(0)
+
+    const foraDoTenant = policies
+      .filter((p) => !p.expressoes.includes('app.tenant_id'))
+      .map((p) => ({ policy: p.policy, comando: p.comando }))
+
+    expect(
+      foraDoTenant,
+      `Policies que não filtram por app.tenant_id precisam estar em POLICIES_FORA_DO_TENANT, ` +
+        `com o mesmo comando e o motivo.`,
+    ).toEqual(
+      Object.entries(POLICIES_FORA_DO_TENANT).map(([policy, { comando }]) => ({ policy, comando })),
+    )
+  })
+})
+
 interface ChaveEstrangeira {
   [coluna: string]: unknown
   tabela: string

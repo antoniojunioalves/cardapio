@@ -5,17 +5,18 @@ import {
   permissions,
   refreshTokens,
   rolePermissions,
+  tenants,
   userRoles,
   users,
 } from '../db/schema/index.js'
 import { ForbiddenError, UnauthorizedError } from '../lib/errors.js'
 import {
-  tenantContextFromPublicSlug,
+  tenantContextFromLoginEmail,
   tenantContextFromToken,
   type TenantContext,
 } from '../tenant/context.js'
-import { findTenantBySlug } from '../tenant/repository.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
+import { tenantDoEmail } from './login-lookup.js'
 import { hashPassword, verifyPassword, wastePasswordTime } from './password.js'
 import {
   generateRefreshToken,
@@ -33,10 +34,19 @@ export interface AuthenticatedUser {
   permissions: string[]
 }
 
+/** O estabelecimento da sessão. É dele que o painel tira o endereço para onde ir. */
+export interface SessionEstablishment {
+  id: string
+  slug: string
+  name: string
+  status: 'ACTIVE' | 'SUSPENDED' | 'PENDING'
+}
+
 export interface Session {
   accessToken: string
   refreshToken: string
   user: AuthenticatedUser
+  establishment: SessionEstablishment
 }
 
 /** Carrega as permissões efetivas do usuário, vindas dos papéis dele. */
@@ -51,16 +61,36 @@ async function loadPermissions(tx: TenantTransaction, userId: string): Promise<s
   return [...new Set(linhas.map((linha) => linha.code))].sort()
 }
 
+/** O estabelecimento do contexto. `tenants` é o registro global, lido pelo id que o servidor resolveu. */
+async function carregarEstabelecimento(
+  tx: TenantTransaction,
+  context: TenantContext,
+): Promise<SessionEstablishment> {
+  const [estabelecimento] = await tx
+    .select({ id: tenants.id, slug: tenants.slug, name: tenants.name, status: tenants.status })
+    .from(tenants)
+    .where(eq(tenants.id, context.tenantId))
+    .limit(1)
+
+  // Um usuário só existe dentro de um estabelecimento (FK com cascata).
+  if (!estabelecimento) throw new UnauthorizedError('Sessão inválida.')
+  return estabelecimento
+}
+
 /**
  * Abre uma sessão para o usuário, dentro da transação de quem chama. O login e
  * a renovação usam; o cadastro também, para quem se cadastra já entrar no
  * painel — se a transação do cadastro falhar, a sessão some junto.
+ *
+ * A sessão leva o estabelecimento: quem entra informa só e-mail e senha, e é
+ * daqui que o painel descobre o endereço (`/{slug}/admin/...`).
  */
 export async function emitirSessao(
   tx: TenantTransaction,
   context: TenantContext,
   usuario: { id: string; name: string; email: string },
 ): Promise<Session> {
+  const establishment = await carregarEstabelecimento(tx, context)
   const { token, tokenHash } = generateRefreshToken(context.tenantId)
 
   await tx.insert(refreshTokens).values({
@@ -80,42 +110,40 @@ export async function emitirSessao(
       email: usuario.email,
       permissions: await loadPermissions(tx, usuario.id),
     },
+    establishment,
   }
 }
 
 export interface LoginInput {
-  tenantSlug: string
   email: string
   password: string
 }
 
 /**
- * Autentica um usuário administrativo.
+ * Autentica um usuário administrativo — o dono ou um funcionário — só com
+ * e-mail e senha.
  *
- * O `tenantSlug` vem da rota, não digitado: o e-mail é único por
- * estabelecimento, então a mesma pessoa pode administrar dois com o mesmo
- * endereço, e sem o slug o login seria ambíguo.
+ * O estabelecimento não é informado: o e-mail é único na plataforma, e é ele
+ * que diz de qual estabelecimento a pessoa é (`tenantDoEmail`). O tenant nunca
+ * vem da requisição.
  *
- * A ordem das verificações é deliberada. Tenant inexistente e senha errada
+ * A ordem das verificações é deliberada. E-mail inexistente e senha errada
  * respondem a mesma coisa, para que o endpoint não sirva de oráculo de quais
- * estabelecimentos e e-mails existem. Só **depois** de a senha conferir é que
- * uma conta desativada recebe uma mensagem específica — aí já não há o que
- * revelar a quem não sabia a senha, e o funcionário desligado merece saber por
- * que não entra em vez de achar que digitou errado.
+ * e-mails existem. Só **depois** de a senha conferir é que uma conta
+ * desativada ou um estabelecimento suspenso recebem uma mensagem específica —
+ * aí já não há o que revelar a quem não sabia a senha, e a pessoa merece saber
+ * por que não entra em vez de achar que digitou errado.
  */
 export async function login(input: LoginInput): Promise<Session> {
-  const tenant = await findTenantBySlug(input.tenantSlug)
+  const email = input.email.toLowerCase()
+  const tenantId = await tenantDoEmail(email)
 
-  if (!tenant) {
+  if (!tenantId) {
     await wastePasswordTime()
     throw new UnauthorizedError()
   }
 
-  if (tenant.status === 'SUSPENDED') {
-    throw new ForbiddenError('Este estabelecimento está suspenso. Fale com o suporte.')
-  }
-
-  const context = tenantContextFromPublicSlug(tenant.id)
+  const context = tenantContextFromLoginEmail(tenantId)
 
   return withTenant(context, async (tx) => {
     const [usuario] = await tx
@@ -127,7 +155,7 @@ export async function login(input: LoginInput): Promise<Session> {
         isActive: users.isActive,
       })
       .from(users)
-      .where(eq(users.email, input.email.toLowerCase()))
+      .where(eq(users.email, email))
       .limit(1)
 
     if (!usuario) {
@@ -141,6 +169,10 @@ export async function login(input: LoginInput): Promise<Session> {
 
     if (!usuario.isActive) {
       throw new ForbiddenError('Esta conta está desativada. Fale com o administrador.')
+    }
+
+    if ((await carregarEstabelecimento(tx, context)).status === 'SUSPENDED') {
+      throw new ForbiddenError('Este estabelecimento está suspenso. Fale com o suporte.')
     }
 
     await tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, usuario.id))

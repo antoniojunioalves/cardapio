@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1d2c9e-8a47-4b5e-9c3d-2e7f41a0b8d5",
     "name": "API — Cardápio Online",
-    "description": "Gerada por `pnpm postman` a partir das rotas da API — **não edite à mão**: a próxima geração\ndesfaz. Corpos de exemplo e scripts ficam em `apps/api/src/postman/exemplos.ts`.\n\n**Para começar:** `pnpm db:up` e `pnpm dev`, e rode **Autenticação → Autentica um usuário\nadministrativo**. O login usa `tenantSlug`, `email` e `password` das variáveis da coleção —\npor padrão, a Lanchonete do Zé do seed — e guarda o token em `accessToken`, que as rotas do\npainel já usam.\n\n**Ids:** as listagens guardam o primeiro id (`categoryId`, `productId`…) e as criações guardam\no id criado. As rotas seguintes já apontam para ele.\n\n**Pedido público:** rode antes o cardápio do estabelecimento, que escolhe um produto e calcula\no total. O estabelecimento precisa estar aberto — a `padaria-pao-quente` abre das 08:00 às 18:00.\n\n**Cadastro:** cadastrar troca `tenantSlug`, `email`, `password` e `accessToken` para o\nestabelecimento criado; confirmar o e-mail busca o link no Mailpit sozinho.\n\n**Tempo real** não cabe numa coleção: no Postman, New → WebSocket, conecte em\n`ws://localhost:3333/api/v1/admin/orders/stream` e envie\n`{\"type\": \"auth\", \"token\": \"<accessToken>\"}`.",
+    "description": "Gerada por `pnpm postman` a partir das rotas da API — **não edite à mão**: a próxima geração\ndesfaz. Corpos de exemplo e scripts ficam em `apps/api/src/postman/exemplos.ts`.\n\n**Para começar:** `pnpm db:up` e `pnpm dev`, e rode **Autenticação → Autentica um usuário\nadministrativo**. O login usa só `email` e `password` das variáveis da coleção — por padrão,\no dono da Lanchonete do Zé, do seed. Ele guarda o token em `accessToken`, que as rotas do\npainel já usam, e o endereço do estabelecimento em `tenantSlug`.\n\n**Ids:** as listagens guardam o primeiro id (`categoryId`, `productId`…) e as criações guardam\no id criado. As rotas seguintes já apontam para ele.\n\n**Pedido público:** rode antes o cardápio do estabelecimento, que escolhe um produto e calcula\no total. O estabelecimento precisa estar aberto — a `padaria-pao-quente` abre das 08:00 às 18:00.\n\n**Cadastro:** cadastrar troca `tenantSlug`, `email`, `password` e `accessToken` para o\nestabelecimento criado; confirmar o e-mail busca o link no Mailpit sozinho.\n\n**Tempo real** não cabe numa coleção: no Postman, New → WebSocket, conecte em\n`ws://localhost:3333/api/v1/admin/orders/stream` e envie\n`{\"type\": \"auth\", \"token\": \"<accessToken>\"}`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -29,7 +29,7 @@
     {
       "key": "tenantSlug",
       "value": "lanchonete-do-ze",
-      "description": "Estabelecimento das rotas públicas e do login. O cadastro troca para o criado."
+      "description": "Estabelecimento das rotas públicas. O login e o cadastro trocam para o da sessão."
     },
     {
       "key": "email",
@@ -187,7 +187,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "const sessao = pm.response.json();",
-                  "if (pm.response.code < 300 && sessao.accessToken) pm.collectionVariables.set('accessToken', sessao.accessToken);"
+                  "if (pm.response.code < 300 && sessao.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', sessao.accessToken);",
+                  "  pm.collectionVariables.set('tenantSlug', sessao.establishment.slug);",
+                  "}"
                 ]
               }
             }
@@ -205,7 +208,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -224,7 +227,7 @@
                 "login"
               ]
             },
-            "description": "Guarda o token em `accessToken`; o refresh token fica no cookie, que o Postman guarda sozinho."
+            "description": "O estabelecimento não é informado: o e-mail é único na plataforma, e a resposta traz o estabelecimento a que a pessoa pertence, em `establishment`.\n\nSó e-mail e senha: a resposta diz de qual estabelecimento a pessoa é. Guarda o token em `accessToken` e o endereço em `tenantSlug`; o refresh token fica no cookie, que o Postman guarda sozinho."
           }
         },
         {
@@ -236,7 +239,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "const sessao = pm.response.json();",
-                  "if (pm.response.code < 300 && sessao.accessToken) pm.collectionVariables.set('accessToken', sessao.accessToken);"
+                  "if (pm.response.code < 300 && sessao.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', sessao.accessToken);",
+                  "  pm.collectionVariables.set('tenantSlug', sessao.establishment.slug);",
+                  "}"
                 ]
               }
             }
@@ -414,7 +420,7 @@
                 "signup"
               ]
             },
-            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). O cardápio nasce `PENDING`: responde 404 até o dono confirmar o e-mail pelo link enviado. Endereço em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
+            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). O cardápio nasce `PENDING`: responde 404 até o dono confirmar o e-mail pelo link enviado. Endereço em uso responde 409 `SLUG_TAKEN`; e-mail que já tem conta, 409 `EMAIL_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
           }
         },
         {

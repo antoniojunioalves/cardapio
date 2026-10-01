@@ -165,7 +165,7 @@ beforeAll(async () => {
   const login = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
-    payload: { tenantSlug: lanchonete.slug, email: lanchonete.email, password: SENHA_PADRAO },
+    payload: { email: lanchonete.email, password: SENHA_PADRAO },
   })
   token = login.json<{ accessToken: string }>().accessToken
 })

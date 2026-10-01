@@ -36,18 +36,11 @@ export function publicSignupRoutes(instance: FastifyInstance): void {
           'Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, ' +
           'e já devolve a sessão (refresh token no cookie, como no login). O cardápio nasce ' +
           '`PENDING`: responde 404 até o dono confirmar o e-mail pelo link enviado. Endereço ' +
-          'em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.',
+          'em uso responde 409 `SLUG_TAKEN`; e-mail que já tem conta, 409 `EMAIL_TAKEN`. ' +
+          'Limite próprio por IP.',
         body: cadastroSchema,
         response: {
-          201: sessaoSchema.extend({
-            establishment: z.object({
-              id: z.uuid(),
-              slug: z.string(),
-              name: z.string(),
-              status: z.literal('PENDING'),
-            }),
-            confirmationEmailSent: z.boolean(),
-          }),
+          201: sessaoSchema.extend({ confirmationEmailSent: z.boolean() }),
         },
       },
     },
@@ -61,7 +54,6 @@ export function publicSignupRoutes(instance: FastifyInstance): void {
 
       return reply.status(201).send({
         ...responderSessao(reply, resultado.sessao),
-        establishment: resultado.estabelecimento,
         confirmationEmailSent: resultado.emailDeConfirmacaoEnviado,
       })
     },

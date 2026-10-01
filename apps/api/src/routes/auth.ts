@@ -21,11 +21,17 @@ export const sessaoSchema = z.object({
     email: z.string(),
     permissions: z.array(z.string()),
   }),
+  /** O estabelecimento da sessão: é do `slug` que o painel tira o endereço. */
+  establishment: z.object({
+    id: z.uuid(),
+    slug: z.string(),
+    name: z.string(),
+    status: z.enum(['ACTIVE', 'SUSPENDED', 'PENDING']),
+  }),
 })
 
+/** Só e-mail e senha: o estabelecimento é o do e-mail, e o servidor é quem o acha. */
 const loginSchema = z.object({
-  /** Vem da rota da área administrativa, não digitado pelo usuário. */
-  tenantSlug: z.string().min(1).max(63),
   email: z.email().max(254),
   password: z.string().min(1).max(256),
 })
@@ -62,7 +68,11 @@ function tokenDaRequisicao(request: FastifyRequest<{ Body: z.infer<typeof refres
 /** Grava o refresh token no cookie e devolve o resto da sessão. O cadastro usa o mesmo. */
 export function responderSessao(reply: FastifyReply, sessao: Session) {
   void reply.setCookie(COOKIE_DE_SESSAO, sessao.refreshToken, opcoesDoCookie)
-  return { accessToken: sessao.accessToken, user: sessao.user }
+  return {
+    accessToken: sessao.accessToken,
+    user: sessao.user,
+    establishment: sessao.establishment,
+  }
 }
 
 export function authRoutes(instance: FastifyInstance): void {
@@ -74,6 +84,9 @@ export function authRoutes(instance: FastifyInstance): void {
       schema: {
         tags: ['Autenticação'],
         summary: 'Autentica um usuário administrativo',
+        description:
+          'O estabelecimento não é informado: o e-mail é único na plataforma, e a resposta ' +
+          'traz o estabelecimento a que a pessoa pertence, em `establishment`.',
         body: loginSchema,
         response: { 200: sessaoSchema },
       },

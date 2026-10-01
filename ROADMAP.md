@@ -230,6 +230,10 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Isolamento físico opcional para tenants de plano CUSTOM — banco dedicado, trocando apenas a
   obtenção de conexão dentro de `withTenant`
 - Multi-unidade e franquias
+- Uma pessoa em mais de um estabelecimento com a mesma conta. Hoje o e-mail é único na plataforma e
+  pertence a um estabelecimento só (é o que permite entrar só com e-mail e senha — Fase 18b); quem
+  tem dois usa um e-mail em cada. Para uma conta só, o usuário deixa de pertencer a um tenant: vira
+  conta da plataforma, com vínculos a estabelecimentos e uma tela para escolher em qual entrar.
 - Internacionalização _(o MVP é pt-BR, sem biblioteca de i18n)_
 
 ## Infraestrutura

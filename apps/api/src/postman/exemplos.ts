@@ -54,7 +54,7 @@ export const VARIAVEIS: VariavelDaColecao[] = [
   {
     chave: 'tenantSlug',
     valor: 'lanchonete-do-ze',
-    descricao: 'Estabelecimento das rotas públicas e do login. O cadastro troca para o criado.',
+    descricao: 'Estabelecimento das rotas públicas. O login e o cadastro trocam para o da sessão.',
   },
   { chave: 'email', valor: 'ze@exemplo.com', descricao: 'Login do painel (seed).' },
   { chave: 'password', valor: 'cardapio123', descricao: 'Senha do painel (seed).' },
@@ -112,9 +112,17 @@ export const VALORES_PARA_VALIDAR: Record<string, string> = {
 
 // --- Trechos de script ---------------------------------------------------------
 
-const guardarToken = [
+/**
+ * Guarda o token e o estabelecimento da sessão: o login não informa o
+ * estabelecimento, então é da resposta que as rotas públicas ficam sabendo de
+ * qual cardápio se trata.
+ */
+const guardarSessao = [
   'const sessao = pm.response.json();',
-  "if (pm.response.code < 300 && sessao.accessToken) pm.collectionVariables.set('accessToken', sessao.accessToken);",
+  'if (pm.response.code < 300 && sessao.accessToken) {',
+  "  pm.collectionVariables.set('accessToken', sessao.accessToken);",
+  "  pm.collectionVariables.set('tenantSlug', sessao.establishment.slug);",
+  '}',
 ]
 
 const guardarIdCriado = (variavel: string) => [
@@ -143,12 +151,15 @@ const ENDERECO_DE_ENTREGA = JSON.stringify({
 export const EXEMPLOS: Record<string, ExemploDeRota> = {
   // Autenticação
   'POST /api/v1/auth/login': {
-    corpo: { tenantSlug: '{{tenantSlug}}', email: '{{email}}', password: '{{password}}' },
-    depois: guardarToken,
-    nota: 'Guarda o token em `accessToken`; o refresh token fica no cookie, que o Postman guarda sozinho.',
+    corpo: { email: '{{email}}', password: '{{password}}' },
+    depois: guardarSessao,
+    nota:
+      'Só e-mail e senha: a resposta diz de qual estabelecimento a pessoa é. Guarda o token em ' +
+      '`accessToken` e o endereço em `tenantSlug`; o refresh token fica no cookie, que o Postman ' +
+      'guarda sozinho.',
   },
   'POST /api/v1/auth/refresh': {
-    depois: guardarToken,
+    depois: guardarSessao,
     nota: 'Sem corpo: o refresh token vai no cookie guardado pelo login.',
   },
   'POST /api/v1/auth/logout': {

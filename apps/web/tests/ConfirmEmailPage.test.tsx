@@ -42,9 +42,10 @@ describe('confirmação do e-mail pelo link', () => {
     })
 
     expect(await screen.findByRole('heading', { name: 'E-mail confirmado!' })).toBeVisible()
+    // O painel passa pelo login, que é um só: quem já entrou vai direto.
     expect(screen.getByRole('link', { name: 'Ir para o painel' })).toHaveAttribute(
       'href',
-      '/lanchonete-da-maria/admin',
+      '/entrar',
     )
     expect(screen.getByRole('link', { name: 'Ver o cardápio' })).toHaveAttribute(
       'href',

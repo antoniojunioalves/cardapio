@@ -17,10 +17,10 @@ sistema no ar (ver
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
 de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a sábado) ou a
-`padaria-pao-quente` (das 08:00 às 18:00, todos os dias). Os pedidos chegam ao vivo no painel, em
-`/{estabelecimento}/admin` — por exemplo,
-[localhost:5173/lanchonete-do-ze/admin](http://localhost:5173/lanchonete-do-ze/admin) — que
-também avisa quando o plano se aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+`padaria-pao-quente` (das 08:00 às 18:00, todos os dias). Os pedidos chegam ao vivo no painel:
+entre em [localhost:5173/entrar](http://localhost:5173/entrar) só com e-mail e senha — o sistema
+acha o estabelecimento pelo e-mail e leva ao painel dele, que também avisa quando o plano se
+aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

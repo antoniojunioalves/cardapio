@@ -16,9 +16,10 @@ coleção e pergunta se substitui — escolha **Replace**. As variáveis voltam 
 ## Usar
 
 1. Suba o ambiente: `pnpm db:up` e `pnpm dev`.
-2. Rode **Autenticação → Autentica um usuário administrativo**. Ele usa `tenantSlug`, `email` e
-   `password` das variáveis — por padrão, a Lanchonete do Zé do seed — e guarda o token em
-   `accessToken`. Todas as rotas do painel já o usam.
+2. Rode **Autenticação → Autentica um usuário administrativo**. Ele usa só `email` e `password`
+   das variáveis — por padrão, o dono da Lanchonete do Zé, do seed — e guarda o token em
+   `accessToken`, que todas as rotas do painel já usam, e o endereço do estabelecimento em
+   `tenantSlug`.
 3. As listagens guardam o primeiro id (`categoryId`, `productId`, `orderId`…) e as criações guardam
    o id criado. As rotas seguintes já apontam para ele.
 

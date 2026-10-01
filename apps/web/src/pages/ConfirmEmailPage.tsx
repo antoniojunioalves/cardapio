@@ -122,7 +122,7 @@ export function ConfirmEmailPage() {
           . Agora é montar o cardápio e mandar o link para os clientes.
         </p>
         <div className="flex flex-col gap-stack sm:flex-row">
-          <Link to={`/${slug}/admin`} className={botao}>
+          <Link to="/entrar" className={botao}>
             Ir para o painel
           </Link>
           <Link to={`/${slug}`} className={botaoSecundario}>

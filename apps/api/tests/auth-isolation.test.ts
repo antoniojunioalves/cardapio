@@ -1,13 +1,14 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../src/app.js'
 import { recordAudit } from '../src/audit/record.js'
+import { tenantDoEmail } from '../src/auth/login-lookup.js'
 import { closeDatabase, db } from '../src/db/index.js'
 import { auditLogs, refreshTokens, userRoles, users } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
-import { withTenant } from '../src/tenant/with-tenant.js'
+import { withTenant, type TenantTransaction } from '../src/tenant/with-tenant.js'
 import { hashPassword } from '../src/auth/password.js'
 import {
   criarTenantComUsuario,
@@ -100,6 +101,111 @@ describe('usuários', () => {
   })
 })
 
+/**
+ * O login pede só e-mail e senha: o estabelecimento é achado pelo e-mail, antes
+ * de existir contexto de tenant. Quem permite isso é a policy `login_por_email`
+ * — e estes testes provam o tamanho exato da abertura: ler a linha do e-mail
+ * que está entrando, e mais nada.
+ */
+describe('login por e-mail', () => {
+  /** Uma transação com o e-mail em login definido, como `tenantDoEmail` faz. */
+  function comEmailEmLogin<T>(email: string, work: (tx: TenantTransaction) => Promise<T>) {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.login_email', ${email}, true)`)
+      return work(tx)
+    })
+  }
+
+  it('acha o estabelecimento de cada e-mail', async () => {
+    expect(await tenantDoEmail(tenantA.email)).toBe(tenantA.tenantId)
+    expect(await tenantDoEmail(tenantB.email)).toBe(tenantB.tenantId)
+    expect(await tenantDoEmail('ninguem@exemplo.com')).toBeNull()
+  })
+
+  it('só a linha do e-mail que está entrando aparece', async () => {
+    const visiveis = await comEmailEmLogin(tenantA.email, (tx) =>
+      tx.select({ id: users.id }).from(users),
+    )
+
+    expect(visiveis).toEqual([{ id: tenantA.userId }])
+  })
+
+  it('um e-mail que não existe não mostra linha nenhuma', async () => {
+    const visiveis = await comEmailEmLogin('ninguem@exemplo.com', (tx) =>
+      tx.select({ id: users.id }).from(users),
+    )
+
+    expect(visiveis).toEqual([])
+  })
+
+  it('a leitura não deixa trocar a senha nem desativar a conta', async () => {
+    const alterados = await comEmailEmLogin(tenantA.email, (tx) =>
+      tx
+        .update(users)
+        .set({ passwordHash: 'hash-plantado-pelo-invasor', isActive: false })
+        .where(eq(users.email, tenantA.email))
+        .returning({ id: users.id }),
+    )
+
+    expect(alterados).toEqual([])
+
+    const [intacto] = await withTenant(contextoDe(tenantA), (tx) =>
+      tx.select({ hash: users.passwordHash, isActive: users.isActive }).from(users),
+    )
+    expect(intacto?.hash).not.toBe('hash-plantado-pelo-invasor')
+    expect(intacto?.isActive).toBe(true)
+  })
+
+  it('a leitura não deixa apagar a conta', async () => {
+    const apagados = await comEmailEmLogin(tenantA.email, (tx) =>
+      tx.delete(users).where(eq(users.email, tenantA.email)).returning({ id: users.id }),
+    )
+
+    expect(apagados).toEqual([])
+  })
+
+  it('não abre nenhuma outra tabela', async () => {
+    const papeis = await comEmailEmLogin(tenantA.email, (tx) =>
+      tx.select({ userId: userRoles.userId }).from(userRoles),
+    )
+
+    expect(papeis).toEqual([])
+  })
+
+  it('o e-mail em login não sobrevive ao fim da transação', async () => {
+    await tenantDoEmail(tenantA.email)
+
+    // A conexão volta ao pool sem o e-mail: o `set_config` é local à transação.
+    expect(await db.select().from(users)).toEqual([])
+  })
+
+  it('o banco recusa o mesmo e-mail em dois estabelecimentos', async () => {
+    await expect(
+      withTenant(contextoDe(tenantB), async (tx) =>
+        tx.insert(users).values({
+          tenantId: tenantB.tenantId,
+          name: 'Mesmo e-mail',
+          email: tenantA.email,
+          passwordHash: await hashPassword('qualquer-senha-123'),
+        }),
+      ),
+    ).rejects.toMatchObject({ cause: { constraint: 'users_email' } })
+  })
+
+  it('o banco recusa e-mail com maiúsculas, que viraria uma segunda conta', async () => {
+    await expect(
+      withTenant(contextoDe(tenantB), async (tx) =>
+        tx.insert(users).values({
+          tenantId: tenantB.tenantId,
+          name: 'Maiúsculas',
+          email: tenantA.email.toUpperCase(),
+          passwordHash: await hashPassword('qualquer-senha-123'),
+        }),
+      ),
+    ).rejects.toMatchObject({ cause: { constraint: 'users_email_minusculo' } })
+  })
+})
+
 describe('papéis atribuídos', () => {
   it('não vazam entre estabelecimentos', async () => {
     const deA = await withTenant(contextoDe(tenantA), (tx) =>
@@ -127,7 +233,7 @@ describe('sessões', () => {
     await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { tenantSlug: tenantB.slug, email: tenantB.email, password: SENHA_PADRAO },
+      payload: { email: tenantB.email, password: SENHA_PADRAO },
     })
 
     const vistosPorA = await withTenant(contextoDe(tenantA), (tx) =>
@@ -146,7 +252,7 @@ describe('sessões', () => {
       await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
-        payload: { tenantSlug: tenantA.slug, email: tenantA.email, password: SENHA_PADRAO },
+        payload: { email: tenantA.email, password: SENHA_PADRAO },
       })
     ).json<{ accessToken: string; user: { tenantId: string } }>()
 

@@ -422,6 +422,31 @@ o registro de tenants; usá-lo com dado de estabelecimento devolve zero linhas, 
 encontra contexto. O sintoma é "sumiu tudo", não um vazamento — falha fechada, mas confusa se
 você não souber a causa.
 
+A única leitura de dado de estabelecimento fora de `withTenant` é a do login:
+`tenantDoEmail(email)` (`src/auth/login-lookup.ts`) acha o estabelecimento de um e-mail, e só o
+`tenant_id` dele. Precisa achar um usuário pelo e-mail sem saber o tenant — o "esqueci minha
+senha" da Fase 25, por exemplo? Use essa função e siga com `withTenant`; não crie outra consulta
+fora de contexto nem outra policy. O teste `rls-guard` recusa policy nova que não filtre pelo
+tenant.
+
+### Entrando no painel
+
+O login é um só, em [localhost:5173/entrar](http://localhost:5173/entrar), com e-mail e senha —
+sem informar o estabelecimento. Os donos do seed estão no README (`ze@exemplo.com` e os outros,
+senha `cardapio123`).
+
+O e-mail é único na plataforma. Se `pnpm db:migrate` falhar em `users_email` num banco antigo de
+desenvolvimento, há o mesmo e-mail em dois estabelecimentos — de antes da Fase 18b, quando isso
+era permitido. Para ver quais:
+
+```sql
+select u.email, t.slug from users u join tenants t on t.id = u.tenant_id
+where u.email in (select email from users group by 1 having count(*) > 1);
+```
+
+Apague o estabelecimento que sobra (`delete from tenants where slug = '…'`, que leva o usuário em
+cascata) ou recrie o banco com `pnpm db:reset`, `pnpm db:migrate` e `pnpm db:seed`.
+
 ### Testando uma página
 
 Monte `AppRoutes` dentro de `MemoryRouter` e de um `QueryClient` novo por teste, e simule a API

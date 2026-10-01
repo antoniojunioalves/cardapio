@@ -64,7 +64,7 @@ export function AdminOrdersPage() {
   }, [novos])
 
   // Sessão que não renova mais (refresh revogado ou vencido) volta ao login.
-  if (!logado) return <Navigate to={`/${tenantSlug}/admin`} replace />
+  if (!logado) return <Navigate to="/entrar" replace />
 
   const permissoes = sessao.usuario?.permissions ?? []
   const podeAtualizar = permissoes.includes('orders:update')
