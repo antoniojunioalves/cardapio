@@ -361,6 +361,14 @@ token. Quitada na Fase 15 a dívida de quando ele ficava no `localStorage`.
 O login é um só, em `/entrar`. O endereço do estabelecimento nunca é digitado nem enviado: vem da
 resposta da API, e é ele que o painel guarda.
 
+**A sessão é conferida num lugar só** (Fase 18c): a moldura do painel, por onde toda tela de
+`/{endereço}/admin` passa. Sem sessão daquele estabelecimento, nenhuma tela é montada e nada é
+pedido à API. O menu esconde o que a permissão da pessoa não alcança, mas isso é conforto, não
+barreira: quem recusa é a API, rota a rota (`requireAuth`), como o teste-guarda de rotas exige.
+
+**O resumo dos pedidos** (`GET /api/v1/admin/orders/summary`) pede `orders:read` e devolve só três
+números, do próprio estabelecimento — há teste com dois estabelecimentos.
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.

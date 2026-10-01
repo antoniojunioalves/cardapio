@@ -3,10 +3,9 @@ import { Link, Navigate, useNavigate } from 'react-router'
 
 import { SiteLayout } from '@/components/SiteLayout'
 import { TextField } from '@/components/TextField'
+import { caminhoDoPainel } from '@/features/admin/menu'
 import { entrar, useSessaoStore } from '@/features/admin/session'
 import { ApiError } from '@/services/api'
-
-const painelDe = (slug: string) => `/${slug}/admin/pedidos`
 
 function mensagemDaFalha(erro: unknown): string {
   if (!(erro instanceof ApiError)) return 'Não foi possível entrar agora. Tente de novo.'
@@ -38,7 +37,7 @@ export function EnterPage() {
 
   // Quem já entrou neste aparelho vai direto: a pessoa não precisa saber o
   // endereço do painel, e nem digitar a senha a cada visita.
-  if (slugDaSessao) return <Navigate to={painelDe(slugDaSessao)} replace />
+  if (slugDaSessao) return <Navigate to={caminhoDoPainel(slugDaSessao)} replace />
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault()
@@ -46,7 +45,7 @@ export function EnterPage() {
     setEnviando(true)
     try {
       const slug = await entrar(email.trim(), senha)
-      void navigate(painelDe(slug), { replace: true })
+      void navigate(caminhoDoPainel(slug), { replace: true })
     } catch (e) {
       setErro(mensagemDaFalha(e))
     } finally {

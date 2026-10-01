@@ -1,9 +1,11 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { itensDoMenu } from '../src/features/admin/menu'
 import { acoesDoPedido } from '../src/features/admin/orders'
 import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
 import { comSessao, useSessaoStore } from '../src/features/admin/session'
+import type { ResumoDosPedidos } from '../src/features/admin/summary'
 import type { PedidoDoPainel } from '../src/features/admin/types'
 import { cardapioDoZe } from './helpers/cardapio'
 import { abrir, abrirComLocal, localAtual, mockarRotas, type Resposta } from './helpers/pagina'
@@ -119,23 +121,45 @@ const SESSAO = {
   establishment: { id: 't', slug: 'lanchonete-do-ze', name: 'Lanchonete do Zé', status: 'ACTIVE' },
 }
 
+/** O resumo que a API devolveria para estes pedidos. */
+function resumoDe(pedidos: PedidoDoPainel[]): ResumoDosPedidos {
+  const contar = (...status: PedidoDoPainel['status'][]) =>
+    pedidos.filter((p) => status.includes(p.status)).length
+  return {
+    new: contar('RECEIVED'),
+    inProgress: contar('ACCEPTED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'),
+    completedToday: contar('COMPLETED'),
+  }
+}
+
 interface Api {
   pedidos: PedidoDoPainel[]
   plano?: UsoDoPlano
   login?: { status: number; corpo: unknown }
   /** Respostas da lista, na ordem; a última se repete. */
   listas?: { status: number; corpo: unknown }[]
+  /** Respostas do resumo, na ordem; a última se repete. Sem elas, o resumo sai de `pedidos`. */
+  resumos?: { status: number; corpo: unknown }[]
 }
+
+/** A lista de pedidos, e não o resumo, que mora debaixo do mesmo endereço. */
+const LISTA = '/admin/orders?'
+const RESUMO = '/admin/orders/summary'
 
 function mockarApi(api: Api) {
   let chamadasDaLista = 0
+  let chamadasDoResumo = 0
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     const metodo = init?.method ?? 'GET'
     let resposta: { status: number; corpo: unknown } = { status: 200, corpo: cardapioDoZe() }
     if (url.endsWith('/auth/login')) resposta = api.login ?? { status: 200, corpo: SESSAO }
     else if (url.endsWith('/auth/refresh')) resposta = { status: 200, corpo: SESSAO }
     else if (url.endsWith('/admin/plan')) resposta = { status: 200, corpo: api.plano ?? LIVRE }
-    else if (url.includes('/admin/orders') && metodo === 'GET') {
+    else if (url.endsWith(RESUMO)) {
+      const resumos = api.resumos ?? [{ status: 200, corpo: resumoDe(api.pedidos) }]
+      resposta = resumos[Math.min(chamadasDoResumo, resumos.length - 1)] ?? resposta
+      chamadasDoResumo += 1
+    } else if (url.includes(LISTA) && metodo === 'GET') {
       const listas = api.listas ?? [{ status: 200, corpo: api.pedidos }]
       resposta = listas[Math.min(chamadasDaLista, listas.length - 1)] ?? resposta
       chamadasDaLista += 1
@@ -169,9 +193,21 @@ async function abrirPainel(api: Api) {
   return fetch
 }
 
+/** O Início do painel, em `/lanchonete-do-ze/admin`, com o marcador do endereço. */
+async function abrirInicio(api: Api, sessao = SESSAO) {
+  useSessaoStore.getState().guardar(sessao)
+  const fetch = mockarApi(api)
+  abrirComLocal('/lanchonete-do-ze/admin')
+  await screen.findByRole('heading', { level: 1, name: 'Olá, Zé' })
+  return fetch
+}
+
+/** Quem atende sem ver pedidos: nenhuma permissão do painel. */
+const SEM_PEDIDOS = { ...SESSAO, user: { ...SESSAO.user, permissions: [] as string[] } }
+
 beforeEach(() => {
   localStorage.clear()
-  useSessaoStore.setState({ slug: null, usuario: null, accessToken: null })
+  useSessaoStore.setState({ slug: null, estabelecimento: null, usuario: null, accessToken: null })
   WebSocketFalso.instancias = []
   vi.stubGlobal('WebSocket', WebSocketFalso)
 })
@@ -205,8 +241,8 @@ describe('login do painel', () => {
 
     preencher(' ze@exemplo.com ', 'cardapio123')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
-    expect(localAtual()).toBe('/lanchonete-do-ze/admin/pedidos')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Olá, Zé' })).toBeInTheDocument()
+    expect(localAtual()).toBe('/lanchonete-do-ze/admin')
 
     // Nenhum endereço de estabelecimento vai na requisição: quem diz é a API.
     const [login] = chamadas(fetch, '/auth/login', 'POST')
@@ -252,17 +288,22 @@ describe('login do painel', () => {
     mockarApi({ pedidos: [] })
     abrirComLocal('/entrar')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
-    expect(localAtual()).toBe('/lanchonete-do-ze/admin/pedidos')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Olá, Zé' })).toBeInTheDocument()
+    expect(localAtual()).toBe('/lanchonete-do-ze/admin')
   })
 
-  it('sem sessão, o painel manda para o login', async () => {
-    mockarApi({ pedidos: [] })
-    abrirComLocal('/lanchonete-do-ze/admin/pedidos')
+  it.each(['/lanchonete-do-ze/admin', '/lanchonete-do-ze/admin/pedidos'])(
+    'sem sessão, %s manda para o login, sem pedir nada à API',
+    async (caminho) => {
+      const fetch = mockarApi({ pedidos: [] })
+      abrirComLocal(caminho)
 
-    expect(await screen.findByRole('heading', { name: 'Entrar no painel' })).toBeVisible()
-    expect(localAtual()).toBe('/entrar')
-  })
+      expect(await screen.findByRole('heading', { name: 'Entrar no painel' })).toBeVisible()
+      expect(localAtual()).toBe('/entrar')
+      expect(fetch).not.toHaveBeenCalled()
+      expect(WebSocketFalso.instancias).toHaveLength(0)
+    },
+  )
 
   it('sessão de outro estabelecimento não abre este painel: a pessoa cai no dela', async () => {
     useSessaoStore.getState().guardar({
@@ -272,8 +313,202 @@ describe('login do painel', () => {
     mockarApi({ pedidos: [] })
     abrirComLocal('/lanchonete-do-ze/admin/pedidos')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
-    expect(localAtual()).toBe('/pizzaria-da-esquina/admin/pedidos')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Olá, Zé' })).toBeInTheDocument()
+    expect(localAtual()).toBe('/pizzaria-da-esquina/admin')
+  })
+})
+
+describe('menu do painel', () => {
+  it('cada pessoa recebe só os itens que a permissão dela alcança', () => {
+    expect(itensDoMenu(['orders:read']).map((item) => item.rotulo)).toEqual(['Início', 'Pedidos'])
+    expect(itensDoMenu([]).map((item) => item.rotulo)).toEqual(['Início'])
+  })
+
+  it('mostra o estabelecimento, os itens, o cardápio e quem está logado', async () => {
+    await abrirInicio({ pedidos: [] })
+    const menu = within(screen.getByRole('navigation', { name: 'Painel' }))
+
+    expect(menu.getByRole('link', { name: 'Início' })).toHaveAttribute(
+      'href',
+      '/lanchonete-do-ze/admin',
+    )
+    expect(menu.getByRole('link', { name: 'Pedidos' })).toHaveAttribute(
+      'href',
+      '/lanchonete-do-ze/admin/pedidos',
+    )
+    expect(menu.getByRole('link', { name: 'Início' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Pedidos' })).not.toHaveAttribute('aria-current')
+
+    const cardapio = screen.getByRole('link', { name: 'Ver cardápio' })
+    expect(cardapio).toHaveAttribute('href', '/lanchonete-do-ze')
+    expect(cardapio).toHaveAttribute('target', '_blank')
+    expect(screen.getAllByText('Lanchonete do Zé').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeVisible()
+  })
+
+  it('o número de pedidos novos aparece ao lado de "Pedidos" e no botão do menu', async () => {
+    await abrirInicio({ pedidos: [pedido(), pedido({ id: 'p2', number: 2 })] })
+
+    expect(await screen.findByRole('link', { name: 'Pedidos, 2 novos' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Menu, 2 pedidos novos' })).toBeVisible()
+  })
+
+  it('"Pedidos" leva à tela de pedidos sem abrir outra conexão ao vivo', async () => {
+    await abrirInicio({ pedidos: [pedido()] })
+    await ultimoSocket()
+
+    fireEvent.click(screen.getByRole('link', { name: /^Pedidos/ }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeVisible()
+    expect(localAtual()).toBe('/lanchonete-do-ze/admin/pedidos')
+    expect(screen.getByRole('link', { name: /^Pedidos/ })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Início' })).not.toHaveAttribute('aria-current')
+    // A conexão é da moldura: trocar de tela não a derruba nem abre outra.
+    expect(WebSocketFalso.instancias).toHaveLength(1)
+    expect(WebSocketFalso.instancias[0]?.fechadoPeloPainel).toBe(false)
+  })
+
+  it('em tela pequena, "Menu" abre a gaveta; Esc, o fundo e a escolha de um item fecham', async () => {
+    await abrirInicio({ pedidos: [] })
+    const botao = screen.getByRole('button', { name: 'Menu' })
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(botao).toHaveAttribute('aria-controls', 'menu-do-painel')
+
+    fireEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(botao).toHaveFocus()
+
+    fireEvent.click(botao)
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar o menu' }))
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(botao)
+    fireEvent.click(screen.getByRole('link', { name: 'Pedidos' }))
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('quem não vê pedidos não tem o item, o resumo nem o número', async () => {
+    const fetch = await abrirInicio({ pedidos: [pedido()] }, SEM_PEDIDOS)
+
+    expect(screen.getByRole('link', { name: 'Início' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: /Pedidos/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Concluídos hoje')).not.toBeInTheDocument()
+    expect(chamadas(fetch, RESUMO)).toHaveLength(0)
+  })
+
+  it('endereço desconhecido debaixo do painel não é tela do painel', async () => {
+    logar()
+    mockarApi({ pedidos: [] })
+    abrir('/lanchonete-do-ze/admin/nao-existe')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Não encontrado' })).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: 'Painel' })).not.toBeInTheDocument()
+  })
+})
+
+describe('início do painel', () => {
+  const numero = (rotulo: string) => screen.getByText(rotulo).nextElementSibling
+
+  it('mostra os pedidos novos, em andamento e concluídos hoje, com o atalho para os pedidos', async () => {
+    await abrirInicio({
+      pedidos: [],
+      resumos: [{ status: 200, corpo: { new: 2, inProgress: 3, completedToday: 14 } }],
+    })
+
+    await waitFor(() => {
+      expect(numero('Novos')).toHaveTextContent('2')
+    })
+    expect(numero('Em andamento')).toHaveTextContent('3')
+    expect(numero('Concluídos hoje')).toHaveTextContent('14')
+    expect(screen.getByRole('link', { name: 'Ver pedidos' })).toHaveAttribute(
+      'href',
+      '/lanchonete-do-ze/admin/pedidos',
+    )
+    expect(document.title).toBe('(2) Início')
+  })
+
+  it('mostra o uso do plano no mês', async () => {
+    await abrirInicio({ pedidos: [], plano: plano({ used: 37 }) })
+
+    expect(
+      await screen.findByText('Pedidos neste mês: 37 de 100, no plano Gratuito.'),
+    ).toBeVisible()
+  })
+
+  it('pedido novo chegando atualiza o número do menu, o resumo e o título da aba', async () => {
+    const fetch = await abrirInicio({
+      pedidos: [],
+      resumos: [
+        { status: 200, corpo: { new: 0, inProgress: 0, completedToday: 0 } },
+        { status: 200, corpo: { new: 0, inProgress: 0, completedToday: 0 } },
+        { status: 200, corpo: { new: 1, inProgress: 0, completedToday: 0 } },
+      ],
+    })
+    const socket = await ultimoSocket()
+    socket.abrir()
+    socket.receber({ type: 'ready' })
+    await waitFor(() => {
+      expect(chamadas(fetch, RESUMO).length).toBeGreaterThanOrEqual(2)
+    })
+    expect(document.title).toBe('Início')
+
+    socket.receber({ type: 'order.created', orderId: 'x', number: 7 })
+
+    expect(await screen.findByRole('link', { name: 'Pedidos, 1 novo' })).toBeVisible()
+    expect(numero('Novos')).toHaveTextContent('1')
+    expect(document.title).toBe('(1) Início')
+  })
+
+  it('com o som ligado, o pedido novo toca fora da tela de pedidos', async () => {
+    const tocados: number[] = []
+    class AudioContextFalso {
+      currentTime = 0
+      destination = {}
+      createOscillator() {
+        return {
+          frequency: { value: 0 },
+          connect: (destino: unknown) => destino,
+          start: (quando: number) => tocados.push(quando),
+          stop: () => undefined,
+        }
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: () => undefined, exponentialRampToValueAtTime: () => undefined },
+          connect: (destino: unknown) => destino,
+        }
+      }
+    }
+    vi.stubGlobal('AudioContext', AudioContextFalso)
+
+    await abrirInicio({ pedidos: [] })
+    const socket = await ultimoSocket()
+    socket.abrir()
+    socket.receber({ type: 'ready' })
+
+    // Sem o som ligado, nada toca.
+    socket.receber({ type: 'order.created', orderId: 'x', number: 7 })
+    expect(tocados).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ligar som' }))
+    expect(screen.getByRole('button', { name: 'Som ligado' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    const aoLigar = tocados.length
+    expect(aoLigar).toBeGreaterThan(0)
+
+    socket.receber({ type: 'order.created', orderId: 'y', number: 8 })
+    expect(tocados.length).toBeGreaterThan(aoLigar)
+  })
+
+  it('resumo fora do ar avisa, sem derrubar o resto do Início', async () => {
+    await abrirInicio({ pedidos: [], resumos: [{ status: 500, corpo: {} }] })
+
+    expect(await screen.findByText(/Não foi possível carregar o resumo/)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Ver pedidos' })).toBeVisible()
   })
 })
 
@@ -309,7 +544,9 @@ describe('lista de pedidos', () => {
   it('o título da aba conta os pedidos que esperam ser aceitos', async () => {
     await abrirPainel({ pedidos: [pedido(), pedido({ id: 'p3', number: 3 })] })
     await screen.findByRole('article', { name: 'Pedido #1' })
-    expect(document.title).toBe('(2) Pedidos novos')
+    await waitFor(() => {
+      expect(document.title).toBe('(2) Pedidos')
+    })
   })
 
   it('os botões seguem o caminho do status: retirada não tem "saiu para entrega"', () => {
@@ -387,7 +624,7 @@ describe('pedidos ao vivo', () => {
 
     socket.receber({ type: 'order.created', orderId: 'x', number: 7 })
     expect(await screen.findByRole('article', { name: 'Pedido #7' })).toBeVisible()
-    expect(chamadas(fetch, '/admin/orders').length).toBeGreaterThanOrEqual(3)
+    expect(chamadas(fetch, LISTA).length).toBeGreaterThanOrEqual(3)
   })
 
   it('sessão expirada (4001) renova o token e reconecta', async () => {
@@ -543,7 +780,7 @@ describe('aviso de confirmação do cadastro', () => {
     },
   }
 
-  /** O painel do dono, com a confirmação respondendo na ordem; a última se repete. */
+  /** O Início do painel do dono, com a confirmação respondendo na ordem; a última se repete. */
   async function abrirComConfirmacao(
     situacoes: Resposta[],
     reenvio: Resposta = { status: 202, corpo: { email: 'ze@exemplo.com' } },
@@ -558,12 +795,13 @@ describe('aviso de confirmação do cadastro', () => {
         return resposta ?? 'falha-de-rede'
       }
       if (url.endsWith('/admin/plan')) return { status: 200, corpo: LIVRE }
-      if (url.includes('/admin/orders')) return { status: 200, corpo: [] }
+      if (url.endsWith(RESUMO)) return { status: 200, corpo: resumoDe([]) }
+      if (url.includes(LISTA)) return { status: 200, corpo: [] }
       return { status: 200, corpo: cardapioDoZe() }
     })
     useSessaoStore.getState().guardar(sessao)
-    abrir('/lanchonete-do-ze/admin/pedidos')
-    await screen.findByRole('heading', { level: 1, name: 'Pedidos' })
+    abrir('/lanchonete-do-ze/admin')
+    await screen.findByRole('heading', { level: 1, name: 'Olá, Zé' })
     return fetch
   }
 

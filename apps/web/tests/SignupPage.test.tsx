@@ -62,6 +62,9 @@ function mockarApi(api: Api = {}) {
         },
       }
     }
+    if (url.endsWith('/admin/orders/summary')) {
+      return { status: 200, corpo: { new: 0, inProgress: 0, completedToday: 0 } }
+    }
     if (url.includes('/admin/orders')) return { status: 200, corpo: [] }
     return { status: 404, corpo: { error: { code: 'NOT_FOUND' } } }
   })
@@ -194,7 +197,8 @@ describe('cadastro', () => {
 
     enviar()
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Pedidos' })).toBeInTheDocument()
+    // O cadastro já abre o painel, no Início — é lá que ficam os avisos do estabelecimento.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Olá, Maria' })).toBeInTheDocument()
     expect(
       await screen.findByRole('heading', { name: 'Seu cardápio ainda não está no ar' }),
     ).toBeVisible()

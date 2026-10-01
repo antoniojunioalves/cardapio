@@ -13,11 +13,13 @@ import {
 import type { Order, OrderStatus } from '../db/schema/index.js'
 import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
 import { AppError, ConflictError, NotFoundError } from '../lib/errors.js'
+import { inicioDoDia } from '../lib/timezone.js'
 import { montarCardapioPublico } from '../public-menu/service.js'
 import { ensureSettings } from '../settings/repository.js'
 import type { StorageService } from '../storage/index.js'
 import type { TenantContext } from '../tenant/context.js'
 import { resolverEstabelecimentoPublico } from '../tenant/public.js'
+import { findTenantById } from '../tenant/repository.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
 import { avisarPedido } from '../realtime/notify.js'
 import { calcularPedido } from './pricing.js'
@@ -31,8 +33,10 @@ import {
   listarPedidos as listarPedidosDoBanco,
   mudarStatus as mudarStatusNoBanco,
   proximoNumero,
+  resumirPedidos,
   type FiltroDePedidos,
   type ItemComOpcoes,
+  type ResumoDosPedidos,
 } from './repository.js'
 import { MENSAGEM_DA_RECUSA, problemaDaTransicao } from './status.js'
 
@@ -332,6 +336,20 @@ export async function listarPedidos(
     )
     return pedidos.map((p) => ({ ...p, itens: itens.get(p.id) ?? [] }))
   })
+}
+
+/**
+ * O resumo que o painel mostra em toda tela: pedidos novos, em andamento e
+ * concluídos hoje. "Hoje" é o dia do estabelecimento, no fuso dele.
+ */
+export async function resumoDosPedidos(
+  context: TenantContext,
+  agora: Date,
+): Promise<ResumoDosPedidos> {
+  const tenant = await findTenantById(context.tenantId)
+  if (!tenant) throw new NotFoundError('Estabelecimento não encontrado.')
+
+  return withTenant(context, (tx) => resumirPedidos(tx, inicioDoDia(agora, tenant.timezone)))
 }
 
 export async function obterPedido(context: TenantContext, id: string): Promise<PedidoDoPainel> {

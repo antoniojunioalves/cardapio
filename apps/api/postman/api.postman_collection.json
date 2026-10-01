@@ -1752,6 +1752,27 @@
           }
         },
         {
+          "name": "Resumo dos pedidos: novos, em andamento e concluídos hoje",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/orders/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "orders",
+                "summary"
+              ]
+            },
+            "description": "Os números do início do painel e do menu. `new` são os pedidos esperando ser aceitos; `inProgress`, os aceitos e ainda não entregues; `completedToday`, os concluídos desde a meia-noite no fuso do estabelecimento."
+          }
+        },
+        {
           "name": "Um pedido, com itens, endereço e pagamento",
           "request": {
             "method": "GET",

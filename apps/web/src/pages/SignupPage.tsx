@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { SiteLayout } from '@/components/SiteLayout'
+import { caminhoDoPainel } from '@/features/admin/menu'
 import type { ChegadaDoCadastro } from '@/features/signup/api'
 import { SignupForm } from '@/features/signup/components/SignupForm'
 
@@ -37,7 +38,7 @@ export function SignupPage() {
             const chegada: ChegadaDoCadastro = {
               emailNaoEnviado: !cadastrado.confirmationEmailSent,
             }
-            void navigate(`/${cadastrado.establishment.slug}/admin/pedidos`, {
+            void navigate(caminhoDoPainel(cadastrado.establishment.slug), {
               replace: true,
               state: chegada,
             })

@@ -134,6 +134,9 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   estabelecimento ou um só da plataforma; o custo por conversa cobrado pela Meta; e os dados
   pessoais que passam pela conversa (LGPD).
 
+- Painel: menu recolhível só com ícones e busca no menu, como na referência que o Junio trouxe na
+  Fase 18c. Fazem sentido quando o menu tiver itens demais para caber; hoje são dois. O quadro de
+  pedidos em colunas não está aqui: é fase própria do MVP (PROJECT_PLAN.md, pendências).
 - Consulta do registro de auditoria no painel. O registro existe desde a Fase 4, e a permissão
   `audit:read` já está no RBAC; no MVP basta o registro (decisão do Junio).
 

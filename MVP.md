@@ -26,7 +26,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
       da Fase 25_
 - [ ] Troca da própria senha, redefinição pelo dono e "Esqueci minha senha" por e-mail —
       _Fase 25_
-- [ ] Painel com navegação e a lista do que falta para receber pedidos — _Fase 21_
+- [x] Painel com menu lateral e tela Início, com o resumo dos pedidos de hoje
+- [ ] Lista do que falta para receber pedidos, no Início — _Fase 21_
 - [ ] Configuração do estabelecimento: nome, logo, descrição, contato, WhatsApp — _Fase 21_
 - [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia — _Fase 22_
 - [ ] Taxa de entrega: valor fixo ou por região — _Fase 22_
@@ -142,7 +143,7 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 18b:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
+> **Situação ao fim da Fase 18c:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
 > — e os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o isolamento. Os passos 2 e 3
 > ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 19 a 28 fecham o MVP —
 > ver PROJECT_PLAN.md, "O que falta para o MVP".

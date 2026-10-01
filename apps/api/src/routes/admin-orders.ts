@@ -8,14 +8,15 @@ import {
   listarPedidos,
   mudarStatusDoPedido,
   obterPedido,
+  resumoDosPedidos,
   type PedidoDoPainel,
 } from '../orders/service.js'
 
 /**
  * Pedidos no painel do estabelecimento.
  *
- * Ainda sem tela: a lista em tempo real é da Fase 13. As rotas já existem
- * para o status ter o seu caminho — e a sua auditoria — desde o início.
+ * A lista, o resumo que o painel mostra em toda tela, o detalhe e a mudança de
+ * status — que tem o seu caminho e a sua auditoria.
  */
 
 const seguranca = [{ bearerAuth: [] }]
@@ -158,6 +159,37 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
           limite: request.query.limit,
         })
       ).map(apresentar),
+  )
+
+  typed.get(
+    '/orders/summary',
+    {
+      schema: {
+        tags: tag,
+        summary: 'Resumo dos pedidos: novos, em andamento e concluídos hoje',
+        description:
+          'Os números do início do painel e do menu. `new` são os pedidos esperando ser aceitos; ' +
+          '`inProgress`, os aceitos e ainda não entregues; `completedToday`, os concluídos desde ' +
+          'a meia-noite no fuso do estabelecimento.',
+        response: {
+          200: z.object({
+            new: z.number(),
+            inProgress: z.number(),
+            completedToday: z.number(),
+          }),
+        },
+        security: seguranca,
+      },
+      onRequest: requireAuth('orders:read'),
+    },
+    async (request) => {
+      const resumo = await resumoDosPedidos(tenantContextOf(request), new Date())
+      return {
+        new: resumo.novos,
+        inProgress: resumo.emAndamento,
+        completedToday: resumo.concluidosHoje,
+      }
+    },
   )
 
   typed.get(

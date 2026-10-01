@@ -11,8 +11,9 @@ import { ApiError, requisitar } from '@/services/api'
  *   o JavaScript da página não o vê, e um script injetado não tem como
  *   roubá-lo. As chamadas de autenticação mandam o cookie
  *   (`credentials: 'include'`); as demais, não.
- * - No `localStorage` fica só o que não é segredo: o slug e quem está logado,
- *   para o painel saber que há sessão a renovar depois de recarregar.
+ * - No `localStorage` fica só o que não é segredo: o slug, o nome do
+ *   estabelecimento e quem está logado, para o painel saber que há sessão a
+ *   renovar depois de recarregar — e já ter o que mostrar no menu.
  *
  * A sessão é de **um** estabelecimento, e quem diz qual é a API: o login pede
  * só e-mail e senha, e a resposta traz o estabelecimento da pessoa. É do slug
@@ -35,6 +36,8 @@ export interface RespostaDeSessao {
 
 interface EstadoDaSessao {
   slug: string | null
+  /** O nome do estabelecimento, para o menu do painel. */
+  estabelecimento: string | null
   usuario: UsuarioDoPainel | null
   accessToken: string | null
   guardar: (resposta: RespostaDeSessao) => void
@@ -45,11 +48,13 @@ export const useSessaoStore = create<EstadoDaSessao>()(
   persist(
     (set) => ({
       slug: null,
+      estabelecimento: null,
       usuario: null,
       accessToken: null,
       guardar: (resposta) => {
         set({
           slug: resposta.establishment.slug,
+          estabelecimento: resposta.establishment.name,
           accessToken: resposta.accessToken,
           usuario: {
             id: resposta.user.id,
@@ -60,7 +65,7 @@ export const useSessaoStore = create<EstadoDaSessao>()(
         })
       },
       encerrar: () => {
-        set({ slug: null, usuario: null, accessToken: null })
+        set({ slug: null, estabelecimento: null, usuario: null, accessToken: null })
       },
     }),
     {
@@ -70,7 +75,11 @@ export const useSessaoStore = create<EstadoDaSessao>()(
       version: 2,
       storage: createJSONStorage(() => localStorage),
       // O token de acesso nunca vai para o navegador guardado.
-      partialize: (s) => ({ slug: s.slug, usuario: s.usuario }),
+      partialize: (s) => ({
+        slug: s.slug,
+        estabelecimento: s.estabelecimento,
+        usuario: s.usuario,
+      }),
     },
   ),
 )
