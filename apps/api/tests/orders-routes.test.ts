@@ -19,6 +19,7 @@ import {
   paymentMethods,
   tenants,
 } from '../src/db/schema/index.js'
+import { resumoDosPedidos } from '../src/orders/service.js'
 import { LIMITE_DE_PEDIDOS } from '../src/routes/public-orders.js'
 import {
   atualizarConfiguracoes,
@@ -653,6 +654,92 @@ describe('painel do estabelecimento', () => {
     )
     expect(itens).toEqual([])
     expect(opcoes).toEqual([])
+  })
+})
+
+describe('resumo dos pedidos', () => {
+  interface Resumo {
+    new: number
+    inProgress: number
+    completedToday: number
+  }
+
+  const resumo = async (token = tokenDaLanchonete) =>
+    (await admin('GET', '/orders/summary', undefined, token)).json<Resumo>()
+
+  async function idDoPedido(numero: number): Promise<string> {
+    const [gravado] = await naLanchonete((tx) =>
+      tx.select({ id: orders.id }).from(orders).where(eq(orders.number, numero)),
+    )
+    return gravado?.id ?? ''
+  }
+
+  async function mudar(id: string, status: string): Promise<void> {
+    const resposta = await admin('PATCH', `/orders/${id}/status`, { status })
+    expect(resposta.statusCode, resposta.body).toBe(200)
+  }
+
+  it('acompanha o pedido: novo, em andamento, concluído hoje', async () => {
+    const antes = await resumo()
+
+    const id = await idDoPedido((await criar()).number)
+    expect(await resumo()).toEqual({ ...antes, new: antes.new + 1 })
+
+    await mudar(id, 'ACCEPTED')
+    expect(await resumo()).toEqual({ ...antes, inProgress: antes.inProgress + 1 })
+
+    await mudar(id, 'COMPLETED')
+    expect(await resumo()).toEqual({ ...antes, completedToday: antes.completedToday + 1 })
+  })
+
+  it('cancelado não entra em nenhuma conta', async () => {
+    const antes = await resumo()
+    const id = await idDoPedido((await criar()).number)
+
+    const resposta = await admin('PATCH', `/orders/${id}/status`, {
+      status: 'CANCELLED',
+      reason: 'Cliente desistiu',
+    })
+    expect(resposta.statusCode, resposta.body).toBe(200)
+
+    expect(await resumo()).toEqual(antes)
+  })
+
+  it('"hoje" é o dia do estabelecimento, no fuso dele — não o dia em UTC', async () => {
+    const id = await idDoPedido((await criar()).number)
+    await mudar(id, 'ACCEPTED')
+    await mudar(id, 'COMPLETED')
+    // Concluído às 23:30 de 29/09 em São Paulo — em UTC, já 30/09.
+    await naLanchonete((tx) =>
+      tx
+        .update(orders)
+        .set({ statusChangedAt: new Date('2026-09-30T02:30:00Z') })
+        .where(eq(orders.id, id)),
+    )
+    const contexto = tenantContextFromUser(lanchonete.tenantId)
+
+    // 23:45 de 29/09 em São Paulo: o pedido é de hoje.
+    const noMesmoDia = await resumoDosPedidos(contexto, new Date('2026-09-30T02:45:00Z'))
+    // 00:30 de 30/09 em São Paulo: o pedido ficou para ontem. Em UTC, os dois
+    // instantes e o pedido são do mesmo dia 30.
+    const noDiaSeguinte = await resumoDosPedidos(contexto, new Date('2026-09-30T03:30:00Z'))
+
+    expect(noMesmoDia.concluidosHoje - noDiaSeguinte.concluidosHoje).toBe(1)
+  })
+
+  it('os pedidos de outro estabelecimento não entram na conta', async () => {
+    await criar()
+
+    expect((await resumo()).new).toBeGreaterThan(0)
+    expect(await resumo(tokenDaPizzaria)).toEqual({ new: 0, inProgress: 0, completedToday: 0 })
+  })
+
+  it('sem login responde 401; sem permissão de ver pedidos, 403', async () => {
+    const semLogin = await app.inject({ method: 'GET', url: '/api/v1/admin/orders/summary' })
+    expect(semLogin.statusCode).toBe(401)
+
+    const semPermissao = await admin('GET', '/orders/summary', undefined, await entrar(fechada))
+    expect(semPermissao.statusCode).toBe(403)
   })
 })
 

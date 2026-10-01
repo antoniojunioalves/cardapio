@@ -888,7 +888,14 @@ existente.
 COMPLETED`, só avançando, podendo pular etapas; `OUT_FOR_DELIVERY` só em entrega; `CANCELLED`
 de qualquer status não final, com motivo. A atualização só grava se o status ainda for o lido
 (`WHERE status = de`), e a mudança vai para a auditoria. As rotas do painel
-(`/api/v1/admin/orders`) listam, detalham e mudam o status; a tela é das próximas fases.
+(`/api/v1/admin/orders`) listam, detalham e mudam o status.
+
+`GET /api/v1/admin/orders/summary` devolve o resumo que o painel mostra em toda tela: pedidos
+novos (`RECEIVED`), em andamento (aceitos e ainda não entregues) e concluídos hoje. Uma consulta
+só, com `count(*) filter`, restrita aos pedidos que podem entrar na conta. "Hoje" começa à
+meia-noite **no fuso do estabelecimento** (`inicioDoDia`, em `lib/timezone.ts`, ao lado do
+`inicioDoMes` dos limites do plano): um pedido concluído às 23:30 de São Paulo é de hoje, embora
+em UTC já seja amanhã.
 
 ### 8.11 Mensagem do WhatsApp
 
@@ -944,7 +951,8 @@ src/
 | `/:tenantSlug`                | cardápio público                             |
 | `/:tenantSlug/checkout`       | finalizar pedido                             |
 | `/:tenantSlug/pedido-enviado` | confirmação do pedido                        |
-| `/:tenantSlug/admin/pedidos`  | pedidos ao vivo                              |
+| `/:tenantSlug/admin`          | painel: Início, com o resumo dos pedidos     |
+| `/:tenantSlug/admin/pedidos`  | painel: pedidos ao vivo                      |
 | qualquer outra                | não encontrado                               |
 
 No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
@@ -1013,6 +1021,31 @@ como roubo.
 
 A **lista** vem do TanStack Query; a **conexão ao vivo** (`live.ts`) só manda relê-la. Os botões
 de status saem de `proximosStatus`, a regra de `packages/shared` que a API também aplica.
+
+**A moldura** (`components/AdminLayout.tsx`, Fase 18c) é a rota `/:tenantSlug/admin`; cada tela é
+uma rota filha, desenhada no `Outlet`. O que vale para o painel inteiro mora nela, e não em cada
+tela:
+
+- a **conferência da sessão** — sem sessão daquele estabelecimento, vai para `/entrar`;
+- a **conexão ao vivo**, uma só: manda reler a lista, o resumo e o uso do plano, e não cai ao
+  trocar de tela;
+- o **alerta sonoro** e o número de pedidos novos no título da aba (`useTituloDoPainel`) — o
+  pedido novo é percebido em qualquer tela, não só na de pedidos;
+- o indicador "Ao vivo" e o botão do som, na barra do topo.
+
+As telas recebem o slug, o usuário, as permissões e o estado da conexão por `usePainel()`
+(`panel.ts`), e por isso nunca rodam sem usuário.
+
+**O menu** é uma lista em `menu.ts`, sem React: rótulo, caminho, ícone e a permissão exigida.
+`itensDoMenu(permissoes)` devolve o que a pessoa alcança — esconder o item é conforto, não
+segurança: quem barra é a API. `AdminNav` desenha a lista num **elemento só**: em tela pequena,
+gaveta que entra pela esquerda (fechada, fica `invisible`, fora do teclado e do leitor de tela); a
+partir de `lg`, coluna fixa. Mobile-first: o padrão é o celular, e a coluna fixa é o acréscimo. O
+número de pedidos novos ao lado de "Pedidos" vem do resumo (8.10) e tem rótulo próprio para leitor
+de tela.
+
+**O Início** (`pages/AdminHomePage.tsx`) é a primeira tela depois do login e do cadastro: o aviso
+de confirmação do e-mail, o aviso do plano e o resumo dos pedidos de hoje.
 
 ### 9.7 Temas
 
@@ -1167,7 +1200,8 @@ a dois planos — FREE, STARTER, ADVANCED, PREMIUM e CUSTOM cabem sem migration 
 As tabelas nascem na Fase 3, junto do modelo de tenant. Não há cobrança no MVP e nenhum gateway
 foi escolhido.
 
-**Os limites (Fase 14)** — regra pura em `src/plans/limits.ts`, uso em `src/plans/service.ts`:
+**Os limites (Fase 14)** — regra pura em `src/plans/limits.ts`, uso em `src/plans/service.ts`; o
+início do mês no fuso vem de `src/lib/timezone.ts`:
 
 - **Pedidos por mês** (`maxOrdersPerMonth`): aviso no painel a partir de 80%; atingido o limite,
   tolerância de 10%; passada ela, o cardápio público passa a `NAO_RECEBENDO` e, como o pedido é

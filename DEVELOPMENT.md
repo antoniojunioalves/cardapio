@@ -447,6 +447,26 @@ where u.email in (select email from users group by 1 having count(*) > 1);
 Apague o estabelecimento que sobra (`delete from tenants where slug = '…'`, que leva o usuário em
 cascata) ou recrie o banco com `pnpm db:reset`, `pnpm db:migrate` e `pnpm db:seed`.
 
+### Acrescentando uma tela ao painel
+
+O painel é a rota `/:tenantSlug/admin`, com a moldura `AdminLayout`; cada tela é uma rota filha.
+Para uma tela nova:
+
+1. **Uma entrada em `apps/web/src/features/admin/menu.ts`**: rótulo, caminho, ícone e a permissão
+   que a API exige para os dados da tela. Sem a permissão, a pessoa não vê o item.
+2. **Uma rota filha em `apps/web/src/App.tsx`**, debaixo de `/:tenantSlug/admin`.
+3. **A página**, que lê o slug, o usuário e as permissões de `usePainel()` e dá o título da aba com
+   `useTituloDoPainel('…')`. Ela **não** confere sessão, não abre conexão ao vivo e não tem botão
+   de sair: isso é da moldura.
+4. **O ícone**, em `features/admin/components/icons.tsx` — SVG no próprio código.
+
+Mobile-first: desenhe a tela para o celular e acrescente o que a tela grande permite (`sm:`, `lg:`),
+nunca o contrário. A moldura já cuida do menu — gaveta no celular, coluna fixa a partir de `lg`.
+
+Nos testes, `abrirComLocal('/lanchonete-do-ze/admin/…')` com a sessão guardada abre a tela dentro
+da moldura; veja `abrirInicio` em `tests/AdminPanel.test.tsx`. O jsdom não aplica CSS: a gaveta se
+testa pelo `aria-expanded` do botão "Menu", não por estar ou não visível.
+
 ### Testando uma página
 
 Monte `AppRoutes` dentro de `MemoryRouter` e de um `QueryClient` novo por teste, e simule a API

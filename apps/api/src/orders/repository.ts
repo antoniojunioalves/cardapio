@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 
 import {
   orderCounters,
@@ -152,6 +152,43 @@ export async function listarPedidos(
     .where(condicoes.length > 0 ? and(...condicoes) : undefined)
     .orderBy(desc(orders.number))
     .limit(filtro.limite)
+}
+
+/** Aceito e ainda não entregue: o que a cozinha e o entregador têm nas mãos. */
+const EM_ANDAMENTO: OrderStatus[] = ['ACCEPTED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY']
+
+export interface ResumoDosPedidos {
+  novos: number
+  emAndamento: number
+  concluidosHoje: number
+}
+
+/**
+ * Quantos pedidos esperam ser aceitos, quantos estão em andamento e quantos
+ * foram concluídos desde `inicioDoDia`. Uma consulta só, e só sobre os pedidos
+ * que podem entrar na conta — o histórico de dias anteriores fica de fora.
+ */
+export async function resumirPedidos(
+  tx: TenantTransaction,
+  inicioDoDia: Date,
+): Promise<ResumoDosPedidos> {
+  const novo = eq(orders.status, 'RECEIVED')
+  const emAndamento = inArray(orders.status, EM_ANDAMENTO)
+  const concluidoHoje = and(
+    eq(orders.status, 'COMPLETED'),
+    gte(orders.statusChangedAt, inicioDoDia),
+  )
+
+  const [linha] = await tx
+    .select({
+      novos: sql<number>`count(*) filter (where ${novo})`.mapWith(Number),
+      emAndamento: sql<number>`count(*) filter (where ${emAndamento})`.mapWith(Number),
+      concluidosHoje: sql<number>`count(*) filter (where ${concluidoHoje})`.mapWith(Number),
+    })
+    .from(orders)
+    .where(or(novo, emAndamento, concluidoHoje))
+
+  return linha ?? { novos: 0, emAndamento: 0, concluidosHoje: 0 }
 }
 
 /**

@@ -1,8 +1,8 @@
+import { inicioDoMes } from '../lib/timezone.js'
 import type { TenantTransaction } from '../tenant/with-tenant.js'
 import {
   RECURSO_PEDIDOS_POR_MES,
   RECURSO_USUARIOS,
-  inicioDoMes,
   situacaoDosPedidos,
   type UsoDePedidos,
 } from './limits.js'

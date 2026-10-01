@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
+import { AdminLayout } from '@/features/admin/components/AdminLayout'
+import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
@@ -24,9 +26,13 @@ import { SignupPage } from '@/pages/SignupPage'
  * chamado `cadastro` ficaria inacessível.
  *
  * `/lanchonete-do-ze` abre o cardápio, `/lanchonete-do-ze/checkout` finaliza o
- * pedido, `/lanchonete-do-ze/pedido-enviado` confirma e
- * `/lanchonete-do-ze/admin/pedidos` é o painel do estabelecimento. Qualquer
- * outro segundo segmento cai no não encontrado.
+ * pedido e `/lanchonete-do-ze/pedido-enviado` confirma. Qualquer outro segundo
+ * segmento cai no não encontrado.
+ *
+ * `/lanchonete-do-ze/admin` é o painel do estabelecimento: a moldura
+ * (`AdminLayout`) confere a sessão e traz o menu, e cada tela é uma rota filha
+ * — o Início no índice, os pedidos em `/admin/pedidos`. Tela nova do painel:
+ * uma rota filha aqui e uma entrada em `features/admin/menu.ts`.
  *
  * O login é um só, em `/entrar`, com e-mail e senha: a pessoa não precisa
  * saber o endereço do estabelecimento para entrar.
@@ -43,7 +49,10 @@ export function AppRoutes() {
       <Route path="/:tenantSlug" element={<MenuPage />} />
       <Route path="/:tenantSlug/checkout" element={<CheckoutPage />} />
       <Route path="/:tenantSlug/pedido-enviado" element={<OrderSentPage />} />
-      <Route path="/:tenantSlug/admin/pedidos" element={<AdminOrdersPage />} />
+      <Route path="/:tenantSlug/admin" element={<AdminLayout />}>
+        <Route index element={<AdminHomePage />} />
+        <Route path="pedidos" element={<AdminOrdersPage />} />
+      </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

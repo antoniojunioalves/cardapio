@@ -76,11 +76,11 @@ describe('termos e privacidade', () => {
 })
 
 describe('endereços do painel', () => {
-  it('/{endereço}/admin não existe: o login é um só, em /entrar', () => {
+  it('/{endereço}/admin é o painel: sem sessão, leva ao login, que é um só', () => {
     const fetch = mockarRotas(() => ({ status: 200, corpo: {} }))
     abrir('/lanchonete-do-ze/admin')
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Não encontrado' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 1, name: 'Entrar no painel' })).toBeVisible()
     expect(fetch).not.toHaveBeenCalled()
   })
 

@@ -19,8 +19,9 @@ pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento:
 de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a sábado) ou a
 `padaria-pao-quente` (das 08:00 às 18:00, todos os dias). Os pedidos chegam ao vivo no painel:
 entre em [localhost:5173/entrar](http://localhost:5173/entrar) só com e-mail e senha — o sistema
-acha o estabelecimento pelo e-mail e leva ao painel dele, que também avisa quando o plano se
-aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+acha o estabelecimento pelo e-mail e leva ao painel dele. O painel abre no Início, com o resumo
+dos pedidos de hoje, e tem um menu lateral (gaveta no celular) que leva aos Pedidos; ele também
+avisa quando o plano se aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

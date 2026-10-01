@@ -1,7 +1,7 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-10-01
-**Fase atual:** 18b — concluída, aguardando validação
+**Fase atual:** 18c — concluída, aguardando validação
 **Próxima:** 19 — comandos do Super Admin: listar, suspender, reativar, trocar o plano. As fases 19 a
 28 fecham o MVP (ver "O que falta para o MVP")
 
@@ -34,7 +34,8 @@ WhatsApp", com a mensagem pronta — número, itens, opções, valores, entrega,
 montada no servidor. Endereço escolhido da lista sai mascarado; digitado na hora, completo.
 
 **O estabelecimento recebe os pedidos ao vivo.** Em `/entrar` o lojista entra só com e-mail e
-senha, e em `/{tenantSlug}/admin/pedidos` vê os pedidos chegarem sem recarregar — com endereço completo,
+senha e cai no painel, `/{tenantSlug}/admin`; em `/{tenantSlug}/admin/pedidos` vê os pedidos
+chegarem sem recarregar — com endereço completo,
 itens, pagamento e botões de status —, com alerta sonoro opcional e o número de pedidos novos no
 título da aba.
 
@@ -69,6 +70,11 @@ checkout avisa para onde vão os dados do cliente.
 e-mail é único na plataforma, a API acha de qual estabelecimento a pessoa é e a tela segue para o
 painel dele. Vale para o dono e para os funcionários, cada um com o seu e-mail e a sua senha.
 
+**O painel tem moldura e menu (Fase 18c).** `/{tenantSlug}/admin` abre o Início, com o resumo dos
+pedidos de hoje e os avisos do estabelecimento; o menu lateral — gaveta no celular, fixo em tela
+grande — leva aos Pedidos e vai ganhar um item a cada tela nova. O pedido novo toca e aparece no
+menu em qualquer tela do painel.
+
 **Ainda não existe:** as telas de configuração, cardápio, usuários e clientes — o estabelecimento
 se cadastra pela página, mas ainda é configurado pela API. As fases 19 a 28 fecham o MVP; ver "O
 que falta para o MVP".
@@ -101,9 +107,10 @@ que falta para o MVP".
 | 17  | Envio de e-mail e cadastro do estabelecimento pela API                                                              | ✅ Concluída |
 | 18  | Telas do cadastro: landing page, cadastro, confirmação de e-mail, termos e privacidade                              | ✅ Concluída |
 | 18b | Login só com e-mail e senha: e-mail único na plataforma, `/entrar` como login único                                 | ✅ Concluída |
+| 18c | Painel do estabelecimento: moldura com menu lateral, tela Início e resumo dos pedidos                               | ✅ Concluída |
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ⬜ Próxima   |
 | 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜           |
-| 21  | Estrutura do painel e configuração do estabelecimento                                                               | ⬜           |
+| 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ⬜           |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
 | 23  | Categorias e produtos                                                                                               | ⬜           |
 | 24  | Grupos de opção, adicionais e combos                                                                                | ⬜           |
@@ -116,6 +123,84 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 18c — concluída
+
+Pedido do Junio antes de seguir para a Fase 19: as próximas fases criam várias telas de gestão, e
+todas precisam de um lugar para morar. Em `/{slug}/admin`, um painel com menu lateral, parecido
+com a referência que ele enviou (Anota AI, em tela grande).
+
+### Decisões do Junio (2026-10-01)
+
+- **A primeira tela é "Início", com o resumo do dia:** pedidos novos, em andamento e concluídos
+  hoje, os avisos e o atalho para os pedidos.
+- **A tela de Pedidos entra como está** (lista com as abas "Em andamento" e "Encerrados"). O quadro
+  em colunas da referência vira uma fase própria.
+- **Mobile-first e responsivo.** A referência é a versão de tela grande; o painel nasce pelo
+  celular.
+
+### Microtasks
+
+| #   | Tarefa                                                                                                    | Status |
+| --- | --------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | API: `GET /api/v1/admin/orders/summary` — novos, em andamento e concluídos hoje, no fuso do tenant        | ✅     |
+| 2   | `lib/timezone.ts`: `inicioDoDia` ao lado de `inicioDoMes`, que saiu de `plans/limits.ts`                  | ✅     |
+| 3   | Moldura (`AdminLayout`): sessão, conexão ao vivo, som e título da aba num lugar só                        | ✅     |
+| 4   | Menu (`menu.ts` + `AdminNav`): itens por permissão, pedidos novos ao lado de "Pedidos", gaveta no celular | ✅     |
+| 5   | Tela Início em `/{slug}/admin`; login e cadastro passam a levar a ela                                     | ✅     |
+| 6   | Tela de Pedidos dentro da moldura, só com o que é dela                                                    | ✅     |
+| 7   | Testes: resumo e fuso na API; menu, moldura, Início, pedido novo e som fora da tela de pedidos no web     | ✅     |
+
+### Decisões e achados desta fase
+
+**O que vale para o painel inteiro subiu para a moldura.** A conferência da sessão, a conexão ao
+vivo, o alerta sonoro e o número de pedidos novos no título da aba moravam na tela de Pedidos. Com
+várias telas, quem estivesse em outra deixaria de ouvir o pedido novo. Agora há uma conexão só, que
+não cai ao trocar de tela — e há teste para isso.
+
+**Tela nova no painel é uma linha e uma rota.** Uma entrada em `features/admin/menu.ts`, com a
+permissão que a API exige, e uma rota filha de `/:tenantSlug/admin` em `App.tsx`. É o que as Fases
+21 a 26 vão fazer; a receita está no DEVELOPMENT.md.
+
+**O resumo vem de uma rota própria, e não da lista.** A lista traz os 50 pedidos mais recentes;
+contar "concluídos hoje" a partir dela erraria num dia cheio. A rota também serve ao número do
+menu, sem carregar 50 pedidos com itens em toda tela. "Hoje" é o dia do estabelecimento, no fuso
+dele.
+
+**O menu é um elemento só.** No celular é gaveta (fechada, fica fora do teclado e do leitor de
+tela); a partir de `lg`, coluna fixa. Sem duplicar os links na página.
+
+**O número de pedidos novos tem rótulo próprio para leitor de tela** ("Pedidos, 2 novos"). Sem
+isso, o nome do link sairia "Pedidos2".
+
+**O aviso de confirmação do e-mail foi para o Início.** É assunto do estabelecimento, não da lista
+de pedidos. O aviso do plano aparece nas duas telas.
+
+**Visto num navegador de verdade:** capturas em 390, 768 e 1280 px de largura mostraram o nome do
+estabelecimento cortado na barra do topo (celular) e no menu (tela grande); os dois foram
+corrigidos antes da entrega.
+
+**O quadro de pedidos em colunas** (Novos | Em preparo | Prontos e em entrega) ficou fora, por
+decisão do Junio: fase própria, a encaixar.
+
+A coleção do Postman ganhou a rota do resumo — importe de novo.
+
+### Verificação executada
+
+| Verificação                                | Resultado                                                                                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                              | **718 testes** (488 API + 202 web + 28 shared); formatação, typecheck, lint e build                                                 |
+| Clone limpo, `--frozen-lockfile`           | os mesmos 718 testes, formatação, typecheck, lint e build                                                                           |
+| Menu sem o filtro de permissão             | falham o teste dos itens por permissão e o de quem não vê pedidos                                                                   |
+| Moldura sem conferir de quem é a sessão    | falha "sessão de outro estabelecimento não abre este painel"                                                                        |
+| Início do dia em UTC                       | falham os quatro testes do fuso e o do resumo "hoje é o dia do estabelecimento"                                                     |
+| API de verdade, na porta 3334              | o resumo da Lanchonete do Zé bate com a lista: o pedido concluído hoje conta, o de 29/09 não                                        |
+| Navegador de verdade (Chromium sem janela) | login, Início e Pedidos em 390, 768 e 1280 px: gaveta no celular, menu fixo em tela grande, sem rolagem lateral nem erro no console |
+| Validação do Junio no navegador            | a fazer                                                                                                                             |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
 
 ---
 
@@ -297,6 +382,10 @@ sistema ainda não está no ar. As fases 19 a 28 fecham essa distância.
   para importar de novo. O teste `tests/postman.test.ts` não deixa esquecer: falha com a coleção
   desatualizada ou com rota de corpo sem exemplo. Como fazer: DEVELOPMENT.md, "Postman".
 
+- **Tela nova do painel: uma entrada no menu e uma rota filha** (`features/admin/menu.ts` e
+  `App.tsx`), feita pelo celular primeiro. Como fazer: DEVELOPMENT.md, "Acrescentando uma tela ao
+  painel".
+
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
 
@@ -320,14 +409,14 @@ vazio**, como faria alguém que nunca viu o sistema.
   aceitam imagem, e sem limite o abuso passaria por elas. Dois recursos novos do plano
   (`maxProducts` e `maxCategories`), na infraestrutura de limites da Fase 14.
 
-### Fase 21 — Estrutura do painel e configuração do estabelecimento
+### Fase 21 — Configuração do estabelecimento
 
-- Navegação entre Pedidos, Cardápio, Configurações, Usuários e Clientes, conforme as permissões.
+- A moldura do painel e o menu já existem (Fase 18c): a tela entra como um item do menu.
 - Tela de configurações: nome (rota nova — o nome fica em `tenants` e nenhuma rota o altera),
   descrição, contato, WhatsApp, endereço, tempo de preparo, pedido mínimo, "recebendo pedidos",
   logo e capa — e o **fuso**, que hoje só é definido no cadastro, pelo aparelho (achado da Fase
   18).
-- O início do painel ganha a lista "o que falta para receber pedidos": e-mail confirmado,
+- A tela Início (Fase 18c) ganha a lista "o que falta para receber pedidos": e-mail confirmado,
   WhatsApp, horários, entrega ou retirada, forma de pagamento e pelo menos um produto.
 
 ### Fases 22 a 24 — Configurações restantes e cardápio
@@ -538,6 +627,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Suspender não derruba as sessões abertas — o middleware não olha o status do estabelecimento                                                                      | Fase 19                                  |
 | Limites do plano gratuito: 20 produtos e 10 categorias (decididos)                                                                                                | Fase 20                                  |
+| Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |
 | CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
 | Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |
