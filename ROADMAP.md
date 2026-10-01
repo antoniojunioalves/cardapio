@@ -108,12 +108,16 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   escolhe o plano, assina, faz o cadastro e já começa a usar. O MVP faz o cadastro só no plano
   gratuito (Fases 17 e 18); falta escolher um plano pago e pagar, o que depende da cobrança
   recorrente e do gateway abaixo.
-- Cobrança de excedente e mudança de plano pelo próprio lojista — os limites já são aplicados
-  (Fase 14), mas passar deles hoje só bloqueia
-
+- **Mudança de plano pelo próprio dono, no painel** — upgrade e downgrade, com o login dele. Hoje
+  só a plataforma troca o plano, por comando (`pnpm plataforma plano`, Fase 19), depois de
+  combinar com o cliente por fora. O que já existe e é reaproveitado: a troca em si (`trocarPlano`,
+  que encerra a assinatura vigente, abre a nova e guarda o histórico), o menu do painel, onde
+  entra um item "Plano" só para o dono (Fase 18c), e o uso do plano que o Início já mostra.
+  **Depende da cobrança recorrente e do gateway abaixo:** sem pagamento, qualquer dono passaria
+  para o plano pago de graça.
+- Cobrança de excedente — os limites já são aplicados (Fase 14), mas passar deles hoje só bloqueia
 - Cobrança recorrente
 - Escolha de gateway — Stripe, Mercado Pago ou outro; **nenhum foi escolhido**
-- Autosserviço de upgrade e downgrade de plano
 - Faturas e recibos
 
 ## Operação do estabelecimento
