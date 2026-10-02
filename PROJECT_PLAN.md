@@ -1,9 +1,9 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-10-01
-**Fase atual:** 20 — concluída, aguardando validação
-**Próxima:** 21 — configuração do estabelecimento e a lista "o que falta para receber pedidos". As
-fases 21 a 28 fecham o MVP (ver "O que falta para o MVP")
+**Fase atual:** 21 — concluída, aguardando validação
+**Próxima:** 22 — horários, entrega e retirada, formas de pagamento. As fases 22 a 28 fecham o MVP
+(ver "O que falta para o MVP")
 
 ---
 
@@ -83,9 +83,13 @@ do ar e derruba na hora quem estava logado. Tudo fica na auditoria do estabeleci
 sai sem metadados — inclusive a localização GPS —, de pé, no tamanho do uso e em WebP. E o plano
 gratuito passou a limitar o cardápio a 20 produtos e 10 categorias.
 
-**Ainda não existe:** as telas de configuração, cardápio, usuários e clientes — o estabelecimento
-se cadastra pela página, mas ainda é configurado pela API. As fases 21 a 28 fecham o MVP; ver "O
-que falta para o MVP".
+**O estabelecimento já é configurado pelo painel (Fase 21).** A tela Configurações altera o nome,
+a descrição, o fuso, o logo e a capa, o contato, o endereço, o pedido mínimo e o tempo de preparo —
+tudo num "Salvar" só. E o Início mostra o que ainda falta para receber pedidos.
+
+**Ainda não existe:** as telas de horários, entrega e pagamento, do cardápio, de usuários e de
+clientes — isso ainda é configurado pela API. As fases 22 a 28 fecham o MVP; ver "O que falta para
+o MVP".
 
 ---
 
@@ -119,8 +123,8 @@ que falta para o MVP".
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ✅ Concluída |
 | 19b | Ajustes visuais do cardápio: janela "Info" e menu de baixo                                                          | ✅ Concluída |
 | 20  | Tratamento de imagens no upload e limites do plano gratuito (20 produtos, 10 categorias)                            | ✅ Concluída |
-| 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ⬜ Próxima   |
-| 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
+| 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ✅ Concluída |
+| 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜ Próxima   |
 | 23  | Categorias e produtos                                                                                               | ⬜           |
 | 24  | Grupos de opção, adicionais e combos                                                                                | ⬜           |
 | 25  | Usuários e senha                                                                                                    | ⬜           |
@@ -132,6 +136,95 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 21 — concluída
+
+A primeira tela de gestão do painel: as configurações do estabelecimento. E o Início ganhou a
+lista do que falta para receber pedidos.
+
+### Microtasks
+
+| #   | Tarefa                                                                                              | Status |
+| --- | --------------------------------------------------------------------------------------------------- | ------ |
+| 1   | API: `GET` e `PATCH /settings` passam a trazer e alterar o nome e o fuso, na mesma transação        | ✅     |
+| 2   | API: `GET /api/v1/admin/setup-checklist`, com os seis passos                                        | ✅     |
+| 3   | Tela Configurações, no menu: estabelecimento, contato, endereço e regras do pedido, num "Salvar" só | ✅     |
+| 4   | Logo e capa pela tela, gravados ao escolher o arquivo                                               | ✅     |
+| 5   | Só leitura para quem não tem `settings:update`                                                      | ✅     |
+| 6   | Início: a lista "o que falta para receber pedidos"                                                  | ✅     |
+| 7   | Cardápio público: o telefone de contato aparece formatado                                           | ✅     |
+| 8   | Testes: API, regra da lista, conversões do formulário, tela, imagens e a lista no Início            | ✅     |
+
+### Decisões e achados desta fase
+
+**O nome e o fuso entraram na rota de configurações que já existia**, em vez de numa rota nova,
+como o plano dizia. Para quem configura é um formulário só, e assim o "Salvar" grava tudo ou nada:
+as duas tabelas são alteradas na mesma transação, com uma auditoria só.
+
+**`tenants` não tem RLS, então o filtro pelo estabelecimento é explícito.** É o único lugar do
+painel em que quem isola é o código, e não o banco. Há teste que tira o filtro e vê o nome de
+outro estabelecimento mudar.
+
+**O endereço do cardápio não é editável.** Está em links e cartazes já divulgados. Trocar o
+endereço foi para o ROADMAP.
+
+**O fuso virou um seletor com os cinco fusos do Brasil**, com o nome que a pessoa reconhece. O
+fuso de quem se cadastrou de fora entra no seletor também: salvar o formulário não pode trocá-lo
+sem a pessoa pedir.
+
+**Configurações fica no fim do menu, abaixo de "Ver cardápio"** (pedido do Junio na validação), e
+não entre Início e Pedidos: é tela que se ajusta de vez em quando. O menu ganhou a marca `rodape`
+para isso.
+
+**As imagens ficam fora do "Salvar".** São outra rota, e a pessoa vê o resultado ao escolher o
+arquivo. As recusas da Fase 20 viram frases: grande demais, formato errado, imagem que não abre.
+
+**A lista do Início é calculada na API, numa transação.** Seis passos: e-mail confirmado,
+WhatsApp, horário, entrega ou retirada, forma de pagamento e ao menos um produto à venda. Ela só
+informa; quem decide se um pedido é aceito continua sendo a criação do pedido. Some quando tudo
+está feito, e volta se algo deixar de estar.
+
+**Só um passo já tem tela: o WhatsApp.** Os de horário, entrega, pagamento e produtos aparecem na
+lista sem link, porque as telas são das Fases 22 e 23. Cada tela que nascer acrescenta o seu
+caminho em `features/admin/checklist.ts`.
+
+**Achado — a entrega nasce ligada e grátis.** Desde a Fase 5, um estabelecimento novo começa com
+entrega habilitada e taxa zero. Por isso o passo "entrega ou retirada" já aparece feito num
+cadastro recém-criado, sem o dono ter decidido nada, e um cardápio poderia ir ao ar com entrega
+grátis sem ele saber. A tela para ajustar é da Fase 22; a decisão do padrão ficou nas pendências.
+
+**Uma regra entre dois campos precisa dizer quando roda.** O Zod só avalia a regra "tempo máximo
+menor que o mínimo" se o formulário inteiro estiver válido; a pessoa só veria o erro depois de
+corrigir os outros. O `when` do `refine` resolve.
+
+**Visto num navegador de verdade**, em 390 e 1280 px, num estabelecimento descartável: a lista no
+Início, o formulário, salvar e o envio do logo. Em tela grande os botões do logo quebravam em duas
+linhas; a coluna foi alargada.
+
+A coleção do Postman ganhou a rota da lista e o exemplo com nome e fuso — importe de novo.
+
+### Verificação executada
+
+| Verificação                                    | Resultado                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                                  | **825 testes** (571 API + 226 web + 28 shared); formatação, typecheck, lint e build                                                                                                                                                                                           |
+| Clone limpo, `--frozen-lockfile`               | os mesmos 825 testes                                                                                                                                                                                                                                                          |
+| Nome alterado sem filtrar pelo estabelecimento | falha "mudar o nome de um estabelecimento não mexe no de outro"                                                                                                                                                                                                               |
+| Produto indisponível contando como à venda     | falha "cada configuração feita sai da lista"                                                                                                                                                                                                                                  |
+| Lista do Início aparecendo com tudo feito      | falha "com tudo feito, a lista some"                                                                                                                                                                                                                                          |
+| Quem só pode ver conseguindo editar            | falha "quem só pode ver não altera"                                                                                                                                                                                                                                           |
+| Navegador de verdade, em 390 e 1280 px         | num estabelecimento descartável: lista no Início (1 de 6), configurações, salvar o WhatsApp, enviar o logo (guardado em WebP) e a lista acompanhando o que foi salvo, sem recarregar. Sem rolagem lateral nem erro no console. Descartável, arquivo e e-mails apagados no fim |
+| Validação do Junio                             | a fazer                                                                                                                                                                                                                                                                       |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
+
+**Uma falha que não se repetiu.** Na primeira verificação completa, o teste de pedidos "o status só
+avança, cancelar exige motivo, e tudo vai para a auditoria" falhou uma vez; passou nas seis
+rodadas seguintes, sozinho e na suíte inteira. Não capturei a mensagem. O teste comparava os
+registros de auditoria pela ordem sem pedir ordem ao banco, e passou a pedir — o que remove essa
+fonte de variação, mas não prova que era a causa.
 
 ---
 
@@ -545,10 +638,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 20 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+As fases 1 a 21 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
 (MVP.md, "Como saber que acabou"). O passo 1 — cadastrar pela página inicial e confirmar o e-mail
 — e os passos 4 a 7 funcionam de ponta a ponta. Os passos 2 e 3 só funcionam **pela API**, e o
-sistema ainda não está no ar. As fases 21 a 28 fecham essa distância.
+sistema ainda não está no ar. As fases 22 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -577,19 +670,11 @@ sistema ainda não está no ar. As fases 21 a 28 fecham essa distância.
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
 
-### Fase 21 — Configuração do estabelecimento
-
-- A moldura do painel e o menu já existem (Fase 18c): a tela entra como um item do menu.
-- Tela de configurações: nome (rota nova — o nome fica em `tenants` e nenhuma rota o altera),
-  descrição, contato, WhatsApp, endereço, tempo de preparo, pedido mínimo, "recebendo pedidos",
-  logo e capa — e o **fuso**, que hoje só é definido no cadastro, pelo aparelho (achado da Fase
-  18).
-- A tela Início (Fase 18c) ganha a lista "o que falta para receber pedidos": e-mail confirmado,
-  WhatsApp, horários, entrega ou retirada, forma de pagamento e pelo menos um produto.
-
 ### Fases 22 a 24 — Configurações restantes e cardápio
 
-- **22:** horários, entrega e retirada, formas de pagamento.
+- **22:** horários, entrega e retirada, formas de pagamento. Decidir o padrão da entrega de um
+  estabelecimento novo, que hoje nasce ligada e grátis (achado da Fase 21). Cada tela acrescenta o
+  seu caminho ao passo correspondente de "o que falta para receber pedidos".
 - **23:** categorias e produtos, com imagem. Reordenação de produtos em lote
   (`PUT /products/order`), como a de categorias, se a tela precisar.
 - **24:** grupos de opção, adicionais e combos.
@@ -797,6 +882,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Estabelecimento novo nasce com entrega habilitada e taxa zero — o dono não decidiu isso                                                                           | Fase 22, com a tela de entrega           |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
 | Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                                           | A definir pelo Junio                     |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |

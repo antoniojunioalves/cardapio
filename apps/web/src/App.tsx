@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router'
 import { AdminLayout } from '@/features/admin/components/AdminLayout'
 import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
+import { AdminSettingsPage } from '@/pages/AdminSettingsPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
 import { EnterPage } from '@/pages/EnterPage'
@@ -52,6 +53,7 @@ export function AppRoutes() {
       <Route path="/:tenantSlug/admin" element={<AdminLayout />}>
         <Route index element={<AdminHomePage />} />
         <Route path="pedidos" element={<AdminOrdersPage />} />
+        <Route path="configuracoes" element={<AdminSettingsPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

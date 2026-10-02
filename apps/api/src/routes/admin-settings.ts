@@ -1,3 +1,4 @@
+import { fusoValido, textoObrigatorio } from '@repo/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
@@ -6,6 +7,7 @@ import { currentUser, requireAuth, tenantContextOf } from '../auth/middleware.js
 import {
   atualizarConfiguracoes,
   definirFormasDePagamento,
+  obterChecklist,
   obterConfiguracoes,
   obterEntrega,
   obterFormasDePagamento,
@@ -14,6 +16,7 @@ import {
   substituirEntrega,
   substituirHorarios,
 } from '../settings/service.js'
+import { PASSOS } from '../settings/checklist.js'
 import { paraMinutos } from '../settings/opening-hours.js'
 import { apresentarConfiguracoes } from '../settings/presenter.js'
 import { storage } from '../storage/index.js'
@@ -53,8 +56,23 @@ export const configuracoesSchema = z.object({
   updatedAt: z.date(),
 })
 
+/**
+ * As configurações como `GET` e `PATCH /settings` devolvem: com o nome, o
+ * endereço e o fuso, que moram no registro de estabelecimentos. As rotas de
+ * imagem devolvem só a parte de `tenant_settings`.
+ */
+const configuracoesDoEstabelecimentoSchema = configuracoesSchema.extend({
+  name: z.string(),
+  /** O endereço do cardápio. Só leitura: não muda por esta rota. */
+  slug: z.string(),
+  timezone: z.string(),
+})
+
 const patchDeConfiguracoes = z
   .object({
+    name: textoObrigatorio(120, 'Informe o nome do estabelecimento.').optional(),
+    /** Um fuso que o `Intl` conhece: é com ele que "aberto agora" e "hoje" são calculados. */
+    timezone: z.string().refine(fusoValido, 'Fuso horário desconhecido.').optional(),
     description: textoOpcional(2000),
     /** Só dígitos: o link do WhatsApp não aceita máscara. */
     whatsappPhone: z
@@ -242,7 +260,8 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       schema: {
         tags: ['Configurações'],
         summary: 'Configurações do estabelecimento',
-        response: { 200: configuracoesSchema },
+        description: 'Inclui o nome, o endereço do cardápio (`slug`, só leitura) e o fuso horário.',
+        response: { 200: configuracoesDoEstabelecimentoSchema },
         security: seguranca,
       },
       onRequest: requireAuth(LER),
@@ -257,8 +276,11 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       schema: {
         tags: ['Configurações'],
         summary: 'Altera as configurações do estabelecimento',
+        description:
+          'Só os campos enviados mudam. O nome e o fuso são gravados na mesma transação dos ' +
+          'demais. O endereço do cardápio (`slug`) não muda por aqui.',
         body: patchDeConfiguracoes,
-        response: { 200: configuracoesSchema },
+        response: { 200: configuracoesDoEstabelecimentoSchema },
         security: seguranca,
       },
       onRequest: requireAuth(ESCREVER),
@@ -272,6 +294,31 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         ),
         storage,
       ),
+  )
+
+  typed.get(
+    '/setup-checklist',
+    {
+      schema: {
+        tags: ['Configurações'],
+        summary: 'O que falta para o estabelecimento receber pedidos',
+        description:
+          'A lista do Início do painel. `emailConfirmed`: o cardápio está no ar; `whatsapp`: há ' +
+          'número para onde o pedido é enviado; `businessHours`: há horário cadastrado; ' +
+          '`fulfillment`: entrega ou retirada funcionando; `paymentMethods`: ao menos uma forma ' +
+          'de pagamento; `products`: ao menos um produto à venda. `ready` é verdadeiro com todos ' +
+          'feitos.',
+        response: {
+          200: z.object({
+            ready: z.boolean(),
+            steps: z.array(z.object({ key: z.enum(PASSOS), done: z.boolean() })),
+          }),
+        },
+        security: seguranca,
+      },
+      onRequest: requireAuth(LER),
+    },
+    async (request) => obterChecklist(tenantContextOf(request)),
   )
 
   typed.get(

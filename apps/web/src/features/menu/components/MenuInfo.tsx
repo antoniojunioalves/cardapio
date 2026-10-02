@@ -1,3 +1,5 @@
+import { formatarTelefone } from '@repo/shared'
+
 import { Sheet } from '@/components/Sheet'
 
 import { formatarEndereco, horariosPorDia, resumoDaEntrega } from '../presentation'
@@ -62,7 +64,8 @@ export function MenuInfo({ cardapio, aoFechar }: MenuInfoProps) {
             <h3 className="text-body font-semibold text-content">Contato</h3>
             <p className="text-caption">
               <a href={`tel:+${telefone}`} className="text-primary underline">
-                {telefone}
+                {/* Guardado só com dígitos e o país; um valor antigo, livre, aparece como está. */}
+                {/^55\d{10,11}$/.test(telefone) ? formatarTelefone(telefone) : telefone}
               </a>
             </p>
           </section>

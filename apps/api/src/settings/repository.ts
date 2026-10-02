@@ -1,11 +1,14 @@
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, count, eq, sql } from 'drizzle-orm'
 
 import {
   businessHours,
+  categories,
   deliveryRegions,
   deliverySettings,
   paymentMethods,
+  products,
   tenantPaymentMethods,
+  tenants,
   tenantSettings,
   type BusinessHour,
   type DeliveryRegion,
@@ -236,4 +239,85 @@ export async function setPaymentMethods(
   }
 
   return listPaymentMethods(tx)
+}
+
+/** O que o registro de estabelecimentos guarda e as configurações mostram junto. */
+export interface IdentidadeDoEstabelecimento {
+  name: string
+  slug: string
+  timezone: string
+  status: 'ACTIVE' | 'SUSPENDED' | 'PENDING'
+}
+
+/**
+ * A identidade do estabelecimento do contexto. `tenants` não tem RLS — é o
+ * registro que resolve o slug —, então o filtro pelo id é explícito, e o id é
+ * o do contexto, nunca um valor vindo da requisição.
+ */
+export async function buscarIdentidade(
+  tx: TenantTransaction,
+  context: TenantContext,
+): Promise<IdentidadeDoEstabelecimento> {
+  const [identidade] = await tx
+    .select({
+      name: tenants.name,
+      slug: tenants.slug,
+      timezone: tenants.timezone,
+      status: tenants.status,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, context.tenantId))
+    .limit(1)
+
+  if (!identidade) throw new Error('estabelecimento não encontrado')
+  return identidade
+}
+
+/** Altera o nome e o fuso. O endereço (slug) não muda por aqui: está em links e cartazes. */
+export async function atualizarIdentidade(
+  tx: TenantTransaction,
+  context: TenantContext,
+  patch: { name?: string | undefined; timezone?: string | undefined },
+): Promise<void> {
+  if (patch.name === undefined && patch.timezone === undefined) return
+
+  await tx
+    .update(tenants)
+    .set({
+      ...(patch.name !== undefined && { name: patch.name }),
+      ...(patch.timezone !== undefined && { timezone: patch.timezone }),
+      updatedAt: new Date(),
+    })
+    .where(eq(tenants.id, context.tenantId))
+}
+
+export async function contarHorarios(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx.select({ total: count() }).from(businessHours)
+  return linha?.total ?? 0
+}
+
+export async function contarRegioesAtivas(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx
+    .select({ total: count() })
+    .from(deliveryRegions)
+    .where(eq(deliveryRegions.isActive, true))
+  return linha?.total ?? 0
+}
+
+export async function contarFormasDePagamentoHabilitadas(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx
+    .select({ total: count() })
+    .from(tenantPaymentMethods)
+    .where(eq(tenantPaymentMethods.isEnabled, true))
+  return linha?.total ?? 0
+}
+
+/** Produtos que o cliente consegue pedir: disponíveis, em categoria visível. */
+export async function contarProdutosAVenda(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx
+    .select({ total: count() })
+    .from(products)
+    .innerJoin(categories, eq(categories.id, products.categoryId))
+    .where(and(eq(products.isAvailable, true), eq(categories.isActive, true)))
+  return linha?.total ?? 0
 }

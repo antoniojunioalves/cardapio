@@ -151,6 +151,11 @@ describe('cardápio público', () => {
     expect(within(info).getByText('Pedido mínimo R$ 20,00')).toBeInTheDocument()
     expect(within(info).getByText('18:00 às 02:00')).toBeInTheDocument()
     expect(within(info).getByText('Rua das Flores, 123 — Centro, São Paulo/SP')).toBeInTheDocument()
+    // O telefone de contato aparece formatado, e o link liga para o número com o país.
+    expect(within(info).getByRole('link', { name: '(11) 98888-7777' })).toHaveAttribute(
+      'href',
+      'tel:+5511988887777',
+    )
     expect(within(info).getByText('Pix')).toBeInTheDocument()
     expect(within(info).getByText('Dinheiro')).toBeInTheDocument()
 

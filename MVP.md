@@ -26,20 +26,21 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [ ] Troca da própria senha, redefinição pelo dono e "Esqueci minha senha" por e-mail —
       _Fase 25_
 - [x] Painel com menu lateral e tela Início, com o resumo dos pedidos de hoje
-- [ ] Lista do que falta para receber pedidos, no Início — _Fase 21_
-- [ ] Configuração do estabelecimento: nome, logo, descrição, contato, WhatsApp — _Fase 21_
+- [x] Lista do que falta para receber pedidos, no Início
+- [x] Configuração do estabelecimento: nome, logo, capa, descrição, contato, WhatsApp, endereço
+      e fuso horário
 - [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia — _Fase 22_
 - [ ] Taxa de entrega: valor fixo ou por região — _Fase 22_
 - [ ] Retirada no estabelecimento, quando habilitada — _Fase 22_
-- [ ] Pedido mínimo — _Fase 21_
+- [x] Pedido mínimo
 - [ ] Formas de pagamento habilitáveis por tenant — _Fase 22_
 - [ ] Categorias com ordenação — _Fase 23_
 - [ ] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem — _Fase 23_
 - [ ] Grupos de opções com mínimo, máximo e obrigatoriedade — _Fase 24_
 - [ ] Adicionais com alteração de preço — _Fase 24_
 - [ ] Combos — _Fase 24_
-- [x] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — _pela API; as
-      telas são das Fases 21 e 23_
+- [x] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — _logo e capa
+      pela tela; as fotos de produto são da Fase 23_
 - [x] Lista de pedidos com atualização de status
 - [x] Pedidos novos chegando em tempo real
 - [ ] Lista de clientes e histórico de pedidos — _Fase 26_
@@ -142,7 +143,7 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 20:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
+> **Situação ao fim da Fase 21:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
 > — e os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o isolamento. Os passos 2 e 3
-> ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 21 a 28 fecham o MVP —
+> ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 22 a 28 fecham o MVP —
 > ver PROJECT_PLAN.md, "O que falta para o MVP".

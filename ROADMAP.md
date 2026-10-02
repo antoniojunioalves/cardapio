@@ -231,6 +231,8 @@ evolução com impacto no carrinho e no cálculo do pedido.
 
 ## Plataforma e multi-tenancy
 
+- Trocar o endereço do cardápio (`slug`). Hoje ele é definido no cadastro e não muda, porque já
+  está em links e cartazes; trocar pede manter o antigo redirecionando por um tempo.
 - Subdomínio por tenant — `tenant.dominio.com`
 - Domínio próprio do tenant
 - Cores do estabelecimento no cardápio público: guardar o tema em `tenant_settings`, devolvê-lo

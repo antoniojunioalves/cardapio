@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router'
 
 import { EmailConfirmationNotice } from '@/features/admin/components/EmailConfirmationNotice'
 import { PlanNotice } from '@/features/admin/components/PlanNotice'
+import { SetupChecklist } from '@/features/admin/components/SetupChecklist'
 import { caminhoDoPainel } from '@/features/admin/menu'
 import { usePainel, useTituloDoPainel } from '@/features/admin/panel'
 import { avisoDoPlano, usePlano } from '@/features/admin/plan'
@@ -52,6 +53,9 @@ export function AdminHomePage() {
       )}
 
       <PlanNotice aviso={avisoDoPlano(plano)} />
+
+      {/* Quem configura o estabelecimento é quem lê as configurações. */}
+      {permissoes.includes('settings:read') && <SetupChecklist slug={slug} />}
 
       {podeVerPedidos && (
         <section aria-labelledby="resumo-dos-pedidos" className="flex flex-col gap-stack">

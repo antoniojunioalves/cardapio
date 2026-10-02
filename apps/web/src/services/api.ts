@@ -44,6 +44,8 @@ export interface Requisicao {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   /** Enviado como JSON. */
   body?: unknown
+  /** Enviado como `multipart/form-data` — o upload de imagem. Não combina com `body`. */
+  formulario?: FormData
   /** Token de acesso do painel, enviado como `Authorization: Bearer`. */
   token?: string
   /** Envia os cookies — só as rotas de autenticação precisam (o refresh token). */
@@ -54,6 +56,7 @@ export interface Requisicao {
 /** Chama a API e devolve o JSON da resposta, ou lança `ApiError`. 204 devolve `undefined`. */
 export async function requisitar<T>(caminho: string, requisicao: Requisicao = {}): Promise<T> {
   const headers: Record<string, string> = {}
+  // Com `FormData` o navegador define o `Content-Type`, com a fronteira das partes.
   if (requisicao.body !== undefined) headers['content-type'] = 'application/json'
   if (requisicao.token) headers.authorization = `Bearer ${requisicao.token}`
 
@@ -61,6 +64,7 @@ export async function requisitar<T>(caminho: string, requisicao: Requisicao = {}
     ...(requisicao.method && { method: requisicao.method }),
     ...(Object.keys(headers).length > 0 && { headers }),
     ...(requisicao.body !== undefined && { body: JSON.stringify(requisicao.body) }),
+    ...(requisicao.formulario && { body: requisicao.formulario }),
     ...(requisicao.signal && { signal: requisicao.signal }),
     ...(requisicao.comCookie && { credentials: 'include' as const }),
   })
@@ -76,6 +80,23 @@ export async function getJson<T>(caminho: string, signal?: AbortSignal): Promise
 /** POST com corpo JSON, que devolve o JSON da resposta ou lança `ApiError`. */
 export async function postJson<T>(caminho: string, corpo: unknown): Promise<T> {
   return requisitar<T>(caminho, { method: 'POST', body: corpo })
+}
+
+/**
+ * Os erros de validação da API, por campo: `{ whatsappPhone: 'informe apenas dígitos…' }`.
+ *
+ * A API devolve um item por problema, com o caminho do campo (`instancePath:
+ * "/whatsappPhone"`). Fica a primeira mensagem de cada campo.
+ */
+export function errosPorCampo(detalhes: unknown): Record<string, string> {
+  if (!Array.isArray(detalhes)) return {}
+  const erros: Record<string, string> = {}
+  for (const item of detalhes as { instancePath?: unknown; message?: unknown }[]) {
+    if (typeof item.instancePath !== 'string' || typeof item.message !== 'string') continue
+    const campo = item.instancePath.slice(1)
+    if (campo) erros[campo] ??= item.message
+  }
+  return erros
 }
 
 export { API_URL }
