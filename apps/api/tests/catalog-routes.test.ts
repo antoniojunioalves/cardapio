@@ -373,7 +373,7 @@ describe('imagem do produto', () => {
 
     const r = await enviarImagem(`/categories/${categoria.id}/image`)
 
-    expect(r.json<Categoria>().imageUrl).toMatch(/\/categories\/[0-9a-f-]+\.png$/)
+    expect(r.json<Categoria>().imageUrl).toMatch(/\/categories\/[0-9a-f-]+\.webp$/)
   })
 
   it('imagem para produto inexistente responde 404 e não deixa arquivo órfão', async () => {

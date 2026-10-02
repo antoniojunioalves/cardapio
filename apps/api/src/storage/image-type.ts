@@ -9,15 +9,14 @@
  * Só três formatos são aceitos, e nenhum deles executa código. **SVG fica de
  * fora** porque é XML e pode carregar `<script>`: servido pelo nosso domínio,
  * vira XSS armazenado. GIF fica de fora por não ter uso num cardápio.
+ *
+ * É esta conferência que decide o que chega ao tratamento da imagem
+ * (`process-image.ts`): a biblioteca de lá abre SVG, GIF, TIFF e outros, e só
+ * não os recebe porque são barrados aqui.
  */
 
+/** O formato de uma imagem **enviada**. Guardada, toda imagem é WebP. */
 export type TipoDeImagem = 'image/jpeg' | 'image/png' | 'image/webp'
-
-export const EXTENSAO: Record<TipoDeImagem, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-}
 
 const comeca = (bytes: Uint8Array, assinatura: readonly number[], deslocamento = 0): boolean =>
   assinatura.every((byte, i) => bytes[deslocamento + i] === byte)

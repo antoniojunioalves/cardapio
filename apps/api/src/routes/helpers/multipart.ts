@@ -27,4 +27,4 @@ export async function lerArquivo(request: FastifyRequest): Promise<Uint8Array> {
 
 /** Descrição do upload, repetida em toda rota de imagem da documentação. */
 export const DESCRICAO_DO_UPLOAD =
-  'multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.'
+  'multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script. A imagem é tratada antes de ser guardada: sai sem metadados (inclusive a localização da foto), girada como a câmera anotou, reduzida ao tamanho do uso e em WebP. Imagem que não abre responde 422 `UNREADABLE_IMAGE`; com mais de 50 megapixels, 422 `IMAGE_TOO_LARGE`.'

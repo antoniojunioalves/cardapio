@@ -1,6 +1,6 @@
 import { recordAudit } from '../audit/record.js'
 import { tenantSettings, type TenantSettings } from '../db/schema/index.js'
-import { novaChaveDeImagem, type StorageService } from '../storage/index.js'
+import type { StorageService } from '../storage/index.js'
 import { removerImagem as removerImagemReferenciada, trocarImagem } from '../storage/replace.js'
 import type { TenantContext } from '../tenant/context.js'
 import { withTenant } from '../tenant/with-tenant.js'
@@ -22,9 +22,10 @@ export async function substituirImagem(
 ): Promise<TenantSettings> {
   return trocarImagem({
     service,
+    tenantId: context.tenantId,
+    uso: qual,
     conteudo,
-    montarChave: (tipo) => novaChaveDeImagem(context.tenantId, qual, tipo),
-    gravar: (chaveNova, tipo) =>
+    gravar: (chaveNova, imagem) =>
       withTenant(context, async (tx) => {
         const atual = await ensureSettings(tx, context)
         const chaveAntiga = atual[COLUNA[qual]]
@@ -40,7 +41,7 @@ export async function substituirImagem(
           entityType: 'tenant_settings',
           entityId: atualizado.id,
           actorUserId,
-          metadata: { de: chaveAntiga, para: chaveNova, tipo, bytes: conteudo.byteLength },
+          metadata: { de: chaveAntiga, para: chaveNova, ...imagem },
         })
 
         return { resultado: atualizado, chaveAntiga }

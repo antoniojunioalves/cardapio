@@ -17,7 +17,9 @@ import {
 } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
-import { definirPapel } from '../src/users/repository.js'
+import { RECURSO_USUARIOS } from '../src/plans/limits.js'
+import { travarLimiteDoPlano } from '../src/plans/service.js'
+import { definirPapel, inserirUsuario } from '../src/users/repository.js'
 import {
   criarTenantComUsuario,
   removerTenantDeTeste,
@@ -163,6 +165,52 @@ describe('criar usuário', () => {
 })
 
 describe('limite de usuários do plano', () => {
+  it('duas criações ao mesmo tempo: a segunda espera a primeira e encontra o limite', async () => {
+    await liberarVagas()
+    await criar('STAFF')
+    // Dono + 1 = 2 de 3: sobra exatamente uma vaga.
+    const contexto = tenantContextFromUser(loja.tenantId)
+
+    // A primeira criação, parada no meio: travou o limite e inseriu, mas ainda
+    // não confirmou — a outra transação não enxerga o usuário dela.
+    let confirmar = () => undefined as void
+    const sinal = new Promise<void>((resolve) => {
+      confirmar = resolve
+    })
+    let inseriu = () => undefined as void
+    const primeiraInseriu = new Promise<void>((resolve) => {
+      inseriu = resolve
+    })
+    const primeira = withTenant(contexto, async (tx) => {
+      await travarLimiteDoPlano(tx, contexto, RECURSO_USUARIOS)
+      await inserirUsuario(tx, {
+        tenantId: loja.tenantId,
+        name: 'Primeira',
+        email: `primeira-${randomUUID().slice(0, 8)}@exemplo.com`,
+        passwordHash: 'hash-qualquer',
+      })
+      inseriu()
+      await sinal
+    })
+    await primeiraInseriu
+
+    // Sem a trava na conferência, a segunda contaria 2 de 3 e passaria na hora.
+    const segunda = criar('STAFF').then(({ resposta }) => resposta)
+    const aindaEsperando = await Promise.race([
+      segunda.then(() => 'respondeu'),
+      new Promise<string>((resolve) => setTimeout(resolve, 200, 'esperando')),
+    ])
+    // Solta a primeira antes de conferir: se a conferência falhar, a transação
+    // dela não fica aberta, segurando a trava dos testes seguintes.
+    confirmar()
+    await primeira
+    expect(aindaEsperando).toBe('esperando')
+
+    const resposta = await segunda
+    expect(resposta.statusCode).toBe(409)
+    expect(resposta.json()).toMatchObject({ error: { code: 'PLAN_USER_LIMIT' } })
+  })
+
   it('conta só os ativos: cheio recusa, desativar abre vaga, reativar respeita o limite', async () => {
     await liberarVagas()
     // Dono + 2 = 3, o limite.

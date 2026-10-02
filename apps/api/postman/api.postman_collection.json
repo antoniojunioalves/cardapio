@@ -796,7 +796,7 @@
                 "logo"
               ]
             },
-            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script. A imagem é tratada antes de ser guardada: sai sem metadados (inclusive a localização da foto), girada como a câmera anotou, reduzida ao tamanho do uso e em WebP. Imagem que não abre responde 422 `UNREADABLE_IMAGE`; com mais de 50 megapixels, 422 `IMAGE_TOO_LARGE`.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
           }
         },
         {
@@ -848,7 +848,7 @@
                 "cover"
               ]
             },
-            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script. A imagem é tratada antes de ser guardada: sai sem metadados (inclusive a localização da foto), girada como a câmera anotou, reduzida ao tamanho do uso e em WebP. Imagem que não abre responde 422 `UNREADABLE_IMAGE`; com mais de 50 megapixels, 422 `IMAGE_TOO_LARGE`.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
           }
         },
         {
@@ -1096,7 +1096,7 @@
                 }
               ]
             },
-            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script. A imagem é tratada antes de ser guardada: sai sem metadados (inclusive a localização da foto), girada como a câmera anotou, reduzida ao tamanho do uso e em WebP. Imagem que não abre responde 422 `UNREADABLE_IMAGE`; com mais de 50 megapixels, 422 `IMAGE_TOO_LARGE`.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
           }
         },
         {
@@ -1347,7 +1347,7 @@
                 }
               ]
             },
-            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
+            "description": "multipart/form-data com o campo `file`. Aceita JPEG, PNG e WebP, identificados pelo conteúdo — extensão e Content-Type são ignorados. SVG é recusado por poder carregar script. A imagem é tratada antes de ser guardada: sai sem metadados (inclusive a localização da foto), girada como a câmera anotou, reduzida ao tamanho do uso e em WebP. Imagem que não abre responde 422 `UNREADABLE_IMAGE`; com mais de 50 megapixels, 422 `IMAGE_TOO_LARGE`.\n\nEscolha a imagem no campo `file` da aba Body (JPEG, PNG ou WebP)."
           }
         },
         {
@@ -2029,7 +2029,7 @@
       "description": "Plano do estabelecimento e uso do mês",
       "item": [
         {
-          "name": "Uso do plano: pedidos do mês e usuários ativos",
+          "name": "Uso do plano: pedidos do mês, usuários, produtos e categorias",
           "request": {
             "method": "GET",
             "header": [],

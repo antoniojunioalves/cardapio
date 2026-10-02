@@ -18,6 +18,9 @@ const usoSchema = z.object({
     state: z.enum(['LIVRE', 'PERTO_DO_LIMITE', 'NA_TOLERANCIA', 'BLOQUEADO']),
   }),
   users: z.object({ active: z.number(), limit: z.number().nullable() }),
+  /** Todo produto conta: combo, indisponível, sem foto. */
+  products: z.object({ used: z.number(), limit: z.number().nullable() }),
+  categories: z.object({ used: z.number(), limit: z.number().nullable() }),
 })
 
 export function adminPlanRoutes(instance: FastifyInstance): void {
@@ -28,7 +31,7 @@ export function adminPlanRoutes(instance: FastifyInstance): void {
     {
       schema: {
         tags: ['Plano'],
-        summary: 'Uso do plano: pedidos do mês e usuários ativos',
+        summary: 'Uso do plano: pedidos do mês, usuários, produtos e categorias',
         description:
           'Qualquer usuário logado vê — é o que explica ao atendente por que o cardápio parou ' +
           'de receber pedidos. O mês é o do calendário, no fuso do estabelecimento.',
@@ -52,6 +55,8 @@ export function adminPlanRoutes(instance: FastifyInstance): void {
           state: uso.pedidos.situacao,
         },
         users: { active: uso.usuarios.ativos, limit: uso.usuarios.limite },
+        products: { used: uso.produtos.usados, limit: uso.produtos.limite },
+        categories: { used: uso.categorias.usados, limit: uso.categorias.limite },
       }
     },
   )

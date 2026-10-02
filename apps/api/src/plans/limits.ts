@@ -10,12 +10,18 @@
  * **Usuários**: limite exato, sem tolerância — é o dono que cria usuário, e
  * ele pode desativar um para abrir vaga. Só usuário ativo conta.
  *
+ * **Produtos e categorias**: limite exato, sem tolerância. Todo produto conta —
+ * combo, indisponível, sem foto —, porque o que o limite contém é o espaço que
+ * um cadastro gratuito pode ocupar. Para abrir vaga, exclui-se um.
+ *
  * `null` é ilimitado. Recurso desligado no plano (`isEnabled = false`) vale
  * como limite zero.
  */
 
 export const RECURSO_PEDIDOS_POR_MES = 'maxOrdersPerMonth'
 export const RECURSO_USUARIOS = 'maxUsers'
+export const RECURSO_PRODUTOS = 'maxProducts'
+export const RECURSO_CATEGORIAS = 'maxCategories'
 
 export const TOLERANCIA_DE_PEDIDOS = 0.1
 export const AVISO_A_PARTIR_DE = 0.8
@@ -46,6 +52,9 @@ export function situacaoDosPedidos(usados: number, limite: number | null): UsoDe
   return { usados, limite, teto, situacao }
 }
 
-export function cabeMaisUmUsuario(ativos: number, limite: number | null): boolean {
-  return limite === null || ativos < limite
+/** Se cabe mais um num limite exato, sem tolerância. */
+export function cabeMaisUm(usados: number, limite: number | null): boolean {
+  return limite === null || usados < limite
 }
+
+export const cabeMaisUmUsuario = cabeMaisUm

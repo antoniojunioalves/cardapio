@@ -1,6 +1,14 @@
 import { count, eq, gte } from 'drizzle-orm'
 
-import { orders, planFeatures, plans, subscriptions, users } from '../db/schema/index.js'
+import {
+  categories,
+  orders,
+  planFeatures,
+  plans,
+  products,
+  subscriptions,
+  users,
+} from '../db/schema/index.js'
 import type { TenantTransaction } from '../tenant/with-tenant.js'
 
 /**
@@ -52,5 +60,15 @@ export async function contarPedidosDesde(tx: TenantTransaction, inicio: Date): P
 
 export async function contarUsuariosAtivos(tx: TenantTransaction): Promise<number> {
   const [linha] = await tx.select({ total: count() }).from(users).where(eq(users.isActive, true))
+  return linha?.total ?? 0
+}
+
+export async function contarProdutos(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx.select({ total: count() }).from(products)
+  return linha?.total ?? 0
+}
+
+export async function contarCategorias(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx.select({ total: count() }).from(categories)
   return linha?.total ?? 0
 }

@@ -1,9 +1,9 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-10-01
-**Fase atual:** 19b — concluída, aguardando validação
-**Próxima:** 20 — tratamento de imagens no upload e os limites do plano gratuito. As fases 20 a 28
-fecham o MVP (ver "O que falta para o MVP")
+**Fase atual:** 20 — concluída, aguardando validação
+**Próxima:** 21 — configuração do estabelecimento e a lista "o que falta para receber pedidos". As
+fases 21 a 28 fecham o MVP (ver "O que falta para o MVP")
 
 ---
 
@@ -79,8 +79,12 @@ menu em qualquer tela do painel.
 suspende (com motivo), reativa, troca o plano e reenvia a confirmação. Suspender tira o cardápio
 do ar e derruba na hora quem estava logado. Tudo fica na auditoria do estabelecimento.
 
+**As imagens são tratadas no envio (Fase 20).** Toda foto enviada é refeita antes de ser guardada:
+sai sem metadados — inclusive a localização GPS —, de pé, no tamanho do uso e em WebP. E o plano
+gratuito passou a limitar o cardápio a 20 produtos e 10 categorias.
+
 **Ainda não existe:** as telas de configuração, cardápio, usuários e clientes — o estabelecimento
-se cadastra pela página, mas ainda é configurado pela API. As fases 20 a 28 fecham o MVP; ver "O
+se cadastra pela página, mas ainda é configurado pela API. As fases 21 a 28 fecham o MVP; ver "O
 que falta para o MVP".
 
 ---
@@ -114,8 +118,8 @@ que falta para o MVP".
 | 18c | Painel do estabelecimento: moldura com menu lateral, tela Início e resumo dos pedidos                               | ✅ Concluída |
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ✅ Concluída |
 | 19b | Ajustes visuais do cardápio: janela "Info" e menu de baixo                                                          | ✅ Concluída |
-| 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜ Próxima   |
-| 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ⬜           |
+| 20  | Tratamento de imagens no upload e limites do plano gratuito (20 produtos, 10 categorias)                            | ✅ Concluída |
+| 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ⬜ Próxima   |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
 | 23  | Categorias e produtos                                                                                               | ⬜           |
 | 24  | Grupos de opção, adicionais e combos                                                                                | ⬜           |
@@ -128,6 +132,85 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 20 — concluída
+
+### Microtasks
+
+| #   | Tarefa                                                                                        | Status |
+| --- | --------------------------------------------------------------------------------------------- | ------ |
+| 1   | `sharp` como dependência, em versão exata — sem script de instalação, sem exceção no pnpm     | ✅     |
+| 2   | `tratarImagem`: sem metadados, girada pela orientação, reduzida ao tamanho do uso, em WebP    | ✅     |
+| 3   | `trocarImagem` passa a tratar toda imagem; a chave é sempre `.webp`                           | ✅     |
+| 4   | Recusas: imagem que não abre (422), pixels demais (422); SVG e afins continuam barrados antes | ✅     |
+| 5   | Teto do envio de 5 para 15 MB                                                                 | ✅     |
+| 6   | Plano gratuito: `maxProducts` 20 e `maxCategories` 10, conferidos ao criar, com trava         | ✅     |
+| 7   | `GET /api/v1/admin/plan` mostra o uso de produtos e categorias                                | ✅     |
+| 8   | Testes: GPS, giro, redução, transparência, recusas, limites e duas criações ao mesmo tempo    | ✅     |
+| 9   | O limite de usuários passa a travar antes de contar, como produtos e categorias               | ✅     |
+
+### Decisões e achados desta fase
+
+**A imagem é refeita, não "limpa".** O que fica guardado é outra imagem, gerada a partir dos
+pixels. Isso tira os metadados — a localização GPS de uma foto de celular, o modelo do aparelho —
+e também o que estivesse escondido dentro de um arquivo de imagem válido. O arquivo enviado nunca
+é guardado.
+
+**Os tamanhos:** maior lado de 512 px no logo, 800 na categoria, 1200 no produto e 1600 na capa,
+sem cortar e sem aumentar imagem pequena. Na API de verdade, uma foto de 8,1 MB e 4000×3000 virou
+um WebP de 253 KB e 900×1200.
+
+**A conferência dos primeiros bytes continua na frente, e ficou mais importante.** A biblioteca de
+imagem abre SVG, GIF e TIFF. Tirando a conferência num teste, o SVG com `<script>` passa — é ela
+que o barra.
+
+**Dois limites além dos bytes:** 50 megapixels na entrada (uma imagem enorme e lisa cabe em poucos
+KB e, aberta, ocuparia gigabytes) e 15 segundos por imagem.
+
+**O teto do envio subiu para 15 MB.** Com 5 MB, a foto do celular era recusada antes de ser
+reduzida. **Quem tem um `.env` antigo precisa trocar a linha** `UPLOAD_MAX_BYTES` — o teste na API
+de verdade recebeu 413 por causa disso.
+
+**Todo produto conta para o limite:** combo, indisponível, sem foto. O limite contém o espaço que
+um cadastro gratuito pode ocupar. Excluir abre vaga; quem já passou do limite (um plano rebaixado)
+mantém o que tem e só não cria mais.
+
+**A conferência trava antes de contar.** Sem isso, duas criações ao mesmo tempo contam "19 de 20"
+e as duas passam. O primeiro teste que escrevi para isso — cinco criações em paralelo — passava
+**com e sem** a trava: as criações são tão rápidas que quase nunca se cruzavam, e o teste não
+provava nada. Foi a checagem por mutação que mostrou. O teste que ficou segura a primeira criação
+no meio e confere que a segunda espera por ela.
+
+**O limite de usuários ganhou a mesma trava** (correção pedida pelo Junio na validação). Desde a
+Fase 14 ele contava sem trava, com a mesma brecha: duas criações — ou uma criação e uma
+reativação — ao mesmo tempo podiam passar de um. A brecha foi reproduzida em teste antes da
+correção. A trava virou uma função só, `travarLimiteDoPlano`, usada pelos três limites exatos.
+
+**As imagens enviadas antes desta fase não foram reprocessadas** — não há dado de produção. No
+banco de desenvolvimento, as antigas continuam em JPEG ou PNG, com os metadados que tinham.
+
+Os limites novos entram no banco pelo seed de planos: `pnpm db:seed` (idempotente, não mexe no
+que já existe). A coleção do Postman mudou só nas descrições — importe de novo.
+
+### Verificação executada
+
+| Verificação                            | Resultado                                                                                                                                                                                                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                          | **783 testes** (550 API + 205 web + 28 shared); formatação, typecheck, lint e build                                                                                                                                                                            |
+| Clone limpo, `--frozen-lockfile`       | os mesmos 783 testes; o `sharp` instalou do zero, sem exceção no pnpm                                                                                                                                                                                          |
+| Sem girar pela orientação              | falham os dois testes do giro                                                                                                                                                                                                                                  |
+| Mantendo os metadados                  | falham os três testes da foto de celular com GPS                                                                                                                                                                                                               |
+| Sem reduzir                            | falham os cinco testes de tamanho                                                                                                                                                                                                                              |
+| Sem conferir o formato antes de tratar | falham "recusa SVG" e "recusa HTML disfarçado de PNG"                                                                                                                                                                                                          |
+| Sem a trava antes da contagem          | falha "duas criações ao mesmo tempo" — a segunda é criada, furando o limite                                                                                                                                                                                    |
+| Usuário criado sem a trava             | falha "duas criações ao mesmo tempo", no teste de usuários                                                                                                                                                                                                     |
+| Produto criado sem conferir o plano    | falham o teste do limite e o das duas criações                                                                                                                                                                                                                 |
+| API de verdade, na porta 3334          | num estabelecimento descartável: a 11ª categoria e o 21º produto recusados com a mensagem do plano; foto de 8,1 MB, 4000×3000, com GPS → WebP de 253 KB, 900×1200, de pé e sem EXIF; SVG 415; JPEG cortado 422. Descartável, arquivo e e-mails apagados no fim |
+| Validação do Junio                     | a fazer                                                                                                                                                                                                                                                        |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
 
 ---
 
@@ -462,10 +545,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 19 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+As fases 1 a 20 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
 (MVP.md, "Como saber que acabou"). O passo 1 — cadastrar pela página inicial e confirmar o e-mail
 — e os passos 4 a 7 funcionam de ponta a ponta. Os passos 2 e 3 só funcionam **pela API**, e o
-sistema ainda não está no ar. As fases 20 a 28 fecham essa distância.
+sistema ainda não está no ar. As fases 21 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -494,18 +577,6 @@ sistema ainda não está no ar. As fases 20 a 28 fecham essa distância.
 Começar pelo cadastro permite validar cada tela seguinte num estabelecimento **recém-cadastrado e
 vazio**, como faria alguém que nunca viu o sistema.
 
-### Fase 20 — Tratamento de imagens no upload
-
-- Gira conforme a orientação da câmera, remove todos os metadados — inclusive o GPS —, reduz o
-  tamanho por uso (logo, capa, produto) e converte para WebP. Candidato: `sharp`, conferindo a
-  política de scripts de instalação do pnpm 10 (DEVELOPMENT.md).
-- Testes: foto com GPS sai sem EXIF; foto grande sai reduzida; PNG transparente continua
-  transparente.
-- **Limites do plano gratuito — decididos pelo Junio (validação da Fase 18): 20 produtos e 10
-  categorias**, cada um com a sua imagem, contra abuso do cadastro aberto — as categorias também
-  aceitam imagem, e sem limite o abuso passaria por elas. Dois recursos novos do plano
-  (`maxProducts` e `maxCategories`), na infraestrutura de limites da Fase 14.
-
 ### Fase 21 — Configuração do estabelecimento
 
 - A moldura do painel e o menu já existem (Fase 18c): a tela entra como um item do menu.
@@ -524,6 +595,10 @@ vazio**, como faria alguém que nunca viu o sistema.
 - **24:** grupos de opção, adicionais e combos.
 - Todas sobre rotas que já existem: `admin-settings.ts`, `admin-catalog.ts` e
   `admin-customization.ts`.
+- As telas de categorias e produtos (Fase 23) mostram o uso do plano — `products` e `categories`,
+  em `GET /api/v1/admin/plan` — e a recusa `PLAN_PRODUCT_LIMIT` / `PLAN_CATEGORY_LIMIT` da Fase 20.
+- O envio de imagem pelas telas (Fases 21 e 23) trata as recusas da Fase 20: 413 (mais de 15 MB),
+  415 (não é JPEG, PNG nem WebP) e 422 (`UNREADABLE_IMAGE`, `IMAGE_TOO_LARGE`).
 
 ### Fase 25 — Usuários e senha
 
@@ -722,7 +797,6 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Limites do plano gratuito: 20 produtos e 10 categorias (decididos)                                                                                                | Fase 20                                  |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
 | Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                                           | A definir pelo Junio                     |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |

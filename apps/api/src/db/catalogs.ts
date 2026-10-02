@@ -36,6 +36,9 @@ export const PLANOS = [
     features: [
       { key: 'maxOrdersPerMonth', isEnabled: true, limitValue: 100 },
       { key: 'maxUsers', isEnabled: true, limitValue: 2 },
+      // Contra o abuso do cadastro aberto: cada produto e cada categoria guarda uma imagem.
+      { key: 'maxProducts', isEnabled: true, limitValue: 20 },
+      { key: 'maxCategories', isEnabled: true, limitValue: 10 },
       { key: 'reports', isEnabled: false, limitValue: null },
     ],
   },
@@ -48,6 +51,8 @@ export const PLANOS = [
       // limitValue nulo significa ilimitado — zero seria um limite de verdade.
       { key: 'maxOrdersPerMonth', isEnabled: true, limitValue: null },
       { key: 'maxUsers', isEnabled: true, limitValue: null },
+      { key: 'maxProducts', isEnabled: true, limitValue: null },
+      { key: 'maxCategories', isEnabled: true, limitValue: null },
       { key: 'reports', isEnabled: true, limitValue: null },
     ],
   },
