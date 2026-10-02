@@ -10,6 +10,8 @@
  * navegador do cliente não é confiável.
  */
 
+import { minutosDoDia } from '@repo/shared'
+
 export interface Intervalo {
   /** 0 = domingo, 6 = sábado. */
   dayOfWeek: number
@@ -35,11 +37,8 @@ export type StatusDoEstabelecimento =
 
 const MINUTOS_POR_DIA = 24 * 60
 
-/** `'18:30'` e `'18:30:00'` viram 1110. */
-export function paraMinutos(hora: string): number {
-  const [h = '0', m = '0'] = hora.split(':')
-  return Number(h) * 60 + Number(m)
-}
+/** `'18:30'` e `'18:30:00'` viram 1110. A conta é a mesma que a tela dos horários usa. */
+export const paraMinutos = minutosDoDia
 
 interface MomentoLocal {
   dayOfWeek: number

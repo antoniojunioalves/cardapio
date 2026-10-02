@@ -135,12 +135,18 @@ describe('GET /api/v1/admin/setup-checklist', () => {
     expect((await lista(await entrar(semPermissao))).statusCode).toBe(403)
   })
 
-  it('o estabelecimento recém-criado só tem a entrega pronta, que já nasce habilitada', async () => {
+  it('o estabelecimento recém-criado tem tudo por fazer — a entrega nasce desligada', async () => {
     const resposta = await lista()
 
     expect(resposta.statusCode, resposta.body).toBe(200)
     expect(resposta.json<{ ready: boolean }>().ready).toBe(false)
-    expect(await faltando()).toEqual(['whatsapp', 'businessHours', 'paymentMethods', 'products'])
+    expect(await faltando()).toEqual([
+      'whatsapp',
+      'businessHours',
+      'fulfillment',
+      'paymentMethods',
+      'products',
+    ])
   })
 
   it('aguardando a confirmação do e-mail, o primeiro passo fica pendente', async () => {
@@ -167,6 +173,12 @@ describe('GET /api/v1/admin/setup-checklist', () => {
     const ctx = tenantContextFromUser(novo.tenantId)
 
     await atualizarConfiguracoes(ctx, novo.userId, { whatsappPhone: '5511999990000' })
+    expect(await faltando()).toEqual(['businessHours', 'fulfillment', 'paymentMethods', 'products'])
+
+    await substituirEntrega(ctx, novo.userId, {
+      configuracao: { deliveryEnabled: false, pickupEnabled: true },
+      regioes: [],
+    })
     expect(await faltando()).toEqual(['businessHours', 'paymentMethods', 'products'])
 
     await substituirHorarios(ctx, novo.userId, [
@@ -195,7 +207,7 @@ describe('GET /api/v1/admin/setup-checklist', () => {
     expect((await lista()).json<{ ready: boolean }>().ready).toBe(true)
   })
 
-  it('desligar a entrega sem ligar a retirada devolve o passo à lista', async () => {
+  it('entrega por região sem região ativa, e sem retirada, devolve o passo à lista', async () => {
     const ctx = tenantContextFromUser(novo.tenantId)
 
     await substituirEntrega(ctx, novo.userId, {

@@ -23,6 +23,23 @@ export interface RegiaoDeEntrega {
   isActive: boolean
 }
 
+/**
+ * Se há ao menos um jeito de o pedido chegar ao cliente: retirada, ou entrega
+ * que funcione. Entrega por região sem nenhuma região ativa não entrega em
+ * lugar nenhum.
+ *
+ * Um estabelecimento novo nasce com as duas desligadas. Enquanto for assim, o
+ * cardápio não recebe pedidos — o checkout não teria o que oferecer.
+ */
+export function temComoReceber(
+  configuracao: Pick<ConfiguracaoDeEntrega, 'deliveryEnabled' | 'pickupEnabled' | 'feeMode'>,
+  regioesAtivas: number,
+): boolean {
+  const entregaFunciona =
+    configuracao.deliveryEnabled && (configuracao.feeMode === 'FIXED' || regioesAtivas > 0)
+  return entregaFunciona || configuracao.pickupEnabled
+}
+
 export type TipoDeEntrega = 'DELIVERY' | 'PICKUP'
 
 export type ResultadoDaTaxa =

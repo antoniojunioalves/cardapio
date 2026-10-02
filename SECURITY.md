@@ -393,6 +393,19 @@ explícito pelo id do contexto, e não o banco. Há teste que tira o filtro e v�
 estabelecimento mudar. O endereço do cardápio não é alterável. Na tela, quem só tem
 `settings:read` vê os campos desligados; quem recusa de verdade é a API.
 
+**Horários, entrega e formas de pagamento** (Fase 22) são telas sobre rotas que já existiam, com
+as mesmas permissões: `settings:read` para ver, `settings:update` para gravar. Nenhuma rota nova.
+As regras que a tela aplica — horário sobreposto, região repetida, ao menos entrega ou retirada —
+são conforto: a API aplica as mesmas, e as do horário são literalmente a mesma função
+(`@repo/shared`). As três gravam por substituição dentro do contexto do estabelecimento; quem
+limita o alcance é o RLS, com teste de dois estabelecimentos desde a Fase 5.
+
+**Um estabelecimento novo não recebe pedidos por omissão.** Ele nasce sem entrega, sem retirada e
+sem forma de pagamento, e enquanto for assim o cardápio público responde `NAO_RECEBENDO` e a
+criação do pedido recusa. Antes da Fase 22, um cadastro novo ia ao ar com entrega ligada e grátis
+sem o dono ter decidido. A resposta pública não diz o motivo — é o mesmo status do limite do
+plano.
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.

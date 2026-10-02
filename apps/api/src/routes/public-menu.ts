@@ -118,7 +118,10 @@ export function publicMenuRoutes(instance: FastifyInstance): void {
         summary: 'Cardápio, status e condições de entrega de um estabelecimento',
         description:
           'Sem autenticação. Estabelecimento inexistente ou suspenso responde 404, igualmente. ' +
-          'O status e a disponibilidade são informativos: o pedido é validado de novo no servidor.',
+          'O status e a disponibilidade são informativos: o pedido é validado de novo no servidor. ' +
+          'O status `NAO_RECEBENDO` aparece quando o estabelecimento não tem entrega nem ' +
+          'retirada funcionando, não tem forma de pagamento habilitada ou passou do limite do ' +
+          'plano — a resposta não diz qual.',
         params: z.object({ tenantSlug: z.string() }),
         response: { 200: cardapioSchema },
       },

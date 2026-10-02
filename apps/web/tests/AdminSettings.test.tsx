@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useSessaoStore } from '../src/features/admin/session'
@@ -85,6 +85,17 @@ async function abrirConfiguracoes(api: Api = {}, comSessao = DONO) {
 
 const escrever = (rotulo: string, valor: string) => {
   fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } })
+}
+/**
+ * A mensagem saiu da tela e continua fora. Olhar uma vez só engana: o formulário
+ * confere de novo depois de cada mudança, e pode pôr a mensagem de volta.
+ */
+async function sumiuDeVez(texto: string) {
+  await waitFor(() => {
+    expect(screen.queryByText(texto)).toBeNull()
+  })
+  await act(() => new Promise<void>((resolver) => setTimeout(resolver, 100)))
+  expect(screen.queryByText(texto)).toBeNull()
 }
 const salvar = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }))
@@ -241,6 +252,18 @@ describe('tela de configurações', () => {
     expect(screen.getByText('O tempo máximo não pode ser menor que o mínimo.')).toBeVisible()
     expect(screen.getByLabelText('Nome')).toHaveAttribute('aria-invalid', 'true')
     expect(enviados(fetch, 'PATCH')).toHaveLength(0)
+  })
+
+  it('corrigir o tempo mínimo tira o erro que estava no máximo', async () => {
+    await abrirConfiguracoes()
+    const ERRO = 'O tempo máximo não pode ser menor que o mínimo.'
+
+    escrever('Tempo de preparo mínimo (min)', '60')
+    salvar()
+    await screen.findByText(ERRO)
+    escrever('Tempo de preparo mínimo (min)', '15')
+
+    await sumiuDeVez(ERRO)
   })
 
   it('recusa da API aparece no campo que ela apontou', async () => {

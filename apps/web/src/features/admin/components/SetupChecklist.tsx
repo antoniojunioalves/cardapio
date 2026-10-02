@@ -31,7 +31,7 @@ export function SetupChecklist({ slug }: { slug: string }) {
 
       <ul className="flex flex-col gap-3">
         {data.steps.map(({ key, done }) => {
-          const { titulo, comoFazer, caminho } = PASSOS[key]
+          const { titulo, comoFazer, onde } = PASSOS[key]
           return (
             <li key={key} className="flex items-start gap-3">
               <span className={done ? 'text-success' : 'text-content-muted'}>
@@ -45,12 +45,12 @@ export function SetupChecklist({ slug }: { slug: string }) {
                   <span className="sr-only">{done ? ' — feito' : ' — falta'}</span>
                 </p>
                 {!done && <p className="text-caption text-content-muted">{comoFazer}</p>}
-                {!done && caminho && (
+                {!done && onde && (
                   <Link
-                    to={caminhoDoPainel(slug, caminho)}
+                    to={caminhoDoPainel(slug, onde.caminho)}
                     className="text-caption font-semibold text-primary hover:underline"
                   >
-                    Abrir as configurações
+                    {onde.rotulo}
                   </Link>
                 )}
               </div>

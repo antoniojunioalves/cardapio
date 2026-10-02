@@ -4,6 +4,9 @@
  * Cada tela do painel é uma linha aqui e uma rota filha de
  * `/:tenantSlug/admin` em `App.tsx`. Para acrescentar uma tela: uma entrada
  * nesta lista, com a permissão que a API exige para os dados dela, e a rota.
+ *
+ * Um item fica marcado também nos endereços abaixo do seu: "Configurações"
+ * continua marcado em `configuracoes/horarios`.
  */
 
 export type IconeDoMenu = 'inicio' | 'pedidos' | 'configuracoes'
@@ -32,6 +35,18 @@ export const MENU: readonly ItemDoMenu[] = [
     permissao: 'settings:read',
     rodape: true,
   },
+]
+
+/**
+ * As abas da tela de Configurações. Cada uma tem o próprio endereço e o próprio
+ * "Salvar"; todas pedem a mesma permissão do item do menu, e por isso não
+ * viram itens dele.
+ */
+export const ABAS_DAS_CONFIGURACOES: readonly { rotulo: string; caminho: string }[] = [
+  { rotulo: 'Estabelecimento', caminho: 'configuracoes' },
+  { rotulo: 'Horários', caminho: 'configuracoes/horarios' },
+  { rotulo: 'Entrega', caminho: 'configuracoes/entrega' },
+  { rotulo: 'Pagamento', caminho: 'configuracoes/pagamento' },
 ]
 
 /** Os itens que as permissões da pessoa alcançam, na ordem do menu. */

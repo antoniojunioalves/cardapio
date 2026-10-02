@@ -34,7 +34,12 @@ export const deliverySettings = pgTable(
       .unique()
       .references(() => tenants.id, { onDelete: 'cascade' }),
 
-    deliveryEnabled: boolean().notNull().default(true),
+    /**
+     * As duas nascem desligadas (Fase 22): o dono escolhe como entrega, em vez
+     * de o cardápio ir ao ar com entrega grátis sem ele ter decidido nada. Até
+     * lá, o cardápio não recebe pedidos (`temComoReceber`).
+     */
+    deliveryEnabled: boolean().notNull().default(false),
     /** Retirada no balcão. Um food truck pode só ter isto. */
     pickupEnabled: boolean().notNull().default(false),
 

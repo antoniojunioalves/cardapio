@@ -1,4 +1,10 @@
-import { fusoValido, textoObrigatorio } from '@repo/shared'
+import {
+  fusoValido,
+  HORA_DO_DIA,
+  MAXIMO_DE_INTERVALOS,
+  problemasDosHorarios,
+  textoObrigatorio,
+} from '@repo/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
@@ -17,12 +23,8 @@ import {
   substituirHorarios,
 } from '../settings/service.js'
 import { PASSOS } from '../settings/checklist.js'
-import { paraMinutos } from '../settings/opening-hours.js'
 import { apresentarConfiguracoes } from '../settings/presenter.js'
 import { storage } from '../storage/index.js'
-
-/** `HH:MM` ou `HH:MM:SS`. */
-const HORA = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/
 
 const centavos = z.coerce.number().int().min(0)
 const minutos = z.coerce
@@ -102,51 +104,28 @@ const patchDeConfiguracoes = z
     { message: 'o tempo mínimo de preparo não pode ser maior que o máximo' },
   )
 
-const intervaloSchema = z
-  .object({
-    dayOfWeek: z.coerce.number().int().min(0).max(6),
-    opensAt: z.string().regex(HORA, 'use o formato HH:MM'),
-    closesAt: z.string().regex(HORA, 'use o formato HH:MM'),
-  })
-  .refine((i) => i.opensAt !== i.closesAt, {
+const intervaloSchema = z.object({
+  dayOfWeek: z.coerce.number().int().min(0).max(6),
+  opensAt: z.string().regex(HORA_DO_DIA, 'use o formato HH:MM'),
+  closesAt: z.string().regex(HORA_DO_DIA, 'use o formato HH:MM'),
+})
+
+/**
+ * A grade da semana. As regras são as de `@repo/shared`, as mesmas que a tela
+ * dos horários aplica enquanto a pessoa edita: abrir e fechar na mesma hora e
+ * intervalos sobrepostos no mesmo dia são recusados.
+ */
+const horariosSchema = z
+  .object({ intervalos: z.array(intervaloSchema).max(MAXIMO_DE_INTERVALOS) })
+  .refine((v) => !problemasDosHorarios(v.intervalos).includes('ABRE_E_FECHA_IGUAIS'), {
     message:
       'abertura e fechamento não podem ser iguais — para funcionamento ininterrupto use 00:00 às 23:59',
+    path: ['intervalos'],
   })
-
-const horariosSchema = z
-  .object({ intervalos: z.array(intervaloSchema).max(50) })
-  .refine((v) => !temSobreposicao(v.intervalos), {
+  .refine((v) => !problemasDosHorarios(v.intervalos).includes('SOBREPOSTO'), {
     message: 'há intervalos sobrepostos no mesmo dia',
     path: ['intervalos'],
   })
-
-/**
- * Detecta intervalos sobrepostos no mesmo dia — o erro comum de cadastrar
- * 11:00–14:00 e 13:00–18:00 e depois não entender por que o horário exibido
- * está estranho.
- *
- * Intervalos que atravessam a meia-noite ficam de fora: comparar um
- * 18:00–02:00 com os do dia seguinte exigiria normalizar a semana inteira numa
- * linha do tempo, e o ganho não paga a complexidade num formulário que o
- * lojista revisa na tela.
- */
-function temSobreposicao(intervalos: readonly z.infer<typeof intervaloSchema>[]): boolean {
-  for (let dia = 0; dia <= 6; dia += 1) {
-    const doDia = intervalos
-      .filter((i) => i.dayOfWeek === dia)
-      .filter((i) => paraMinutos(i.closesAt) > paraMinutos(i.opensAt))
-      .map((i) => ({ abre: paraMinutos(i.opensAt), fecha: paraMinutos(i.closesAt) }))
-      .sort((a, b) => a.abre - b.abre)
-
-    for (let i = 1; i < doDia.length; i += 1) {
-      const anterior = doDia[i - 1]
-      const atual = doDia[i]
-      if (anterior && atual && atual.abre < anterior.fecha) return true
-    }
-  }
-
-  return false
-}
 
 const horarioDeSaida = z.object({
   id: z.uuid(),
@@ -214,6 +193,13 @@ const patchDeEntrega = z
   .refine((v) => new Set(v.regioes.map((r) => r.name.toLowerCase())).size === v.regioes.length, {
     message: 'há regiões com o mesmo nome',
   })
+  .refine(
+    (v) =>
+      v.configuracao.estimatedMinMinutes == null ||
+      v.configuracao.estimatedMaxMinutes == null ||
+      v.configuracao.estimatedMinMinutes <= v.configuracao.estimatedMaxMinutes,
+    { message: 'o tempo mínimo de entrega não pode ser maior que o máximo' },
+  )
 
 const formaDePagamentoSchema = z.object({
   id: z.uuid(),
@@ -363,6 +349,9 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       schema: {
         tags: ['Configurações'],
         summary: 'Configuração de entrega e regiões',
+        description:
+          'Um estabelecimento nasce com a entrega e a retirada desligadas: é o dono quem liga. ' +
+          'Enquanto as duas estiverem desligadas, o cardápio não recebe pedidos.',
         response: { 200: entregaSchema },
         security: seguranca,
       },
@@ -377,6 +366,10 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       schema: {
         tags: ['Configurações'],
         summary: 'Salva entrega e regiões numa transação só',
+        description:
+          'A lista de regiões enviada substitui a anterior. Regras: ao menos entrega ou retirada ' +
+          'ligada; com a entrega ligada no modo `BY_REGION`, ao menos uma região ativa; nomes de ' +
+          'região sem repetição; o tempo mínimo não passa do máximo.',
         body: patchDeEntrega,
         response: { 200: entregaSchema },
         security: seguranca,
@@ -407,6 +400,8 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
       schema: {
         tags: ['Configurações'],
         summary: 'Habilita, desabilita e ordena as formas de pagamento',
+        description:
+          'Só as formas enviadas mudam. Sem nenhuma forma habilitada, o cardápio não recebe pedidos.',
         body: patchDeFormasDePagamento,
         response: { 200: z.array(formaDePagamentoSchema) },
         security: seguranca,

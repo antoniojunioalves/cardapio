@@ -29,11 +29,13 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Lista do que falta para receber pedidos, no Início
 - [x] Configuração do estabelecimento: nome, logo, capa, descrição, contato, WhatsApp, endereço
       e fuso horário
-- [ ] Horário de funcionamento, com múltiplos intervalos no mesmo dia — _Fase 22_
-- [ ] Taxa de entrega: valor fixo ou por região — _Fase 22_
-- [ ] Retirada no estabelecimento, quando habilitada — _Fase 22_
+- [x] Horário de funcionamento, com múltiplos intervalos no mesmo dia
+- [x] Taxa de entrega: valor fixo ou por região
+- [x] Retirada no estabelecimento, quando habilitada
 - [x] Pedido mínimo
-- [ ] Formas de pagamento habilitáveis por tenant — _Fase 22_
+- [x] Formas de pagamento habilitáveis por tenant
+- [x] Estabelecimento novo nasce sem entrega nem retirada: o cardápio só recebe pedidos depois
+      que o dono escolhe como entrega e como recebe
 - [ ] Categorias com ordenação — _Fase 23_
 - [ ] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem — _Fase 23_
 - [ ] Grupos de opções com mínimo, máximo e obrigatoriedade — _Fase 24_
@@ -143,7 +145,8 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 21:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
-> — e os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o isolamento. Os passos 2 e 3
-> ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 22 a 28 fecham o MVP —
-> ver PROJECT_PLAN.md, "O que falta para o MVP".
+> **Situação ao fim da Fase 22:** os passos 1 e 2 — cadastrar, confirmar o e-mail, entrar e
+> configurar o estabelecimento, os horários, a entrega e o pagamento — e os passos 4 a 7 funcionam
+> de ponta a ponta, e os testes provam o isolamento. O passo 3 ainda só funciona pela API, e o
+> sistema ainda não está no ar. As fases 23 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta
+> para o MVP".

@@ -5,6 +5,7 @@ import {
   listDeliveryRegions,
   listPaymentMethods,
 } from '../settings/repository.js'
+import { temComoReceber } from '../settings/delivery-fee.js'
 import { statusDoEstabelecimento, type StatusDoEstabelecimento } from '../settings/opening-hours.js'
 import { urlDaImagem, type StorageService } from '../storage/index.js'
 import { usoDoPlano } from '../plans/service.js'
@@ -177,11 +178,17 @@ export async function montarCardapioPublico(
       prepTimeMaxMinutes: configuracoes.prepTimeMaxMinutes,
       minimumOrderInCents: configuracoes.minimumOrderInCents,
     },
-    // Passado o limite do plano com a tolerância, o cardápio para de receber
-    // pedidos. A resposta não cita o plano: a situação comercial do
-    // estabelecimento não é da conta de quem abre o cardápio.
+    // O cardápio para de receber pedidos em três casos, e a resposta é a mesma
+    // nos três, sem dizer qual:
+    // - passado o limite do plano com a tolerância — a situação comercial do
+    //   estabelecimento não é da conta de quem abre o cardápio;
+    // - sem entrega nem retirada funcionando (é como um estabelecimento nasce);
+    // - sem nenhuma forma de pagamento.
+    // Nos dois últimos, o checkout não teria o que oferecer.
     status:
-      (await usoDoPlano(tx, tenant.timezone, agora)).pedidos.situacao === 'BLOQUEADO'
+      (await usoDoPlano(tx, tenant.timezone, agora)).pedidos.situacao === 'BLOQUEADO' ||
+      !temComoReceber(entrega, regioes.filter((r) => r.isActive).length) ||
+      !formas.some((f) => f.isEnabled)
         ? { aberto: false, motivo: 'NAO_RECEBENDO' }
         : statusDoEstabelecimento({
             intervalos,

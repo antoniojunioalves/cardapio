@@ -60,8 +60,9 @@ export function AdminNav({
       <li key={item.caminho}>
         <NavLink
           to={caminhoDoPainel(slug, item.caminho)}
-          // Sem `end`, o Início ficaria marcado em todas as telas do painel.
-          end
+          // Sem `end`, o Início ficaria marcado em todas as telas do painel. Os
+          // outros itens ficam marcados também nas telas abaixo deles.
+          end={item.caminho === ''}
           onClick={aoNavegar}
           // O número sozinho não diz nada a quem ouve a página: o rótulo diz o que ele conta.
           aria-label={

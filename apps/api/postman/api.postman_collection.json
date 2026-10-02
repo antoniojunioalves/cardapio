@@ -665,7 +665,7 @@
                 "delivery"
               ]
             },
-            "description": ""
+            "description": "Um estabelecimento nasce com a entrega e a retirada desligadas: é o dono quem liga. Enquanto as duas estiverem desligadas, o cardápio não recebe pedidos."
           }
         },
         {
@@ -699,7 +699,7 @@
                 "delivery"
               ]
             },
-            "description": "Substitui a configuração e as regiões. Para taxa por região: `feeMode: \"BY_REGION\"` e `regioes: [{ \"name\": \"Centro\", \"feeInCents\": 500 }]`."
+            "description": "A lista de regiões enviada substitui a anterior. Regras: ao menos entrega ou retirada ligada; com a entrega ligada no modo `BY_REGION`, ao menos uma região ativa; nomes de região sem repetição; o tempo mínimo não passa do máximo.\n\nSubstitui a configuração e as regiões. Para taxa por região: `feeMode: \"BY_REGION\"` e `regioes: [{ \"name\": \"Centro\", \"feeInCents\": 500 }]`."
           }
         },
         {
@@ -765,7 +765,7 @@
                 "payment-methods"
               ]
             },
-            "description": "Rode antes \"Formas de pagamento disponíveis e quais estão habilitadas\", que guarda `paymentMethodId`."
+            "description": "Só as formas enviadas mudam. Sem nenhuma forma habilitada, o cardápio não recebe pedidos.\n\nRode antes \"Formas de pagamento disponíveis e quais estão habilitadas\", que guarda `paymentMethodId`."
           }
         },
         {
@@ -2136,7 +2136,7 @@
                 }
               ]
             },
-            "description": "Sem autenticação. Estabelecimento inexistente ou suspenso responde 404, igualmente. O status e a disponibilidade são informativos: o pedido é validado de novo no servidor.\n\nPrepara o pedido: escolhe um produto sem opção obrigatória, a quantidade que atinge o pedido mínimo, a retirada ou a entrega, a forma de pagamento e o total esperado."
+            "description": "Sem autenticação. Estabelecimento inexistente ou suspenso responde 404, igualmente. O status e a disponibilidade são informativos: o pedido é validado de novo no servidor. O status `NAO_RECEBENDO` aparece quando o estabelecimento não tem entrega nem retirada funcionando, não tem forma de pagamento habilitada ou passou do limite do plano — a resposta não diz qual.\n\nPrepara o pedido: escolhe um produto sem opção obrigatória, a quantidade que atinge o pedido mínimo, a retirada ou a entrega, a forma de pagamento e o total esperado."
           }
         },
         {

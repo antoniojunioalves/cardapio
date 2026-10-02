@@ -515,8 +515,29 @@ Para uma tela nova:
    `useTituloDoPainel('…')`. Ela **não** confere sessão, não abre conexão ao vivo e não tem botão
    de sair: isso é da moldura.
 4. **O ícone**, em `components/icons.tsx` — SVG no próprio código.
-5. **Se a tela resolve um passo de "o que falta para receber pedidos"**, o `caminho` dela em
-   `PASSOS` (`features/admin/checklist.ts`): o passo vira um link no Início.
+5. **Se a tela resolve um passo de "o que falta para receber pedidos"**, o `onde` dela em
+   `PASSOS` (`features/admin/checklist.ts`) — o caminho e o que o link diz: o passo ganha um link
+   no Início.
+
+**Uma aba nova em Configurações** não é item do menu: é uma entrada em `ABAS_DAS_CONFIGURACOES`
+(`menu.ts`) e uma rota filha de `configuracoes` em `App.tsx`. A página da aba não tem `<h1>` nem
+título próprio — são da moldura, `SettingsTabs`. Siga uma das que existem (`hours.ts` e
+`HoursForm.tsx`, por exemplo):
+
+- o módulo da aba tem o schema do formulário, `paraFormulario` e os dois hooks, de ler e de salvar;
+- o hook de salvar guarda a resposta no cache e marca a lista do Início para ser relida;
+- o formulário usa as peças de `components/form-parts.tsx` — `Secao`, `Marcavel`,
+  `RodapeDeSalvar`, `Carregado` — e, para reais e minutos, os campos de `form-fields.ts`;
+- regra entre dois campos leva `when: comCamposValidos([...], …)`, ou a pessoa só vê o erro depois
+  de corrigir todos os outros;
+- o campo que participa de uma regra mas **não** guarda o erro dela leva
+  `register('campo', { onChange: reconferir({ formState, trigger }, 'campoDoErro') })`. Sem isso,
+  corrigir por ele deixa a mensagem na tela até o próximo "Salvar";
+- no teste de "a mensagem sumiu", use `sumiuDeVez` (`tests/AdminSettingsTabs.test.tsx`), que olha,
+  espera e olha de novo. Um `waitFor` sozinho passa no instante em que a mensagem sai, mesmo que
+  o formulário a ponha de volta logo depois;
+- lista de campos (horários, regiões) usa `useFieldArray`, e o caminho do campo sai de uma função
+  tipada (`campoDoIntervalo`), porque o lint não aceita número solto em texto montado.
 
 Mobile-first: desenhe a tela para o celular e acrescente o que a tela grande permite (`sm:`, `lg:`),
 nunca o contrário. A moldura já cuida do menu — gaveta no celular, coluna fixa a partir de `lg`.

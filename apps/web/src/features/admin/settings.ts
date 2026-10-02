@@ -9,9 +9,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 
-import { formatarPreco, lerReais } from '@/utils/money'
-
 import { chaveDoChecklist } from './checklist'
+import {
+  comCamposValidos,
+  minutosOpcionais,
+  minutosValidos,
+  reais,
+  reaisSemSimbolo,
+} from './form-fields'
 import { comSessao, useSessaoStore } from './session'
 
 /** As configurações do estabelecimento, como `GET /api/v1/admin/settings` devolve. */
@@ -105,16 +110,6 @@ const telefoneOpcional = z.string().transform((valor, ctx) => {
   return normalizado
 })
 
-const minutosOpcionais = z.string().transform((valor, ctx) => {
-  const texto = valor.trim()
-  if (texto === '') return null
-  if (!/^\d{1,4}$/.test(texto) || Number(texto) > 24 * 60) {
-    ctx.addIssue({ code: 'custom', message: 'Informe o tempo em minutos, como 30.' })
-    return z.NEVER
-  }
-  return Number(texto)
-})
-
 /**
  * O formulário das configurações. Recebe o que a pessoa digitou — telefone com
  * máscara, valor em reais — e entrega o corpo que a API espera: só dígitos,
@@ -162,14 +157,7 @@ export const formularioSchema = z
 
     prepTimeMinMinutes: minutosOpcionais,
     prepTimeMaxMinutes: minutosOpcionais,
-    minimumOrderInCents: z.string().transform((valor, ctx) => {
-      const centavos = valor.trim() === '' ? 0 : lerReais(valor.trim())
-      if (centavos === null) {
-        ctx.addIssue({ code: 'custom', message: 'Informe um valor em reais, como 20,00.' })
-        return z.NEVER
-      }
-      return centavos
-    }),
+    minimumOrderInCents: reais,
     isAcceptingOrders: z.boolean(),
   })
   .refine(
@@ -180,14 +168,7 @@ export const formularioSchema = z
     {
       message: 'O tempo máximo não pode ser menor que o mínimo.',
       path: ['prepTimeMaxMinutes'],
-      // Uma regra entre dois campos só roda, por padrão, se o formulário inteiro
-      // estiver válido — e a pessoa só veria este erro depois de corrigir os
-      // outros. Basta os dois tempos estarem válidos.
-      when: ({ value }) => {
-        const campos = value as Record<string, unknown>
-        const valido = (minutos: unknown) => minutos === null || typeof minutos === 'number'
-        return valido(campos.prepTimeMinMinutes) && valido(campos.prepTimeMaxMinutes)
-      },
+      when: comCamposValidos(['prepTimeMinMinutes', 'prepTimeMaxMinutes'], minutosValidos),
     },
   )
 
@@ -195,12 +176,6 @@ export const formularioSchema = z
 export type ValoresDoFormulario = z.input<typeof formularioSchema>
 /** O corpo de `PATCH /api/v1/admin/settings`. */
 export type DadosDoFormulario = z.output<typeof formularioSchema>
-
-/** `2000` → `20,00`: o valor em reais como a pessoa o digitaria, sem o "R$". */
-const reaisSemSimbolo = (centavos: number) =>
-  formatarPreco(centavos)
-    .replace(/R\$\s?/, '')
-    .trim()
 
 const telefoneParaExibir = (telefone: string | null) =>
   // Só formata o que foi guardado normalizado; um valor antigo, livre, aparece como está.

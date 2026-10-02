@@ -51,8 +51,9 @@ export function descreverStatus(status: StatusDoEstabelecimento): StatusDescrito
     }
   }
 
-  // O estabelecimento passou do limite de pedidos do plano. O texto não diz
-  // isso: a situação comercial dele não é assunto de quem abre o cardápio.
+  // O estabelecimento passou do limite de pedidos do plano, ou ainda não
+  // escolheu como entrega e como recebe. O texto não diz qual: a situação dele
+  // não é assunto de quem abre o cardápio.
   if (status.motivo === 'NAO_RECEBENDO') {
     return {
       aberto: false,
