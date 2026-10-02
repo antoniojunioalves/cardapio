@@ -75,12 +75,15 @@ export const envSchema = z
     STORAGE_LOCAL_PATH: z.string().min(1).default('./uploads'),
     /** Endereço público pelo qual o navegador busca as imagens. */
     STORAGE_PUBLIC_URL: z.url().default('http://localhost:3333/uploads'),
-    /** Teto por arquivo. Foto de celular sem compressão passa de 5 MB fácil. */
+    /**
+     * Teto por arquivo **enviado**. Foto de celular passa de 5 MB fácil, e o
+     * que fica guardado é a versão tratada, bem menor (`storage/process-image.ts`).
+     */
     UPLOAD_MAX_BYTES: z.coerce
       .number()
       .int()
       .positive()
-      .default(5 * 1024 * 1024),
+      .default(15 * 1024 * 1024),
 
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
     RATE_LIMIT_WINDOW: z.string().min(1).default('1 minute'),

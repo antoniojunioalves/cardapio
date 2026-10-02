@@ -11,7 +11,7 @@ pelo WhatsApp do estabelecimento.
 
 **Status atual: Fase 18 concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
-publicado quando o dono confirma o e-mail. As fases 20 a 28 fecham o MVP — telas de gestão e o
+publicado quando o dono confirma o e-mail. As fases 21 a 28 fecham o MVP — telas de gestão e o
 sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
@@ -45,7 +45,7 @@ Versões fixadas e verificadas em conjunto — a instalação resolve sem nenhum
 | Camada    | Tecnologias                                                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------- |
 | Base      | Node 24.11 · TypeScript 6.0 · pnpm 10.20 · Turborepo 2.11                                                           |
-| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3 · nodemailer 10                               |
+| Backend   | Fastify 5.12 · Drizzle ORM 0.45 · PostgreSQL 18 · Zod 4.6 · pino 10.3 · nodemailer 10 · sharp 0.35                  |
 | Frontend  | Vite 8.3 · React 19.3 · Tailwind CSS 4.3 · React Router 8.4 · TanStack Query 5 · Zustand 5.0 · React Hook Form 7.89 |
 | Qualidade | ESLint 10.11 · typescript-eslint 8.70 · Prettier 3.9 · Vitest 5.0                                                   |
 | Infra     | Docker Compose (PostgreSQL, Mailpit) · GitHub Actions (CI, desligado até a Fase 28)                                 |

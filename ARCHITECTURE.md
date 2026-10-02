@@ -1156,9 +1156,9 @@ registra.
 
 ## 10. Storage de imagens
 
-### 9.1 Chaves, não caminhos nem URLs
+### 10.1 Chaves, não caminhos nem URLs
 
-O domínio só conhece **chaves** — `tenants/{tenantId}/logo/{uuid}.png` — por meio da interface
+O domínio só conhece **chaves** — `tenants/{tenantId}/logo/{uuid}.webp` — por meio da interface
 `StorageService`. O MVP tem o `LocalStorageProvider`, que grava em disco; um provider S3 entra
 escrevendo outra implementação, sem tocar em regra de negócio.
 
@@ -1170,19 +1170,21 @@ O nome do arquivo enviado não participa da chave. Acento, espaço, `../` e nome
 de ser problema porque nunca chegam ao disco. O prefixo do tenant separa os arquivos de cada
 estabelecimento, o que facilita apagar tudo de um e, no S3, aplicar política por prefixo.
 
-### 9.2 O tipo vem do conteúdo
+### 10.2 O tipo vem do conteúdo
 
 O tipo da imagem é detectado pelos **primeiros bytes** do arquivo. Extensão e `Content-Type` do
 upload são ignorados, porque quem envia escolhe os dois: um HTML renomeado para `foto.png`
 passaria por qualquer checagem baseada neles e seria servido a partir do nosso domínio.
 
 Só JPEG, PNG e WebP são aceitos. **SVG é recusado** por ser XML capaz de carregar `<script>`:
-servido pelo nosso domínio, viraria XSS armazenado.
+servido pelo nosso domínio, viraria XSS armazenado. Esta conferência é também o que decide o que
+chega ao tratamento da imagem (10.6): a biblioteca de lá abre SVG, GIF e TIFF, e só não os recebe
+porque são barrados aqui.
 
 O limite de tamanho é aplicado **enquanto o arquivo chega**, e não depois: um envio de 2 GB é
 interrompido no primeiro byte acima do teto, sem ocupar a memória.
 
-### 9.3 Defesa contra path traversal, em duas camadas
+### 10.3 Defesa contra path traversal, em duas camadas
 
 As chaves são sempre montadas pelo servidor, então nenhuma deveria conter `../`. Mesmo assim:
 
@@ -1193,18 +1195,19 @@ As chaves são sempre montadas pelo servidor, então nenhuma deveria conter `../
 
 A segunda camada existe para o dia em que alguém afrouxar a primeira.
 
-### 9.4 Ordem das operações na troca de imagem
+### 10.4 Ordem das operações na troca de imagem
 
-1. Grava o arquivo novo. Se falhar, nada mudou.
-2. Aponta o banco para ele, na mesma transação da auditoria. Se a transação falhar, o arquivo
+1. Confere o formato e trata a imagem (10.6). O arquivo enviado nunca é guardado.
+2. Grava o arquivo tratado. Se falhar, nada mudou.
+3. Aponta o banco para ele, na mesma transação da auditoria. Se a transação falhar, o arquivo
    novo é apagado.
-3. **Só depois do commit** apaga o antigo.
+4. **Só depois do commit** apaga o antigo.
 
 Apagar o antigo antes deixaria, num rollback, o banco apontando para um arquivo inexistente — um
-logo quebrado no cardápio público. Se o passo 3 falhar, sobra um arquivo sem referência, que é a
+logo quebrado no cardápio público. Se o passo 4 falhar, sobra um arquivo sem referência, que é a
 falha mais barata possível: ocupa disco e não quebra nada visível.
 
-### 9.5 Entrega
+### 10.5 Entrega
 
 As imagens são servidas em `/uploads/` com dois cabeçalhos diferentes do resto da API:
 
@@ -1215,6 +1218,36 @@ As imagens são servidas em `/uploads/` com dois cabeçalhos diferentes do resto
   nunca muda e pode ficar em cache para sempre.
 
 Com S3, as imagens seriam servidas pelo bucket ou por uma CDN, e este caminho deixaria de existir.
+
+### 10.6 Tratamento da imagem
+
+Toda imagem enviada é **refeita a partir dos pixels** antes de ser guardada
+(`storage/process-image.ts`, com o `sharp`), no único caminho que grava imagem (`trocarImagem`). O
+que fica guardado é outra imagem:
+
+- **sem metadado nenhum.** Foto de celular carrega a localização GPS de onde foi tirada, o modelo
+  do aparelho e a data — e o cardápio é público. EXIF, XMP, IPTC e perfil de cor ficam para trás;
+- **de pé.** A câmera grava a foto deitada e anota no EXIF como girá-la; como o EXIF vai embora, o
+  giro é aplicado aos pixels antes;
+- **no tamanho do uso:** o maior lado fica com 512 px no logo, 800 na categoria, 1200 no produto
+  e 1600 na capa. A proporção é mantida — nada é cortado —, e imagem pequena não é aumentada;
+- **em WebP**, que pesa bem menos e mantém a transparência de um logo recortado. Por isso toda
+  chave termina em `.webp`.
+
+Uma foto de 8 MB e 12 MP sai com cerca de 250 KB. Como o que fica guardado é pequeno, o teto do
+**envio** subiu de 5 para 15 MB (`UPLOAD_MAX_BYTES`): a foto do celular passa sem a pessoa ter de
+reduzi-la antes.
+
+Dois limites protegem o servidor. O de **pixels** (50 MP na entrada): o teto de bytes não basta,
+porque uma imagem enorme e lisa comprime para poucos KB e, aberta, ocuparia gigabytes — ela é
+recusada com 422 `IMAGE_TOO_LARGE`, sem ser decodificada. E o de **tempo** (15 s por imagem).
+Arquivo com a assinatura certa que não abre — cortado, corrompido — responde 422
+`UNREADABLE_IMAGE`.
+
+Refazer a imagem também descarta o que estiver escondido nela: um arquivo que é ao mesmo tempo
+JPEG válido e outra coisa sai daqui só como imagem.
+
+As imagens enviadas antes da Fase 20 não foram reprocessadas: não há dado de produção.
 
 ## 11. Tempo real
 
@@ -1268,11 +1301,20 @@ início do mês no fuso vem de `src/lib/timezone.ts`:
   tolerância de 10%; passada ela, o cardápio público passa a `NAO_RECEBENDO` e, como o pedido é
   calculado sobre a mesma montagem, é recusado pela mesma regra. Cancelados contam. O mês é o do
   calendário no fuso do estabelecimento, pelo `Intl`.
-- **Usuários ativos** (`maxUsers`): limite exato, conferido ao criar e ao reativar.
+- **Usuários ativos** (`maxUsers`): limite exato, conferido ao criar e ao reativar — com a mesma
+  trava dos produtos, abaixo.
+- **Produtos e categorias** (`maxProducts`, `maxCategories`, Fase 20): limite exato, conferido ao
+  criar. No plano gratuito, 20 produtos e 10 categorias — contra o abuso do cadastro aberto, já
+  que cada um guarda uma imagem. Todo produto conta: combo, indisponível, sem foto. Excluir abre
+  vaga. Quem já passou do limite (um plano rebaixado) mantém o que tem e só não cria mais.
+  **A conferência trava antes de contar** (`travarLimiteDoPlano`: `pg_advisory_xact_lock`, por
+  recurso e por estabelecimento): sem isso, criações simultâneas contariam todas "19 de 20" e
+  passariam juntas. Vale para produtos, categorias e usuários.
 - `null` é ilimitado; recurso desligado (`isEnabled = false`) vale zero; sem assinatura ativa,
   nada é limitado.
 - O cardápio público **não cita o plano** — só "não está recebendo pedidos". O painel
-  (`GET /api/v1/admin/plan`) mostra o uso com todas as letras.
+  (`GET /api/v1/admin/plan`) mostra o uso com todas as letras: pedidos do mês, usuários, produtos
+  e categorias.
 
 Atenção à distinção: **o cliente final não paga online** pelo pedido no MVP (escolhe a forma de
 pagamento que usará no recebimento). O que é preparado aqui é a assinatura **do estabelecimento**

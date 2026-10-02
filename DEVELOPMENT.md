@@ -28,6 +28,15 @@ estão em `onlyBuiltDependencies` no `pnpm-workspace.yaml`. Hoje há só um: o `
 precisa disso para o binário nativo. Acrescentar um item ali é decidir executar código de
 terceiros durante o install — trate como decisão, não como formalidade.
 
+O `sharp` (tratamento de imagens) **não** precisou entrar na lista: não tem script de instalação.
+O binário da libvips vem como dependência opcional por plataforma (`@img/sharp-linux-x64` e
+semelhantes), e o pnpm instala a do sistema em que roda. Na imagem de produção (Fase 28), o
+`pnpm install` precisa rodar dentro do container, para vir o binário certo.
+
+**`UPLOAD_MAX_BYTES` no seu `.env`:** o teto do envio subiu de 5 para 15 MB na Fase 20. O
+`.env.example` já traz o valor novo; um `.env` copiado antes continua com o antigo, e recusa foto
+de celular com 413. Troque a linha por `UPLOAD_MAX_BYTES=15728640`.
+
 **Os scripts de inicialização do PostgreSQL rodam uma vez só**, quando o volume está vazio.
 Depois de alterar qualquer arquivo em `docker/postgres/init/`, use `pnpm db:reset` — sem isso a
 mudança simplesmente não acontece e o sintoma é um erro de permissão inexplicável.
@@ -403,10 +412,19 @@ migration, não de configuração do cliente.
 
 ### Guardando uma imagem
 
-Nunca grave URL nem caminho no banco — grave a **chave** devolvida por `novaChaveDeImagem`, e
-converta para URL na resposta com `urlDaImagem`. Nunca use o nome enviado pelo cliente para
-montar a chave. `src/settings/images.ts` é o modelo a seguir, inclusive na ordem das operações:
-grava o arquivo novo, atualiza o banco, e só depois do commit apaga o antigo.
+Use sempre `trocarImagem` (`src/storage/replace.ts`), dizendo o `uso` — `logo`, `cover`,
+`categories` ou `products`. Ela confere o formato, **trata a imagem** (sem metadados, de pé, no
+tamanho do uso, em WebP), monta a chave, grava e só depois do commit apaga a antiga.
+`src/settings/images.ts` é o modelo a seguir. Nunca grave no storage por outro caminho: é o
+tratamento que tira a localização GPS da foto.
+
+No banco fica a **chave**, nunca URL nem caminho; a URL sai na resposta, com `urlDaImagem`. O nome
+enviado pelo cliente não participa da chave. Uso novo com outro tamanho: uma entrada em
+`LADO_MAXIMO`, em `src/storage/process-image.ts`.
+
+Nos testes, as amostras de `tests/helpers/imagens.ts` são imagens de verdade — o tratamento abre
+o arquivo, e meia dúzia de bytes com a assinatura certa não passa. Há uma foto de celular com GPS
+(`fotoDeCelular`), uma imagem do tamanho que se pedir (`jpegDe`) e um PNG transparente.
 
 Em desenvolvimento os arquivos ficam em `apps/api/uploads/`, fora do git. Nos testes, num
 diretório temporário do sistema.

@@ -14,7 +14,19 @@ import {
   SENHA_PADRAO,
   type TenantDeTeste,
 } from './helpers/fixtures.js'
-import { corpoMultipart, JPEG, PNG, texto, WEBP } from './helpers/imagens.js'
+import {
+  corpoMultipart,
+  fotoDeCelular,
+  fotoPesada,
+  JPEG,
+  jpegDe,
+  lerImagem,
+  MODELO_DO_CELULAR,
+  PNG,
+  temGps,
+  texto,
+  WEBP,
+} from './helpers/imagens.js'
 
 let app: FastifyInstance
 let dono: TenantDeTeste
@@ -95,13 +107,15 @@ describe('envio', () => {
 
     expect(r.statusCode).toBe(200)
     const { logoUrl } = r.json<Configuracoes>()
-    expect(logoUrl).toMatch(/\/uploads\/tenants\/.+\/logo\/[0-9a-f-]+\.png$/)
+    expect(logoUrl).toMatch(/\/uploads\/tenants\/.+\/logo\/[0-9a-f-]+\.webp$/)
   })
 
   it('uma foto de verdade, maior que o limite do corpo JSON, continua passando', async () => {
     // O limite de 64 KB é do JSON; o upload tem o seu (UPLOAD_MAX_BYTES). Se um
     // valesse para o outro, toda foto de celular seria recusada.
-    const foto = Uint8Array.from([...PNG, ...new Uint8Array(300 * 1024)])
+    const foto = await fotoPesada()
+    expect(foto.byteLength).toBeGreaterThan(env.JSON_BODY_LIMIT_BYTES)
+
     const resposta = await enviar('cover', foto)
     expect(resposta.statusCode, resposta.body).toBe(200)
   })
@@ -112,12 +126,40 @@ describe('envio', () => {
     expect(chaveDe(logoUrl ?? '')).toMatch(new RegExp(`^tenants/${dono.tenantId}/logo/`))
   })
 
-  it('aceita JPEG e WebP, com a extensão tirada do conteúdo', async () => {
-    const jpeg = (await enviar('cover', JPEG, { nome: 'foto.png' })).json<Configuracoes>()
-    expect(jpeg.coverUrl).toMatch(/\.jpg$/)
+  it('aceita JPEG, PNG e WebP, e guarda sempre WebP — o nome enviado não decide nada', async () => {
+    for (const [amostra, nome] of [
+      [JPEG, 'foto.png'],
+      [PNG, 'foto.jpg'],
+      [WEBP, 'foto.gif'],
+    ] as const) {
+      const resposta = await enviar('cover', amostra, { nome })
 
-    const webp = (await enviar('cover', WEBP, { nome: 'foto.gif' })).json<Configuracoes>()
-    expect(webp.coverUrl).toMatch(/\.webp$/)
+      expect(resposta.statusCode, resposta.body).toBe(200)
+      expect(resposta.json<Configuracoes>().coverUrl).toMatch(/\.webp$/)
+    }
+  })
+
+  it('a foto de celular é guardada sem a localização, de pé e no tamanho do uso', async () => {
+    const foto = await fotoDeCelular()
+    expect(temGps((await lerImagem(foto)).exif)).toBe(true)
+
+    const url = (await enviar('logo', foto)).json<Configuracoes>().logoUrl ?? ''
+    const guardada = (await app.inject({ method: 'GET', url: caminhoDe(url) })).rawPayload
+
+    // O que qualquer pessoa baixa do cardápio: sem EXIF, e sem o modelo do aparelho nos bytes.
+    const dados = await lerImagem(guardada)
+    expect(dados.exif).toBeUndefined()
+    expect(guardada.includes(MODELO_DO_CELULAR)).toBe(false)
+    // 40×20 deitada, com a anotação de girar: guardada de pé.
+    expect({ largura: dados.width, altura: dados.height }).toEqual({ largura: 20, altura: 40 })
+  })
+
+  it('a foto grande é reduzida: o logo fica com 512 px no maior lado', async () => {
+    const url = (await enviar('logo', await jpegDe(3000, 1500))).json<Configuracoes>().logoUrl ?? ''
+    const guardada = (await app.inject({ method: 'GET', url: caminhoDe(url) })).rawPayload
+
+    const dados = await lerImagem(guardada)
+    expect({ largura: dados.width, altura: dados.height }).toEqual({ largura: 512, altura: 256 })
   })
 
   it('ignora o nome enviado — nem acento nem ../ chegam ao disco', async () => {
@@ -127,13 +169,14 @@ describe('envio', () => {
     expect(r.json<Configuracoes>().logoUrl).not.toContain('..')
   })
 
-  it('registra a troca na auditoria', async () => {
+  it('registra a troca na auditoria, com o que foi guardado', async () => {
     await enviar('logo', PNG)
 
     const registros = await withTenant(tenantContextFromUser(dono.tenantId), (tx) =>
-      tx.select({ action: auditLogs.action }).from(auditLogs),
+      tx.select({ action: auditLogs.action, metadata: auditLogs.metadata }).from(auditLogs),
     )
-    expect(registros.some((r) => r.action === 'settings.logo_changed')).toBe(true)
+    const troca = registros.findLast((r) => r.action === 'settings.logo_changed')
+    expect(troca?.metadata).toMatchObject({ tipo: 'image/webp', largura: 8, altura: 8 })
   })
 })
 
@@ -152,6 +195,23 @@ describe('recusa pelo conteúdo', () => {
     })
 
     expect(r.statusCode).toBe(415)
+  })
+
+  it('recusa com 422 a imagem que tem a assinatura certa e não abre', async () => {
+    const inteira = await jpegDe(400, 400)
+    const cortada = inteira.subarray(0, Math.floor(inteira.byteLength / 2))
+
+    const r = await enviar('logo', cortada)
+
+    expect(r.statusCode).toBe(422)
+    expect(r.json()).toMatchObject({ error: { code: 'UNREADABLE_IMAGE' } })
+  })
+
+  it('recusa com 422 a imagem com pixels demais, mesmo pequena em bytes', async () => {
+    const r = await enviar('cover', await jpegDe(8000, 7000))
+
+    expect(r.statusCode).toBe(422)
+    expect(r.json()).toMatchObject({ error: { code: 'IMAGE_TOO_LARGE' } })
   })
 
   it('um upload recusado não deixa nada no banco', async () => {
@@ -213,13 +273,14 @@ describe('substituição e remoção', () => {
 })
 
 describe('entrega da imagem', () => {
-  it('serve o mesmo conteúdo que foi enviado, com o tipo certo', async () => {
+  it('serve a imagem tratada, em WebP — e não o arquivo que foi enviado', async () => {
     const url = (await enviar('logo', PNG)).json<Configuracoes>().logoUrl ?? ''
     const r = await app.inject({ method: 'GET', url: caminhoDe(url) })
 
     expect(r.statusCode).toBe(200)
-    expect(r.headers['content-type']).toBe('image/png')
-    expect(new Uint8Array(r.rawPayload)).toEqual(PNG)
+    expect(r.headers['content-type']).toBe('image/webp')
+    expect((await lerImagem(r.rawPayload)).format).toBe('webp')
+    expect(new Uint8Array(r.rawPayload)).not.toEqual(PNG)
   })
 
   it('permite uso por outra origem — senão o <img> do frontend quebraria em silêncio', async () => {

@@ -1,5 +1,7 @@
 import { AppError } from '../lib/errors.js'
-import { detectarTipoDeImagem, type TipoDeImagem } from './image-type.js'
+import { detectarTipoDeImagem } from './image-type.js'
+import { novaChaveDeImagem } from './keys.js'
+import { tratarImagem, type UsoDaImagem } from './process-image.js'
 import type { StorageService } from './storage-service.js'
 
 export class ImagemInvalidaError extends AppError {
@@ -7,6 +9,14 @@ export class ImagemInvalidaError extends AppError {
     super('Envie uma imagem JPEG, PNG ou WebP.', 415, 'UNSUPPORTED_MEDIA_TYPE')
     this.name = 'ImagemInvalidaError'
   }
+}
+
+/** O que foi guardado, para a auditoria de quem troca a imagem. */
+export interface ImagemGuardada {
+  tipo: 'image/webp'
+  bytes: number
+  largura: number
+  altura: number
 }
 
 export interface ResultadoDaGravacao<T> {
@@ -21,30 +31,38 @@ export interface ResultadoDaGravacao<T> {
  * Único lugar do projeto que implementa esta sequência, porque a ordem é o que
  * mantém banco e disco coerentes quando algo falha no meio:
  *
- * 1. **Grava o arquivo novo.** Se falhar, nada mudou.
- * 2. **`gravar` aponta o banco para ele**, na transação e com a auditoria. Se
+ * 1. **Confere o formato e trata a imagem** (`tratarImagem`): sem metadados, de
+ *    pé, no tamanho do uso, em WebP. O arquivo enviado nunca é guardado.
+ * 2. **Grava o arquivo tratado.** Se falhar, nada mudou.
+ * 3. **`gravar` aponta o banco para ele**, na transação e com a auditoria. Se
  *    falhar, o arquivo novo é apagado — sobraria órfão.
- * 3. **Só depois do commit apaga o antigo.** Apagá-lo antes deixaria, num
+ * 4. **Só depois do commit apaga o antigo.** Apagá-lo antes deixaria, num
  *    rollback, o banco apontando para um arquivo que não existe mais.
  *
- * Se o passo 3 falhar, sobra um arquivo sem referência: a falha mais barata
+ * Se o passo 4 falhar, sobra um arquivo sem referência: a falha mais barata
  * possível, que ocupa disco e não quebra nada visível.
  */
 export async function trocarImagem<T>(opcoes: {
   service: StorageService
+  tenantId: string
+  uso: UsoDaImagem
   conteudo: Uint8Array
-  montarChave: (tipo: TipoDeImagem) => string
-  gravar: (chaveNova: string, tipo: TipoDeImagem) => Promise<ResultadoDaGravacao<T>>
+  gravar: (chaveNova: string, imagem: ImagemGuardada) => Promise<ResultadoDaGravacao<T>>
 }): Promise<T> {
-  const tipo = detectarTipoDeImagem(opcoes.conteudo)
-  if (!tipo) throw new ImagemInvalidaError()
+  if (!detectarTipoDeImagem(opcoes.conteudo)) throw new ImagemInvalidaError()
 
-  const chaveNova = opcoes.montarChave(tipo)
-  await opcoes.service.put(chaveNova, opcoes.conteudo, tipo)
+  const tratada = await tratarImagem(opcoes.conteudo, opcoes.uso)
+  const chaveNova = novaChaveDeImagem(opcoes.tenantId, opcoes.uso)
+  await opcoes.service.put(chaveNova, tratada.conteudo, tratada.tipo)
 
   let gravado: ResultadoDaGravacao<T>
   try {
-    gravado = await opcoes.gravar(chaveNova, tipo)
+    gravado = await opcoes.gravar(chaveNova, {
+      tipo: tratada.tipo,
+      bytes: tratada.conteudo.byteLength,
+      largura: tratada.largura,
+      altura: tratada.altura,
+    })
   } catch (error) {
     await opcoes.service.delete(chaveNova)
     throw error

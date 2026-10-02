@@ -38,8 +38,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [ ] Grupos de opções com mínimo, máximo e obrigatoriedade — _Fase 24_
 - [ ] Adicionais com alteração de preço — _Fase 24_
 - [ ] Combos — _Fase 24_
-- [ ] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — _tratamento
-      na Fase 20; telas nas Fases 21 e 23_
+- [x] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — _pela API; as
+      telas são das Fases 21 e 23_
 - [x] Lista de pedidos com atualização de status
 - [x] Pedidos novos chegando em tempo real
 - [ ] Lista de clientes e histórico de pedidos — _Fase 26_
@@ -142,7 +142,7 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 19:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
+> **Situação ao fim da Fase 20:** o passo 1 — cadastrar pela página inicial e confirmar o e-mail
 > — e os passos 4 a 7 funcionam de ponta a ponta, e os testes provam o isolamento. Os passos 2 e 3
-> ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 20 a 28 fecham o MVP —
+> ainda só funcionam pela API, e o sistema ainda não está no ar. As fases 21 a 28 fecham o MVP —
 > ver PROJECT_PLAN.md, "O que falta para o MVP".

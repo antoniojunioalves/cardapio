@@ -412,20 +412,32 @@ limite por instância; um armazenamento compartilhado entra junto do deploy (ROA
 
 ## 9. Upload de arquivos — **em vigor**
 
-| Risco                                    | Defesa                                                                            |
-| ---------------------------------------- | --------------------------------------------------------------------------------- |
-| Arquivo malicioso com extensão de imagem | Tipo detectado pelos bytes; extensão e `Content-Type` ignorados                   |
-| SVG com script (XSS armazenado)          | SVG recusado                                                                      |
-| Path traversal pelo nome do arquivo      | Nome enviado não é usado; chave com formato fixo; caminho conferido contra a raiz |
-| Upload gigante esgotando memória         | Limite aplicado durante o recebimento                                             |
-| Sobrescrever a imagem de outra entidade  | Chave com UUID novo a cada envio; escrita falha se o arquivo já existir           |
-| Listagem do diretório                    | Desabilitada; arquivos ocultos recusados                                          |
-| Upload por quem só pode ler              | Exige `settings:update`                                                           |
+| Risco                                          | Defesa                                                                            |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| Arquivo malicioso com extensão de imagem       | Tipo detectado pelos bytes; extensão e `Content-Type` ignorados                   |
+| Localização GPS e dados do aparelho na foto    | Imagem refeita a partir dos pixels: sai sem EXIF, XMP, IPTC nem perfil de cor     |
+| Conteúdo escondido dentro de uma imagem válida | O arquivo enviado nunca é guardado; só a imagem refeita, em WebP                  |
+| Imagem pequena em bytes e enorme em pixels     | Teto de 50 MP na entrada, conferido antes de decodificar; 15 s por imagem         |
+| SVG com script (XSS armazenado)                | SVG recusado                                                                      |
+| Path traversal pelo nome do arquivo            | Nome enviado não é usado; chave com formato fixo; caminho conferido contra a raiz |
+| Upload gigante esgotando memória               | Limite aplicado durante o recebimento                                             |
+| Sobrescrever a imagem de outra entidade        | Chave com UUID novo a cada envio; escrita falha se o arquivo já existir           |
+| Listagem do diretório                          | Desabilitada; arquivos ocultos recusados                                          |
+| Upload por quem só pode ler                    | Exige `settings:update`                                                           |
 
-**Não implementado, e relevante:** os metadados EXIF **não são removidos**. Uma foto tirada no
-celular pode carregar a localização GPS de onde foi feita — num logo, é pouco provável; em foto
-de produto tirada em casa, é possível. Remover exige reprocessar a imagem, o que entra junto com
-o redimensionamento (ROADMAP).
+**Os metadados são removidos** (Fase 20). Uma foto tirada no celular carrega a localização GPS de
+onde foi feita — em foto de produto tirada em casa, é o endereço de quem tirou, num cardápio
+público. Toda imagem enviada é refeita a partir dos pixels antes de ser guardada, e há teste que
+envia uma foto com GPS e confere, no arquivo que qualquer pessoa baixa, que ele não está mais lá.
+
+A biblioteca que refaz a imagem (`sharp`, sobre a libvips) abre mais formatos do que os três
+aceitos — SVG inclusive. Quem os mantém fora é a conferência dos primeiros bytes, que vem **antes**:
+há teste que tira essa conferência e vê o SVG passar. O teto do envio é de 15 MB, e o que fica
+guardado é a versão tratada, bem menor.
+
+**Limite de produtos e categorias no plano gratuito** (20 e 10): o cadastro é aberto, e cada
+produto e cada categoria guarda uma imagem. Sem o limite, um cadastro gratuito ocuparia o disco à
+vontade. A cota de armazenamento em bytes, por plano, continua no ROADMAP.
 
 ## 10. Segredos
 

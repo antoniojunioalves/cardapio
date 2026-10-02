@@ -3,7 +3,8 @@ import type { Category, Product } from '../db/schema/index.js'
 import { violacaoDoBanco, UNICIDADE } from '../lib/db-errors.js'
 import { diferencas } from '../lib/diff.js'
 import { AppError, ConflictError, NotFoundError } from '../lib/errors.js'
-import { novaChaveDeImagem, type StorageService } from '../storage/index.js'
+import { exigirVagaNoCardapio } from '../plans/service.js'
+import type { StorageService } from '../storage/index.js'
 import { removerImagem, trocarImagem } from '../storage/replace.js'
 import type { TenantContext } from '../tenant/context.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
@@ -63,6 +64,7 @@ export async function criarCategoria(
 ): Promise<Category> {
   try {
     return await withTenant(context, async (tx) => {
+      await exigirVagaNoCardapio(tx, context, 'categoria')
       const criada = await insertCategory(tx, context, dados)
 
       await recordAudit(tx, context, {
@@ -202,8 +204,9 @@ export async function trocarImagemDaCategoria(
 ): Promise<Category> {
   return trocarImagem({
     service,
+    tenantId: context.tenantId,
+    uso: 'categories',
     conteudo,
-    montarChave: (tipo) => novaChaveDeImagem(context.tenantId, 'categories', tipo),
     gravar: (chaveNova) =>
       withTenant(context, async (tx) => {
         const anterior = await exigirCategoria(tx, id)
@@ -279,6 +282,7 @@ export async function criarProduto(
     // um erro de chave estrangeira. A FK composta continua sendo a barreira
     // real contra uma categoria de outro estabelecimento.
     await exigirCategoria(tx, dados.categoryId)
+    await exigirVagaNoCardapio(tx, context, 'produto')
 
     const criado = await insertProduct(tx, context, dados)
 
@@ -411,8 +415,9 @@ export async function trocarImagemDoProduto(
 ): Promise<Product> {
   return trocarImagem({
     service,
+    tenantId: context.tenantId,
+    uso: 'products',
     conteudo,
-    montarChave: (tipo) => novaChaveDeImagem(context.tenantId, 'products', tipo),
     gravar: (chaveNova) =>
       withTenant(context, async (tx) => {
         const anterior = await findProduct(tx, id)

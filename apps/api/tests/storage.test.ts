@@ -7,8 +7,26 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { detectarTipoDeImagem } from '../src/storage/image-type.js'
 import { novaChaveDeImagem } from '../src/storage/index.js'
 import { LocalStorageProvider } from '../src/storage/local-provider.js'
+import {
+  ImagemGrandeDemaisError,
+  ImagemIlegivelError,
+  LADO_MAXIMO,
+  LIMITE_DE_PIXELS,
+  tratarImagem,
+} from '../src/storage/process-image.js'
 import { assertChaveValida } from '../src/storage/storage-service.js'
-import { JPEG, PNG, texto, WEBP } from './helpers/imagens.js'
+import {
+  fotoDeCelular,
+  JPEG,
+  jpegDe,
+  lerImagem,
+  MODELO_DO_CELULAR,
+  PNG,
+  pngTransparente,
+  temGps,
+  texto,
+  WEBP,
+} from './helpers/imagens.js'
 
 describe('detecção do tipo pelo conteúdo', () => {
   it('reconhece PNG, JPEG e WebP', () => {
@@ -41,17 +59,18 @@ describe('detecção do tipo pelo conteúdo', () => {
 
 describe('formato da chave', () => {
   it('aceita a chave que o servidor monta', () => {
-    const chave = novaChaveDeImagem('01a0d928-2736-732c-99b0-3bbf8ab47876', 'logo', 'image/png')
+    const chave = novaChaveDeImagem('01a0d928-2736-732c-99b0-3bbf8ab47876', 'logo')
 
-    expect(chave).toMatch(/^tenants\/01a0d928-2736-732c-99b0-3bbf8ab47876\/logo\/[0-9a-f-]+\.png$/)
+    // Sempre `.webp`: é o formato em que toda imagem é guardada.
+    expect(chave).toMatch(/^tenants\/01a0d928-2736-732c-99b0-3bbf8ab47876\/logo\/[0-9a-f-]+\.webp$/)
     expect(() => {
       assertChaveValida(chave)
     }).not.toThrow()
   })
 
   it('duas chaves para o mesmo arquivo nunca coincidem', () => {
-    const a = novaChaveDeImagem('t', 'logo', 'image/png')
-    const b = novaChaveDeImagem('t', 'logo', 'image/png')
+    const a = novaChaveDeImagem('t', 'logo')
+    const b = novaChaveDeImagem('t', 'logo')
 
     expect(a).not.toBe(b)
   })
@@ -115,5 +134,97 @@ describe('provider local', () => {
     expect(provider.publicUrl('tenants/a/logo/um.png')).toBe(
       'http://cdn.exemplo/uploads/tenants/a/logo/um.png',
     )
+  })
+})
+
+describe('tratamento da imagem', () => {
+  it('a foto de celular sai sem a localização nem dado nenhum do aparelho', async () => {
+    const foto = await fotoDeCelular()
+    // A amostra precisa ter o que o teste diz que some.
+    const antes = await lerImagem(foto)
+    expect(temGps(antes.exif)).toBe(true)
+    expect(foto.includes(MODELO_DO_CELULAR)).toBe(true)
+
+    const tratada = await tratarImagem(foto, 'products')
+
+    const depois = await lerImagem(tratada.conteudo)
+    expect(depois.exif).toBeUndefined()
+    expect(depois.xmp).toBeUndefined()
+    expect(depois.iptc).toBeUndefined()
+    expect(depois.icc).toBeUndefined()
+    expect(Buffer.from(tratada.conteudo).includes(MODELO_DO_CELULAR)).toBe(false)
+  })
+
+  it('gira a foto conforme a câmera anotou, já que a anotação vai embora', async () => {
+    // 40×20 no arquivo, com a orientação "girar 90°": de pé, é 20×40.
+    const tratada = await tratarImagem(await fotoDeCelular(), 'products')
+
+    expect({ largura: tratada.largura, altura: tratada.altura }).toEqual({
+      largura: 20,
+      altura: 40,
+    })
+    expect((await lerImagem(tratada.conteudo)).orientation).toBeUndefined()
+  })
+
+  it('guarda sempre WebP, venha JPEG, PNG ou WebP', async () => {
+    for (const amostra of [JPEG, PNG, WEBP]) {
+      const tratada = await tratarImagem(amostra, 'logo')
+
+      expect(tratada.tipo).toBe('image/webp')
+      expect((await lerImagem(tratada.conteudo)).format).toBe('webp')
+    }
+  })
+
+  it.each([
+    ['logo', 512, 384],
+    ['categories', 800, 600],
+    ['products', 1200, 900],
+    ['cover', 1600, 1200],
+  ] as const)('reduz a foto grande ao tamanho do uso: %s', async (uso, largura, altura) => {
+    const tratada = await tratarImagem(await jpegDe(4000, 3000), uso)
+
+    expect(LADO_MAXIMO[uso]).toBe(largura)
+    // A proporção 4:3 é mantida: nada é cortado nem esticado.
+    expect({ largura: tratada.largura, altura: tratada.altura }).toEqual({ largura, altura })
+  })
+
+  it('não aumenta a imagem que já é pequena', async () => {
+    const tratada = await tratarImagem(await jpegDe(100, 50), 'cover')
+
+    expect({ largura: tratada.largura, altura: tratada.altura }).toEqual({
+      largura: 100,
+      altura: 50,
+    })
+  })
+
+  it('o PNG transparente continua transparente', async () => {
+    const tratada = await tratarImagem(await pngTransparente(), 'logo')
+
+    const { default: sharp } = await import('sharp')
+    const { data, info } = await sharp(tratada.conteudo).raw().toBuffer({ resolveWithObject: true })
+    expect(info.channels).toBe(4)
+    // Canal alfa do primeiro pixel (lado pintado) e do último da primeira linha (lado vazio).
+    expect(data[3]).toBe(255)
+    expect(data[(info.width - 1) * 4 + 3]).toBe(0)
+  })
+
+  it('recusa imagem com pixels demais, por menor que seja o arquivo', async () => {
+    // Lisa, comprime para poucos KB — e aberta ocuparia centenas de MB.
+    const enorme = await jpegDe(8000, 7000)
+    expect(8000 * 7000).toBeGreaterThan(LIMITE_DE_PIXELS)
+    expect(enorme.byteLength).toBeLessThan(1024 * 1024)
+
+    await expect(tratarImagem(enorme, 'products')).rejects.toBeInstanceOf(ImagemGrandeDemaisError)
+  })
+
+  it('recusa o arquivo cortado ao meio e o que só tem a assinatura do formato', async () => {
+    const inteira = await jpegDe(400, 400)
+    const cortada = inteira.subarray(0, Math.floor(inteira.byteLength / 2))
+    const soAssinatura = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13,
+    ])
+
+    await expect(tratarImagem(cortada, 'products')).rejects.toBeInstanceOf(ImagemIlegivelError)
+    await expect(tratarImagem(soAssinatura, 'products')).rejects.toBeInstanceOf(ImagemIlegivelError)
   })
 })

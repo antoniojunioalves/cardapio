@@ -2,8 +2,8 @@ import { recordAudit } from '../audit/record.js'
 import { hashPassword } from '../auth/password.js'
 import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js'
-import { cabeMaisUmUsuario } from '../plans/limits.js'
-import { usoDeUsuarios } from '../plans/service.js'
+import { cabeMaisUmUsuario, RECURSO_USUARIOS } from '../plans/limits.js'
+import { travarLimiteDoPlano, usoDeUsuarios } from '../plans/service.js'
 import { avisarPedido } from '../realtime/notify.js'
 import type { TenantContext } from '../tenant/context.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
@@ -41,7 +41,13 @@ async function exigirUsuario(tx: TenantTransaction, id: string): Promise<Usuario
   return usuario
 }
 
-async function exigirVaga(tx: TenantTransaction): Promise<void> {
+/**
+ * Confere se o plano ainda tem vaga para mais um usuário ativo. Trava antes de
+ * contar: sem isso, duas criações ao mesmo tempo contariam a mesma vaga e
+ * passariam as duas (`travarLimiteDoPlano`).
+ */
+async function exigirVaga(tx: TenantTransaction, context: TenantContext): Promise<void> {
+  await travarLimiteDoPlano(tx, context, RECURSO_USUARIOS)
   const uso = await usoDeUsuarios(tx)
   if (!cabeMaisUmUsuario(uso.ativos, uso.limite)) {
     throw new ConflictError(
@@ -80,7 +86,7 @@ export async function criarUsuario(
 
   try {
     return await withTenant(context, async (tx) => {
-      await exigirVaga(tx)
+      await exigirVaga(tx, context)
       const papel = await buscarPapel(tx, dados.role)
       if (!papel) throw new AppError('Papel desconhecido.', 400, 'UNKNOWN_ROLE')
 
@@ -199,7 +205,7 @@ export async function reativarUsuario(
     const alvo = await exigirUsuario(tx, id)
     if (alvo.isActive) return alvo
 
-    await exigirVaga(tx)
+    await exigirVaga(tx, context)
     await definirAtivo(tx, id, true)
     await recordAudit(tx, context, {
       action: 'user.reactivated',
