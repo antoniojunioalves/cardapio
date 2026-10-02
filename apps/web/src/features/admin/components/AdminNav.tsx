@@ -1,10 +1,17 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router'
 
-import { caminhoDoPainel, itensDoMenu, type IconeDoMenu } from '../menu'
-import { IconeExterno, IconeInicio, IconePedidos, IconeSair } from './icons'
+import {
+  IconeExterno,
+  IconeInicio,
+  IconePedidos,
+  IconeSair,
+  type IconeProps,
+} from '@/components/icons'
 
-const ICONES: Record<IconeDoMenu, () => ReactNode> = {
+import { caminhoDoPainel, itensDoMenu, type IconeDoMenu } from '../menu'
+
+const ICONES: Record<IconeDoMenu, (props: IconeProps) => ReactNode> = {
   inicio: IconeInicio,
   pedidos: IconePedidos,
 }

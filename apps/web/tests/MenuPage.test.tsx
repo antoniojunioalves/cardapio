@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { cardapioDoZe } from './helpers/cardapio'
@@ -25,14 +25,14 @@ describe('cardápio público', () => {
     )
   })
 
-  it('mostra o estabelecimento, o status e as condições de entrega', async () => {
+  it('mostra o estabelecimento e o status; as condições de entrega ficam na janela "Info"', async () => {
     await abrirCardapio()
 
     expect(screen.getByText('Os melhores lanches do bairro')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Aberto agora')
     expect(screen.getByRole('status')).toHaveTextContent('Fecha às 02:00')
-    expect(screen.getByText('Entrega R$ 5,00')).toBeInTheDocument()
-    expect(screen.getByText('Pedido mínimo R$ 20,00')).toBeInTheDocument()
+    expect(screen.queryByText('Entrega R$ 5,00')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pedido mínimo R$ 20,00')).not.toBeInTheDocument()
     expect(document.title).toBe('Lanchonete do Zé — Cardápio')
   })
 
@@ -139,14 +139,60 @@ describe('cardápio público', () => {
     expect(screen.getByText('Nenhum produto encontrado para “sushi”.')).toBeInTheDocument()
   })
 
-  it('mostra horários, endereço e formas de pagamento', async () => {
+  it('"Info", ao lado do status, abre a janela com entrega, horários, endereço e pagamento', async () => {
     await abrirCardapio()
+    // As informações não ocupam mais o fim da página: só aparecem na janela.
+    expect(screen.queryByText('Horário de funcionamento')).not.toBeInTheDocument()
 
-    const info = screen.getByRole('region', { name: 'Informações' })
+    fireEvent.click(screen.getByRole('button', { name: 'Informações do estabelecimento' }))
+
+    const info = screen.getByRole('dialog', { name: 'Informações' })
+    expect(within(info).getByText('Entrega R$ 5,00')).toBeInTheDocument()
+    expect(within(info).getByText('Pedido mínimo R$ 20,00')).toBeInTheDocument()
     expect(within(info).getByText('18:00 às 02:00')).toBeInTheDocument()
     expect(within(info).getByText('Rua das Flores, 123 — Centro, São Paulo/SP')).toBeInTheDocument()
     expect(within(info).getByText('Pix')).toBeInTheDocument()
     expect(within(info).getByText('Dinheiro')).toBeInTheDocument()
+
+    fireEvent.click(within(info).getByRole('button', { name: 'Fechar' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('o botão diz "Info" e fica fora do anúncio de status', async () => {
+    await abrirCardapio()
+    const botao = screen.getByRole('button', { name: 'Informações do estabelecimento' })
+
+    expect(botao).toHaveTextContent('Info')
+    expect(screen.getByRole('status')).not.toContainElement(botao)
+    expect(screen.getByRole('status')).not.toHaveTextContent('Info')
+  })
+
+  it('o endereço com ?info já abre a janela, e Esc a fecha', async () => {
+    await abrirCardapio(cardapioDoZe(), '?info')
+    expect(screen.getByRole('dialog', { name: 'Informações' })).toBeVisible()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('tem o menu de baixo com Início, Histórico e Perfil — por ora só o visual', async () => {
+    await abrirCardapio()
+    const menu = within(screen.getByRole('navigation', { name: 'Menu do cardápio' }))
+
+    expect(menu.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Início',
+      'Histórico',
+      'Perfil',
+    ])
+    // O cardápio é o Início; os outros dois ainda não levam a lugar nenhum.
+    expect(menu.getByRole('button', { name: 'Início' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('button', { name: 'Histórico' })).toHaveAttribute('aria-disabled', 'true')
+    expect(menu.getByRole('button', { name: 'Perfil' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('cardápio sem nenhuma categoria avisa que está sendo preparado', async () => {

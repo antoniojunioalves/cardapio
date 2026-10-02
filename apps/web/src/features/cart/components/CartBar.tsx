@@ -6,12 +6,16 @@ interface CartBarProps {
   aoAbrir: () => void
 }
 
-/** A barra fixa embaixo com o indicador do carrinho. Só aparece com itens. */
+/**
+ * A barra com o indicador do carrinho. Só aparece com itens. Fica na pilha de
+ * barras do fim da tela, logo acima do menu de baixo — é a página que a prende
+ * lá (`MenuPage`).
+ */
 export function CartBar({ quantidadeDeItens, subtotalEmCentavos, aoAbrir }: CartBarProps) {
   const itens = quantidadeDeItens === 1 ? '1 item' : `${String(quantidadeDeItens)} itens`
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 px-page-x pb-[max(env(safe-area-inset-bottom),0.75rem)]">
+    <div className="px-page-x pb-3">
       <button
         type="button"
         onClick={aoAbrir}
