@@ -1005,8 +1005,14 @@ src/
 | `/:tenantSlug/admin/pedidos`  | painel: pedidos ao vivo                      |
 | qualquer outra                | não encontrado                               |
 
-No cardápio, `?produto={id}` abre a janela do produto e `?carrinho` abre o carrinho. Morar na URL
+No cardápio, `?produto={id}` abre a janela do produto, `?carrinho` abre o carrinho e `?info` abre as
+informações do estabelecimento (o botão "Info", ao lado do status). Morar na URL
 faz o "voltar" do celular fechar a janela em vez de sair do cardápio.
+
+O cardápio tem um menu de baixo (`features/menu/components/BottomNav.tsx`) — Início, Histórico e
+Perfil —, por ora só visual. Ele e a barra do carrinho não são `fixed` por conta própria: a página
+os empilha num contêiner fixo só, e por isso o carrinho fica sempre logo acima do menu, sem um
+depender da altura do outro.
 
 `/:tenantSlug` casa com um segmento só; as rotas administrativas, quando vierem, ficam sob um
 prefixo próprio para nunca colidirem com um slug.

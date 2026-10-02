@@ -7,6 +7,7 @@ import { CartSheet } from '@/features/cart/components/CartSheet'
 import { ProductDialog } from '@/features/cart/components/ProductDialog'
 import { useCarrinho } from '@/features/cart/store'
 import { useCardapioPublico } from '@/features/menu/api'
+import { BottomNav } from '@/features/menu/components/BottomNav'
 import { CategoryNav } from '@/features/menu/components/CategoryNav'
 import { MenuHeader } from '@/features/menu/components/MenuHeader'
 import { MenuInfo } from '@/features/menu/components/MenuInfo'
@@ -23,14 +24,14 @@ export function MenuPage() {
   const [busca, setBusca] = useState('')
   const carrinho = useCarrinho(tenantSlug)
 
-  // O produto aberto e o carrinho aberto moram na URL (`?produto=` e
-  // `?carrinho`): o "voltar" do celular fecha a janela em vez de sair do
-  // cardápio, e o link de um produto pode ser compartilhado.
+  // O produto aberto, o carrinho aberto e as informações moram na URL
+  // (`?produto=`, `?carrinho` e `?info`): o "voltar" do celular fecha a janela
+  // em vez de sair do cardápio, e o link de um produto pode ser compartilhado.
   const [parametros, setParametros] = useSearchParams()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const abrirJanela = (chave: 'produto' | 'carrinho', valor: string) => {
+  const abrirJanela = (chave: 'produto' | 'carrinho' | 'info', valor: string) => {
     setParametros({ [chave]: valor }, { state: { janela: true } })
   }
 
@@ -99,10 +100,17 @@ export function MenuPage() {
   const idDoProduto = parametros.get('produto')
   const produtoAberto = idDoProduto ? buscarProduto(cardapio, idDoProduto) : null
   const carrinhoAberto = parametros.has('carrinho')
+  const infoAberta = parametros.has('info')
 
   return (
-    <div className={`min-h-dvh ${linhas.length > 0 ? 'pb-28' : 'pb-section-y'}`}>
-      <MenuHeader cardapio={cardapio} />
+    // O espaço de baixo é o das barras fixas: o menu, e o carrinho quando há itens.
+    <div className={`min-h-dvh ${linhas.length > 0 ? 'pb-44' : 'pb-24'}`}>
+      <MenuHeader
+        cardapio={cardapio}
+        aoAbrirInfo={() => {
+          abrirJanela('info', '1')
+        }}
+      />
 
       <div className="mx-auto mt-stack max-w-3xl px-page-x">
         <label htmlFor="busca" className="sr-only">
@@ -166,19 +174,21 @@ export function MenuPage() {
             </div>
           </section>
         ))}
-
-        <MenuInfo cardapio={cardapio} />
       </main>
 
-      {linhas.length > 0 && !carrinhoAberto && (
-        <CartBar
-          quantidadeDeItens={resumo.quantidadeDeItens}
-          subtotalEmCentavos={resumo.subtotalEmCentavos}
-          aoAbrir={() => {
-            abrirJanela('carrinho', '1')
-          }}
-        />
-      )}
+      {/* As barras do fim da tela, numa pilha só: o carrinho sempre logo acima do menu. */}
+      <div className="fixed inset-x-0 bottom-0 z-20">
+        {linhas.length > 0 && !carrinhoAberto && (
+          <CartBar
+            quantidadeDeItens={resumo.quantidadeDeItens}
+            subtotalEmCentavos={resumo.subtotalEmCentavos}
+            aoAbrir={() => {
+              abrirJanela('carrinho', '1')
+            }}
+          />
+        )}
+        <BottomNav />
+      </div>
 
       {produtoAberto && (
         <ProductDialog
@@ -192,6 +202,8 @@ export function MenuPage() {
           aoFechar={fecharJanela}
         />
       )}
+
+      {infoAberta && <MenuInfo cardapio={cardapio} aoFechar={fecharJanela} />}
 
       {carrinhoAberto && (
         <CartSheet

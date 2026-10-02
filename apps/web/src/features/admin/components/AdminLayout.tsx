@@ -2,6 +2,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, Outlet, useParams } from 'react-router'
 
+import { IconeMenu } from '@/components/icons'
+
 import { chaveDosPedidos } from '../api'
 import { usePedidosAoVivo, type EstadoDaConexao } from '../live'
 import type { ContextoDoPainel } from '../panel'
@@ -10,7 +12,6 @@ import { sair, useSessaoStore } from '../session'
 import { criarAlerta, type Alerta } from '../sound'
 import { chaveDoResumo, useResumoDosPedidos } from '../summary'
 import { AdminNav } from './AdminNav'
-import { IconeMenu } from './icons'
 
 const INDICADOR: Record<EstadoDaConexao, { texto: string; classe: string }> = {
   conectando: { texto: 'Conectando…', classe: 'bg-neutral-100 text-neutral-700' },

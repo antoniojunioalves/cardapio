@@ -1,7 +1,7 @@
 # Plano do projeto
 
 **Atualizado em:** 2026-10-01
-**Fase atual:** 19 — concluída, aguardando validação
+**Fase atual:** 19b — concluída, aguardando validação
 **Próxima:** 20 — tratamento de imagens no upload e os limites do plano gratuito. As fases 20 a 28
 fecham o MVP (ver "O que falta para o MVP")
 
@@ -113,6 +113,7 @@ que falta para o MVP".
 | 18b | Login só com e-mail e senha: e-mail único na plataforma, `/entrar` como login único                                 | ✅ Concluída |
 | 18c | Painel do estabelecimento: moldura com menu lateral, tela Início e resumo dos pedidos                               | ✅ Concluída |
 | 19  | Comandos do Super Admin: listar, suspender, reativar, trocar o plano, reenviar a confirmação                        | ✅ Concluída |
+| 19b | Ajustes visuais do cardápio: janela "Info" e menu de baixo                                                          | ✅ Concluída |
 | 20  | Tratamento de imagens no upload: sem metadados, tamanho reduzido, WebP                                              | ⬜ Próxima   |
 | 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ⬜           |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜           |
@@ -127,6 +128,31 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 19b — concluída
+
+Ajustes visuais do cardápio público, pedidos pelo Junio antes da Fase 20. Só o web: a API não
+mudou.
+
+- **Botão "Info"**, ao lado do status, abre uma janela como a do produto (`?info` na URL, para o
+  "voltar" do celular fechá-la). Foram para ela as informações que ficavam no fim da página —
+  horários, endereço, contato, formas de pagamento — e as condições de entrega que ficavam
+  abaixo do status: taxa, tempo, pedido mínimo e retirada.
+- **Menu de baixo** no cardápio, com Início, Histórico e Perfil. **Só o visual:** Histórico e
+  Perfil ainda não levam a lugar nenhum, e são anunciados como indisponíveis para quem usa leitor
+  de tela. A barra "Ver carrinho" fica logo acima dele, numa pilha só.
+- **Os ícones** passaram a um arquivo comum, `components/icons.tsx`, usado pelo painel e pelo
+  cardápio.
+
+Um efeito a ter em mente: a taxa de entrega e o pedido mínimo deixaram de aparecer ao abrir o
+cardápio — estão a um toque, em "Info". O pedido mínimo continua no carrinho, e a taxa, no
+checkout.
+
+Verificação: `pnpm verify` com **760 testes** (527 API + 205 web + 28 shared), e o cardápio visto
+num navegador de verdade em 390 e 1280 px — janela "Info", menu de baixo com e sem o carrinho, e o
+fim da página sem produto escondido atrás das barras.
 
 ---
 
@@ -698,6 +724,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Limites do plano gratuito: 20 produtos e 10 categorias (decididos)                                                                                                | Fase 20                                  |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
+| Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                                           | A definir pelo Junio                     |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |
 | CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
 | Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |

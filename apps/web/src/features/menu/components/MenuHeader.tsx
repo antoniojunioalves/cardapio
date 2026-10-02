@@ -1,11 +1,18 @@
-import { descreverStatus, resumoDaEntrega } from '../presentation'
+import { IconeInfo } from '@/components/icons'
+
+import { descreverStatus } from '../presentation'
 import type { CardapioPublico } from '../types'
 
-/** Capa, logo, nome, status e condições de entrega. */
-export function MenuHeader({ cardapio }: { cardapio: CardapioPublico }) {
+interface MenuHeaderProps {
+  cardapio: CardapioPublico
+  /** Abre a janela com entrega, horários, endereço, contato e formas de pagamento. */
+  aoAbrirInfo: () => void
+}
+
+/** Capa, logo, nome e status. O resto — entrega, horários, pagamento — fica na janela "Info". */
+export function MenuHeader({ cardapio, aoAbrirInfo }: MenuHeaderProps) {
   const { establishment } = cardapio
   const status = descreverStatus(cardapio.status)
-  const condicoes = resumoDaEntrega(cardapio.delivery, establishment.minimumOrderInCents)
 
   return (
     <header>
@@ -48,24 +55,34 @@ export function MenuHeader({ cardapio }: { cardapio: CardapioPublico }) {
           </div>
 
           <div
-            role="status"
-            className={`text-body mt-stack flex flex-wrap items-center gap-x-2 rounded-control px-3 py-2 ${
+            className={`mt-stack flex items-center gap-2 rounded-control px-3 py-2 ${
               status.aberto ? 'bg-brand-50 text-brand-800' : 'bg-accent-50 text-accent-800'
             }`}
           >
-            <span className="font-semibold">{status.titulo}</span>
-            {status.detalhe && <span className="text-caption">· {status.detalhe}</span>}
-          </div>
+            <div
+              role="status"
+              className="text-body flex min-w-0 flex-1 flex-wrap items-center gap-x-2"
+            >
+              <span className="font-semibold">{status.titulo}</span>
+              {status.detalhe && <span className="text-caption">· {status.detalhe}</span>}
+            </div>
 
-          {condicoes.length > 0 && (
-            <ul className="text-caption mt-stack flex flex-wrap gap-2 text-content-muted">
-              {condicoes.map((frase) => (
-                <li key={frase} className="rounded-pill border border-border px-3 py-1">
-                  {frase}
-                </li>
-              ))}
-            </ul>
-          )}
+            {/*
+             * Discreto, mas de outra cor: sem borda, e no azul de informação para
+             * se destacar do texto do status, na faixa verde e na âmbar. Fica
+             * fora do `role="status"`, que é um anúncio, não um lugar de botão.
+             * As margens negativas dão área de toque sem engordar a faixa.
+             */}
+            <button
+              type="button"
+              onClick={aoAbrirInfo}
+              aria-label="Informações do estabelecimento"
+              className="text-caption -my-1 -mr-1 flex shrink-0 items-center gap-1 rounded-control px-2 py-2 font-semibold text-info hover:bg-surface/60"
+            >
+              <IconeInfo className="size-4" />
+              Info
+            </button>
+          </div>
         </div>
       </div>
     </header>
