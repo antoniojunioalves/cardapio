@@ -282,6 +282,15 @@ falhou; para mostrar todos os erros de uma vez, deixe a base aceitar texto e val
 `superRefine`. E a base precisa aceitar `null`: grupo de rádios sem nada marcado chega assim
 depois que o foco passa por ele, e um `z.string()` puro derruba a base inteira.
 
+Para uma regra entre dois campos, há um caminho mais leve: o `when` do `refine`, que diz quando a
+regra roda mesmo com outros campos inválidos — veja o tempo de preparo em
+`features/admin/settings.ts`.
+
+Formulário do painel que edita um registro: um schema que recebe o que a pessoa digita e entrega
+o corpo da API, e uma função `paraFormulario` no sentido inverso. Depois de salvar,
+`reset(paraFormulario(resposta))` — os campos mostram o que foi gravado, e o botão de salvar volta
+a ficar desligado. `features/admin/settings.ts` e `SettingsForm.tsx` são o modelo.
+
 ### Textos legais
 
 Os termos de uso e a política de privacidade moram em `apps/web/src/features/legal/textos.ts`.
@@ -498,12 +507,16 @@ O painel é a rota `/:tenantSlug/admin`, com a moldura `AdminLayout`; cada tela 
 Para uma tela nova:
 
 1. **Uma entrada em `apps/web/src/features/admin/menu.ts`**: rótulo, caminho, ícone e a permissão
-   que a API exige para os dados da tela. Sem a permissão, a pessoa não vê o item.
+   que a API exige para os dados da tela. Sem a permissão, a pessoa não vê o item. Tela do dia a
+   dia fica no grupo de cima; a que se ajusta de vez em quando leva `rodape: true` e fica no fim
+   do menu, abaixo de "Ver cardápio" — como Configurações.
 2. **Uma rota filha em `apps/web/src/App.tsx`**, debaixo de `/:tenantSlug/admin`.
 3. **A página**, que lê o slug, o usuário e as permissões de `usePainel()` e dá o título da aba com
    `useTituloDoPainel('…')`. Ela **não** confere sessão, não abre conexão ao vivo e não tem botão
    de sair: isso é da moldura.
-4. **O ícone**, em `features/admin/components/icons.tsx` — SVG no próprio código.
+4. **O ícone**, em `components/icons.tsx` — SVG no próprio código.
+5. **Se a tela resolve um passo de "o que falta para receber pedidos"**, o `caminho` dela em
+   `PASSOS` (`features/admin/checklist.ts`): o passo vira um link no Início.
 
 Mobile-first: desenhe a tela para o celular e acrescente o que a tela grande permite (`sm:`, `lg:`),
 nunca o contrário. A moldura já cuida do menu — gaveta no celular, coluna fixa a partir de `lg`.

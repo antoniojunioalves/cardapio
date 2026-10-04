@@ -62,6 +62,8 @@ function mockarApi(api: Api = {}) {
         },
       }
     }
+    if (url.endsWith('/admin/setup-checklist'))
+      return { status: 200, corpo: { ready: true, steps: [] } }
     if (url.endsWith('/admin/orders/summary')) {
       return { status: 200, corpo: { new: 0, inProgress: 0, completedToday: 0 } }
     }

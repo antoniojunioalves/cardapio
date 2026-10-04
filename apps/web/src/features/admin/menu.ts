@@ -6,7 +6,7 @@
  * nesta lista, com a permissão que a API exige para os dados dela, e a rota.
  */
 
-export type IconeDoMenu = 'inicio' | 'pedidos'
+export type IconeDoMenu = 'inicio' | 'pedidos' | 'configuracoes'
 
 export interface ItemDoMenu {
   rotulo: string
@@ -15,11 +15,23 @@ export interface ItemDoMenu {
   icone: IconeDoMenu
   /** Sem ela, a pessoa não vê o item — a API recusaria os dados da tela de qualquer jeito. */
   permissao?: string
+  /**
+   * Fica no fim do menu, abaixo de "Ver cardápio", e não entre as telas do dia
+   * a dia: é o lugar do que se ajusta de vez em quando.
+   */
+  rodape?: boolean
 }
 
 export const MENU: readonly ItemDoMenu[] = [
   { rotulo: 'Início', caminho: '', icone: 'inicio' },
   { rotulo: 'Pedidos', caminho: 'pedidos', icone: 'pedidos', permissao: 'orders:read' },
+  {
+    rotulo: 'Configurações',
+    caminho: 'configuracoes',
+    icone: 'configuracoes',
+    permissao: 'settings:read',
+    rodape: true,
+  },
 ]
 
 /** Os itens que as permissões da pessoa alcançam, na ordem do menu. */

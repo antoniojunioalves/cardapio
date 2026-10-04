@@ -387,6 +387,12 @@ barreira: quem recusa é a API, rota a rota (`requireAuth`), como o teste-guarda
 **O resumo dos pedidos** (`GET /api/v1/admin/orders/summary`) pede `orders:read` e devolve só três
 números, do próprio estabelecimento — há teste com dois estabelecimentos.
 
+**O nome e o fuso do estabelecimento** (Fase 21) são alterados por `PATCH /settings`, com
+`settings:update`. Eles moram em `tenants`, **que não tem RLS** — então aqui quem isola é o filtro
+explícito pelo id do contexto, e não o banco. Há teste que tira o filtro e vê o nome de outro
+estabelecimento mudar. O endereço do cardápio não é alterável. Na tela, quem só tem
+`settings:read` vê os campos desligados; quem recusa de verdade é a API.
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.

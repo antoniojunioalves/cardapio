@@ -1,7 +1,10 @@
 import type { TenantSettings } from '../db/schema/index.js'
 import { urlDaImagem, type StorageService } from '../storage/index.js'
 
-export type ConfiguracoesApresentadas = Omit<TenantSettings, 'logoKey' | 'coverKey'> & {
+export type ConfiguracoesApresentadas<T extends TenantSettings = TenantSettings> = Omit<
+  T,
+  'logoKey' | 'coverKey'
+> & {
   logoUrl: string | null
   coverUrl: string | null
 }
@@ -13,10 +16,10 @@ export type ConfiguracoesApresentadas = Omit<TenantSettings, 'logoKey' | 'coverK
  * `<img src>`. Converter aqui, na borda, é o que permite o banco guardar só a
  * chave e continuar válido quando o storage mudar.
  */
-export function apresentarConfiguracoes(
-  configuracoes: TenantSettings,
+export function apresentarConfiguracoes<T extends TenantSettings>(
+  configuracoes: T,
   service: StorageService,
-): ConfiguracoesApresentadas {
+): ConfiguracoesApresentadas<T> {
   const { logoKey, coverKey, ...resto } = configuracoes
 
   return {

@@ -220,6 +220,8 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
   // Configurações
   'PATCH /api/v1/admin/settings': {
     corpo: {
+      name: 'Lanchonete do Zé',
+      timezone: 'America/Sao_Paulo',
       description: 'Hambúrgueres artesanais e porções. Da terça ao domingo, até tarde.',
       whatsappPhone: '5511999990001',
       prepTimeMinMinutes: 20,

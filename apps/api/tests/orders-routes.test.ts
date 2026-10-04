@@ -613,7 +613,9 @@ describe('painel do estabelecimento', () => {
       tx
         .select()
         .from(auditLogs)
-        .where(eq(auditLogs.entityId, gravado?.id ?? '')),
+        .where(eq(auditLogs.entityId, gravado?.id ?? ''))
+        // A comparação abaixo é pela ordem: sem pedir a ordem, o banco não a garante.
+        .orderBy(auditLogs.createdAt),
     )
     expect(registros.map((r) => r.metadata)).toEqual([
       { number: criado.number, de: 'RECEIVED', para: 'PREPARING' },

@@ -11,7 +11,7 @@ pelo WhatsApp do estabelecimento.
 
 **Status atual: Fase 18 concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
-publicado quando o dono confirma o e-mail. As fases 21 a 28 fecham o MVP — telas de gestão e o
+publicado quando o dono confirma o e-mail. As fases 22 a 28 fecham o MVP — telas de gestão e o
 sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
@@ -20,8 +20,9 @@ de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a s�
 `padaria-pao-quente` (das 08:00 às 18:00, todos os dias). Os pedidos chegam ao vivo no painel:
 entre em [localhost:5173/entrar](http://localhost:5173/entrar) só com e-mail e senha — o sistema
 acha o estabelecimento pelo e-mail e leva ao painel dele. O painel abre no Início, com o resumo
-dos pedidos de hoje, e tem um menu lateral (gaveta no celular) que leva aos Pedidos; ele também
-avisa quando o plano se aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+dos pedidos de hoje e a lista do que falta configurar, e tem um menu lateral (gaveta no celular)
+que leva aos Pedidos e às Configurações do estabelecimento; ele também avisa quando o plano se
+aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

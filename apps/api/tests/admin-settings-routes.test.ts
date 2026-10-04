@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../src/app.js'
-import { closeDatabase } from '../src/db/index.js'
-import { auditLogs } from '../src/db/schema/index.js'
+import { eq } from 'drizzle-orm'
+
+import { closeDatabase, db } from '../src/db/index.js'
+import { auditLogs, tenants } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
@@ -117,6 +119,94 @@ describe('configurações do estabelecimento', () => {
       minimumOrderInCents: 2500,
       whatsappPhone: '5511988887777',
     })
+  })
+
+  it('traz o nome, o endereço e o fuso do estabelecimento', async () => {
+    const [registro] = await db.select().from(tenants).where(eq(tenants.id, dono.tenantId))
+
+    expect((await comoDono('GET', '/settings')).json()).toMatchObject({
+      name: registro?.name,
+      slug: dono.slug,
+      timezone: 'America/Sao_Paulo',
+    })
+  })
+
+  it('altera o nome e o fuso junto com o resto, e registra o antes e o depois', async () => {
+    const antes = (await comoDono('GET', '/settings')).json<{ name: string }>().name
+
+    const resposta = await comoDono('PATCH', '/settings', {
+      name: '  Lanchonete Nova  ',
+      timezone: 'America/Manaus',
+      contactPhone: '(11) 3333-4444',
+    })
+
+    expect(resposta.statusCode, resposta.body).toBe(200)
+    expect(resposta.json()).toMatchObject({
+      name: 'Lanchonete Nova',
+      timezone: 'America/Manaus',
+      contactPhone: '(11) 3333-4444',
+    })
+    const [registro] = await db.select().from(tenants).where(eq(tenants.id, dono.tenantId))
+    expect(registro).toMatchObject({ name: 'Lanchonete Nova', timezone: 'America/Manaus' })
+
+    const registros = await withTenant(tenantContextFromUser(dono.tenantId), (tx) =>
+      tx.select({ action: auditLogs.action, metadata: auditLogs.metadata }).from(auditLogs),
+    )
+    expect(registros.filter((r) => r.action === 'settings.updated').at(-1)?.metadata).toMatchObject(
+      {
+        alteracoes: {
+          name: { de: antes, para: 'Lanchonete Nova' },
+          timezone: { de: 'America/Sao_Paulo', para: 'America/Manaus' },
+        },
+      },
+    )
+  })
+
+  it('o nome novo aparece no cardápio de quem entra depois', async () => {
+    await comoDono('PATCH', '/settings', { name: 'Nome do Login' })
+
+    const sessao = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: dono.email, password: SENHA_PADRAO },
+    })
+    expect(sessao.json<{ establishment: { name: string } }>().establishment.name).toBe(
+      'Nome do Login',
+    )
+  })
+
+  it('nome vazio e fuso que não existe são recusados', async () => {
+    expect((await comoDono('PATCH', '/settings', { name: '   ' })).statusCode).toBe(400)
+    expect((await comoDono('PATCH', '/settings', { timezone: 'Marte/Olimpo' })).statusCode).toBe(
+      400,
+    )
+  })
+
+  it('grava tudo ou nada: um campo inválido não deixa o nome mudar', async () => {
+    const antes = (await comoDono('GET', '/settings')).json<{ name: string }>().name
+
+    const resposta = await comoDono('PATCH', '/settings', {
+      name: 'Não devia gravar',
+      minimumOrderInCents: -1,
+    })
+
+    expect(resposta.statusCode).toBe(400)
+    expect((await comoDono('GET', '/settings')).json<{ name: string }>().name).toBe(antes)
+  })
+
+  it('o endereço do cardápio não muda por esta rota', async () => {
+    const resposta = await comoDono('PATCH', '/settings', { slug: 'outro-endereco' })
+
+    expect(resposta.json<{ slug: string }>().slug).toBe(dono.slug)
+  })
+
+  it('mudar o nome de um estabelecimento não mexe no de outro', async () => {
+    const [antes] = await db.select().from(tenants).where(eq(tenants.id, semPermissao.tenantId))
+
+    await comoDono('PATCH', '/settings', { name: 'Só o meu' })
+
+    const [depois] = await db.select().from(tenants).where(eq(tenants.id, semPermissao.tenantId))
+    expect(depois?.name).toBe(antes?.name)
   })
 
   it('registra na auditoria apenas o que mudou', async () => {

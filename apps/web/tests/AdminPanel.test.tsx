@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { Checklist } from '../src/features/admin/checklist'
 import { itensDoMenu } from '../src/features/admin/menu'
 import { acoesDoPedido } from '../src/features/admin/orders'
 import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
@@ -140,7 +141,11 @@ interface Api {
   listas?: { status: number; corpo: unknown }[]
   /** Respostas do resumo, na ordem; a última se repete. Sem elas, o resumo sai de `pedidos`. */
   resumos?: { status: number; corpo: unknown }[]
+  /** A lista "o que falta para receber pedidos". Sem ela, está tudo feito. */
+  checklist?: Checklist
 }
+
+const TUDO_FEITO: Checklist = { ready: true, steps: [] }
 
 /** A lista de pedidos, e não o resumo, que mora debaixo do mesmo endereço. */
 const LISTA = '/admin/orders?'
@@ -155,7 +160,9 @@ function mockarApi(api: Api) {
     if (url.endsWith('/auth/login')) resposta = api.login ?? { status: 200, corpo: SESSAO }
     else if (url.endsWith('/auth/refresh')) resposta = { status: 200, corpo: SESSAO }
     else if (url.endsWith('/admin/plan')) resposta = { status: 200, corpo: api.plano ?? LIVRE }
-    else if (url.endsWith(RESUMO)) {
+    else if (url.endsWith('/admin/setup-checklist')) {
+      resposta = { status: 200, corpo: api.checklist ?? TUDO_FEITO }
+    } else if (url.endsWith(RESUMO)) {
       const resumos = api.resumos ?? [{ status: 200, corpo: resumoDe(api.pedidos) }]
       resposta = resumos[Math.min(chamadasDoResumo, resumos.length - 1)] ?? resposta
       chamadasDoResumo += 1
@@ -321,6 +328,10 @@ describe('login do painel', () => {
 describe('menu do painel', () => {
   it('cada pessoa recebe só os itens que a permissão dela alcança', () => {
     expect(itensDoMenu(['orders:read']).map((item) => item.rotulo)).toEqual(['Início', 'Pedidos'])
+    expect(itensDoMenu(['settings:read']).map((item) => item.rotulo)).toEqual([
+      'Início',
+      'Configurações',
+    ])
     expect(itensDoMenu([]).map((item) => item.rotulo)).toEqual(['Início'])
   })
 
@@ -509,6 +520,61 @@ describe('início do painel', () => {
 
     expect(await screen.findByText(/Não foi possível carregar o resumo/)).toBeVisible()
     expect(screen.getByRole('link', { name: 'Ver pedidos' })).toBeVisible()
+  })
+})
+
+describe('o que falta para receber pedidos', () => {
+  const CONFIGURA = {
+    ...SESSAO,
+    user: { ...SESSAO.user, permissions: ['orders:read', 'settings:read', 'settings:update'] },
+  }
+  const FALTANDO: Checklist = {
+    ready: false,
+    steps: [
+      { key: 'emailConfirmed', done: true },
+      { key: 'whatsapp', done: false },
+      { key: 'businessHours', done: false },
+      { key: 'fulfillment', done: true },
+      { key: 'paymentMethods', done: false },
+      { key: 'products', done: false },
+    ],
+  }
+
+  it('mostra o que está feito, o que falta e onde resolver', async () => {
+    await abrirInicio({ pedidos: [], checklist: FALTANDO }, CONFIGURA)
+
+    const lista = within(
+      await screen.findByRole('region', { name: 'O que falta para receber pedidos' }),
+    )
+    expect(lista.getByText('2 de 6 passos feitos.')).toBeVisible()
+    expect(lista.getByText('Confirmar o e-mail')).toHaveTextContent('feito')
+    expect(lista.getByText('Informar o WhatsApp do estabelecimento')).toHaveTextContent('falta')
+    expect(lista.getByText('É para ele que o cliente envia o pedido.')).toBeVisible()
+    // O WhatsApp se resolve na tela de configurações, que já existe.
+    expect(lista.getByRole('link', { name: 'Abrir as configurações' })).toHaveAttribute(
+      'href',
+      '/lanchonete-do-ze/admin/configuracoes',
+    )
+  })
+
+  it('com tudo feito, a lista some', async () => {
+    const fetch = await abrirInicio({ pedidos: [] }, CONFIGURA)
+    await waitFor(() => {
+      expect(chamadas(fetch, '/admin/setup-checklist')).toHaveLength(1)
+    })
+
+    expect(
+      screen.queryByRole('region', { name: 'O que falta para receber pedidos' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('quem não cuida das configurações não vê a lista nem a consulta', async () => {
+    const fetch = await abrirInicio({ pedidos: [], checklist: FALTANDO })
+
+    expect(
+      screen.queryByRole('region', { name: 'O que falta para receber pedidos' }),
+    ).not.toBeInTheDocument()
+    expect(chamadas(fetch, '/admin/setup-checklist')).toHaveLength(0)
   })
 })
 
@@ -795,6 +861,7 @@ describe('aviso de confirmação do cadastro', () => {
         return resposta ?? 'falha-de-rede'
       }
       if (url.endsWith('/admin/plan')) return { status: 200, corpo: LIVRE }
+      if (url.endsWith('/admin/setup-checklist')) return { status: 200, corpo: TUDO_FEITO }
       if (url.endsWith(RESUMO)) return { status: 200, corpo: resumoDe([]) }
       if (url.includes(LISTA)) return { status: 200, corpo: [] }
       return { status: 200, corpo: cardapioDoZe() }

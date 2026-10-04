@@ -8,9 +8,16 @@ import type {
 } from '../db/schema/index.js'
 import type { TenantContext } from '../tenant/context.js'
 import { findTenantById } from '../tenant/repository.js'
-import { withTenant } from '../tenant/with-tenant.js'
+import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
+import { montarChecklist, type Checklist } from './checklist.js'
 import { statusDoEstabelecimento, type StatusDoEstabelecimento } from './opening-hours.js'
 import {
+  atualizarIdentidade,
+  buscarIdentidade,
+  contarFormasDePagamentoHabilitadas,
+  contarHorarios,
+  contarProdutosAVenda,
+  contarRegioesAtivas,
   ensureDeliverySettings,
   ensureSettings,
   listBusinessHours,
@@ -36,18 +43,54 @@ import {
  * alteração e o registro acontecem juntos, ou nenhum dos dois.
  */
 
-export async function obterConfiguracoes(context: TenantContext): Promise<TenantSettings> {
-  return withTenant(context, (tx) => ensureSettings(tx, context))
+/**
+ * As configurações, com o nome, o endereço e o fuso do estabelecimento. Esses
+ * três moram no registro de estabelecimentos (`tenants`), e não em
+ * `tenant_settings` — mas para quem configura é um formulário só.
+ */
+export type ConfiguracoesDoEstabelecimento = TenantSettings & {
+  name: string
+  slug: string
+  timezone: string
 }
 
+export type ConfiguracoesPatch = SettingsPatch & {
+  name?: string | undefined
+  timezone?: string | undefined
+}
+
+async function carregarConfiguracoes(
+  tx: TenantTransaction,
+  context: TenantContext,
+): Promise<ConfiguracoesDoEstabelecimento> {
+  const configuracoes = await ensureSettings(tx, context)
+  const { name, slug, timezone } = await buscarIdentidade(tx, context)
+  return { ...configuracoes, name, slug, timezone }
+}
+
+export async function obterConfiguracoes(
+  context: TenantContext,
+): Promise<ConfiguracoesDoEstabelecimento> {
+  return withTenant(context, (tx) => carregarConfiguracoes(tx, context))
+}
+
+/**
+ * Altera as configurações. O nome e o fuso vão para o registro de
+ * estabelecimentos, na **mesma transação** — salvar o formulário grava tudo ou
+ * nada, e a auditoria é uma só, com o antes e o depois de cada campo.
+ */
 export async function atualizarConfiguracoes(
   context: TenantContext,
   actorUserId: string,
-  patch: SettingsPatch,
-): Promise<TenantSettings> {
+  patch: ConfiguracoesPatch,
+): Promise<ConfiguracoesDoEstabelecimento> {
+  const { name, timezone, ...configuracoes } = patch
+
   return withTenant(context, async (tx) => {
-    const anterior = await ensureSettings(tx, context)
-    const atualizado = await updateSettings(tx, context, patch)
+    const anterior = await carregarConfiguracoes(tx, context)
+    await updateSettings(tx, context, configuracoes)
+    await atualizarIdentidade(tx, context, { name, timezone })
+    const atualizado = await carregarConfiguracoes(tx, context)
 
     await recordAudit(tx, context, {
       action: 'settings.updated',
@@ -177,6 +220,29 @@ export async function obterStatus(context: TenantContext): Promise<StatusDoEstab
       intervalos,
       timezone: tenant.timezone,
       aceitandoPedidos: configuracoes.isAcceptingOrders,
+    })
+  })
+}
+
+/** O que falta para o estabelecimento receber pedidos (`checklist.ts`). */
+export async function obterChecklist(context: TenantContext): Promise<Checklist> {
+  return withTenant(context, async (tx) => {
+    const configuracoes = await ensureSettings(tx, context)
+    const entrega = await ensureDeliverySettings(tx, context)
+    const { status } = await buscarIdentidade(tx, context)
+
+    return montarChecklist({
+      status,
+      whatsapp: configuracoes.whatsappPhone,
+      horarios: await contarHorarios(tx),
+      entrega: {
+        deliveryEnabled: entrega.deliveryEnabled,
+        pickupEnabled: entrega.pickupEnabled,
+        feeMode: entrega.feeMode,
+        regioesAtivas: await contarRegioesAtivas(tx),
+      },
+      formasDePagamento: await contarFormasDePagamentoHabilitadas(tx),
+      produtosAVenda: await contarProdutosAVenda(tx),
     })
   })
 }

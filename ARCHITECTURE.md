@@ -684,6 +684,18 @@ não deve ser público vai para `tenant_settings`, que é tenant-scoped e proteg
 endereço, telefone de contato, regras comerciais. Foi a guarda registrada na Fase 3, agora
 cumprida.
 
+**Para quem configura, é um formulário só** (Fase 21). `GET` e `PATCH /api/v1/admin/settings`
+trazem e alteram também o nome e o fuso, que moram em `tenants`: o `PATCH` grava as duas tabelas
+na **mesma transação**, com uma auditoria só — salvar o formulário grava tudo ou nada. Como
+`tenants` não tem RLS, a alteração filtra explicitamente pelo id **do contexto**, e há teste que
+tira o filtro e vê o nome de outro estabelecimento mudar. O endereço do cardápio (`slug`) é só
+leitura: está em links e cartazes já divulgados.
+
+**"O que falta para receber pedidos"** (`settings/checklist.ts`, puro, e
+`GET /api/v1/admin/setup-checklist`): seis passos — e-mail confirmado, WhatsApp, horário, entrega
+ou retirada, forma de pagamento e ao menos um produto à venda — calculados numa transação. A
+lista só informa; quem decide se um pedido é aceito continua sendo a criação do pedido.
+
 ### 7.2 Horário de funcionamento
 
 Um intervalo por linha, várias linhas por dia. Modelar como um par abre/fecha em colunas da
@@ -991,19 +1003,20 @@ src/
 
 ### 9.3 Rotas e dados
 
-| Rota                          | Página                                       |
-| ----------------------------- | -------------------------------------------- |
-| `/`                           | página inicial do produto                    |
-| `/cadastro`                   | cadastro do estabelecimento                  |
-| `/entrar`                     | login do painel, com e-mail e senha          |
-| `/confirmar-email`            | confirmação do e-mail pelo link (`#token=…`) |
-| `/termos`, `/privacidade`     | termos de uso e política de privacidade      |
-| `/:tenantSlug`                | cardápio público                             |
-| `/:tenantSlug/checkout`       | finalizar pedido                             |
-| `/:tenantSlug/pedido-enviado` | confirmação do pedido                        |
-| `/:tenantSlug/admin`          | painel: Início, com o resumo dos pedidos     |
-| `/:tenantSlug/admin/pedidos`  | painel: pedidos ao vivo                      |
-| qualquer outra                | não encontrado                               |
+| Rota                               | Página                                       |
+| ---------------------------------- | -------------------------------------------- |
+| `/`                                | página inicial do produto                    |
+| `/cadastro`                        | cadastro do estabelecimento                  |
+| `/entrar`                          | login do painel, com e-mail e senha          |
+| `/confirmar-email`                 | confirmação do e-mail pelo link (`#token=…`) |
+| `/termos`, `/privacidade`          | termos de uso e política de privacidade      |
+| `/:tenantSlug`                     | cardápio público                             |
+| `/:tenantSlug/checkout`            | finalizar pedido                             |
+| `/:tenantSlug/pedido-enviado`      | confirmação do pedido                        |
+| `/:tenantSlug/admin`               | painel: Início, com o resumo dos pedidos     |
+| `/:tenantSlug/admin/pedidos`       | painel: pedidos ao vivo                      |
+| `/:tenantSlug/admin/configuracoes` | painel: configurações do estabelecimento     |
+| qualquer outra                     | não encontrado                               |
 
 No cardápio, `?produto={id}` abre a janela do produto, `?carrinho` abre o carrinho e `?info` abre as
 informações do estabelecimento (o botão "Info", ao lado do status). Morar na URL
@@ -1101,7 +1114,16 @@ número de pedidos novos ao lado de "Pedidos" vem do resumo (8.10) e tem rótulo
 de tela.
 
 **O Início** (`pages/AdminHomePage.tsx`) é a primeira tela depois do login e do cadastro: o aviso
-de confirmação do e-mail, o aviso do plano e o resumo dos pedidos de hoje.
+de confirmação do e-mail, o aviso do plano e o resumo dos pedidos de hoje. Para quem cuida das
+configurações, mostra também a lista "o que falta para receber pedidos" (7.1), que some quando
+tudo está feito; cada passo vira um link quando a tela que o resolve existe (`checklist.ts`).
+
+**Configurações** (`pages/AdminSettingsPage.tsx`, Fase 21) é a primeira tela de gestão. O
+formulário (`features/admin/settings.ts`) tem um schema só, que recebe o que a pessoa digitou —
+telefone com máscara, valor em reais — e entrega o corpo da API: só dígitos, centavos, `null` no
+que ficou em branco. `paraFormulario` faz o caminho inverso. Um "Salvar" grava tudo; as imagens
+ficam fora do formulário e são gravadas ao escolher o arquivo, por outra rota. Sem
+`settings:update`, a pessoa vê tudo com os campos desligados.
 
 ### 9.7 Temas
 

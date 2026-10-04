@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router'
 
 import {
+  IconeConfiguracoes,
   IconeExterno,
   IconeInicio,
   IconePedidos,
@@ -9,11 +10,12 @@ import {
   type IconeProps,
 } from '@/components/icons'
 
-import { caminhoDoPainel, itensDoMenu, type IconeDoMenu } from '../menu'
+import { caminhoDoPainel, itensDoMenu, type IconeDoMenu, type ItemDoMenu } from '../menu'
 
 const ICONES: Record<IconeDoMenu, (props: IconeProps) => ReactNode> = {
   inicio: IconeInicio,
   pedidos: IconePedidos,
+  configuracoes: IconeConfiguracoes,
 }
 
 const linha =
@@ -49,6 +51,43 @@ export function AdminNav({
   aoNavegar,
   aoSair,
 }: AdminNavProps) {
+  const itens = itensDoMenu(permissoes)
+
+  const linhaDoItem = (item: ItemDoMenu) => {
+    const Icone = ICONES[item.icone]
+    const comNovos = item.icone === 'pedidos' && novos > 0
+    return (
+      <li key={item.caminho}>
+        <NavLink
+          to={caminhoDoPainel(slug, item.caminho)}
+          // Sem `end`, o Início ficaria marcado em todas as telas do painel.
+          end
+          onClick={aoNavegar}
+          // O número sozinho não diz nada a quem ouve a página: o rótulo diz o que ele conta.
+          aria-label={
+            comNovos
+              ? `${item.rotulo}, ${String(novos)} ${novos === 1 ? 'novo' : 'novos'}`
+              : undefined
+          }
+          className={({ isActive }) =>
+            `${linha} ${isActive ? 'bg-primary text-primary-content hover:bg-primary' : ''}`
+          }
+        >
+          <Icone />
+          <span className="flex-1">{item.rotulo}</span>
+          {comNovos && (
+            <span
+              aria-hidden="true"
+              className="text-caption rounded-pill bg-accent-400 px-2 py-0.5 font-semibold text-neutral-950"
+            >
+              {novos}
+            </span>
+          )}
+        </NavLink>
+      </li>
+    )
+  }
+
   return (
     <aside
       id={id}
@@ -61,56 +100,33 @@ export function AdminNav({
         <p className="text-caption text-content-inverted/60">Painel do estabelecimento</p>
       </div>
 
-      <nav aria-label="Painel" className="flex-1">
-        <ul className="flex flex-col gap-1">
-          {itensDoMenu(permissoes).map((item) => {
-            const Icone = ICONES[item.icone]
-            const comNovos = item.icone === 'pedidos' && novos > 0
-            return (
-              <li key={item.caminho}>
-                <NavLink
-                  to={caminhoDoPainel(slug, item.caminho)}
-                  // Sem `end`, o Início ficaria marcado em todas as telas do painel.
-                  end
-                  onClick={aoNavegar}
-                  // O número sozinho não diz nada a quem ouve a página: o rótulo diz o que ele conta.
-                  aria-label={
-                    comNovos
-                      ? `${item.rotulo}, ${String(novos)} ${novos === 1 ? 'novo' : 'novos'}`
-                      : undefined
-                  }
-                  className={({ isActive }) =>
-                    `${linha} ${isActive ? 'bg-primary text-primary-content hover:bg-primary' : ''}`
-                  }
-                >
-                  <Icone />
-                  <span className="flex-1">{item.rotulo}</span>
-                  {comNovos && (
-                    <span
-                      aria-hidden="true"
-                      className="text-caption rounded-pill bg-accent-400 px-2 py-0.5 font-semibold text-neutral-950"
-                    >
-                      {novos}
-                    </span>
-                  )}
-                </NavLink>
-              </li>
-            )
-          })}
+      {/* Um `nav` só, do primeiro item ao "Sair": o rodapé também é navegação do painel. */}
+      <nav aria-label="Painel" className="flex flex-1 flex-col gap-section-y">
+        <ul className="flex flex-1 flex-col gap-1">
+          {itens.filter((item) => !item.rodape).map(linhaDoItem)}
+        </ul>
+
+        <ul className="flex flex-col gap-1 border-t border-content-inverted/20 pt-stack">
+          <li>
+            <Link to={`/${slug}`} target="_blank" rel="noreferrer" className={linha}>
+              <IconeExterno />
+              Ver cardápio
+            </Link>
+          </li>
+          {itens.filter((item) => item.rodape).map(linhaDoItem)}
+          <li>
+            <p className="text-caption truncate px-3 py-1 text-content-inverted/60">
+              {nomeDoUsuario}
+            </p>
+          </li>
+          <li>
+            <button type="button" onClick={aoSair} className={`${linha} w-full text-left`}>
+              <IconeSair />
+              Sair
+            </button>
+          </li>
         </ul>
       </nav>
-
-      <div className="flex flex-col gap-1 border-t border-content-inverted/20 pt-stack">
-        <Link to={`/${slug}`} target="_blank" rel="noreferrer" className={linha}>
-          <IconeExterno />
-          Ver cardápio
-        </Link>
-        <p className="text-caption truncate px-3 py-1 text-content-inverted/60">{nomeDoUsuario}</p>
-        <button type="button" onClick={aoSair} className={`${linha} w-full text-left`}>
-          <IconeSair />
-          Sair
-        </button>
-      </div>
     </aside>
   )
 }

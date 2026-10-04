@@ -537,7 +537,7 @@
                 "settings"
               ]
             },
-            "description": ""
+            "description": "Inclui o nome, o endereço do cardápio (`slug`, só leitura) e o fuso horário."
           }
         },
         {
@@ -552,7 +552,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"description\": \"Hambúrgueres artesanais e porções. Da terça ao domingo, até tarde.\",\n  \"whatsappPhone\": \"5511999990001\",\n  \"prepTimeMinMinutes\": 20,\n  \"prepTimeMaxMinutes\": 40,\n  \"minimumOrderInCents\": 2000,\n  \"isAcceptingOrders\": true\n}",
+              "raw": "{\n  \"name\": \"Lanchonete do Zé\",\n  \"timezone\": \"America/Sao_Paulo\",\n  \"description\": \"Hambúrgueres artesanais e porções. Da terça ao domingo, até tarde.\",\n  \"whatsappPhone\": \"5511999990001\",\n  \"prepTimeMinMinutes\": 20,\n  \"prepTimeMaxMinutes\": 40,\n  \"minimumOrderInCents\": 2000,\n  \"isAcceptingOrders\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -571,7 +571,27 @@
                 "settings"
               ]
             },
-            "description": ""
+            "description": "Só os campos enviados mudam. O nome e o fuso são gravados na mesma transação dos demais. O endereço do cardápio (`slug`) não muda por aqui."
+          }
+        },
+        {
+          "name": "O que falta para o estabelecimento receber pedidos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/setup-checklist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "setup-checklist"
+              ]
+            },
+            "description": "A lista do Início do painel. `emailConfirmed`: o cardápio está no ar; `whatsapp`: há número para onde o pedido é enviado; `businessHours`: há horário cadastrado; `fulfillment`: entrega ou retirada funcionando; `paymentMethods`: ao menos uma forma de pagamento; `products`: ao menos um produto à venda. `ready` é verdadeiro com todos feitos."
           }
         },
         {
