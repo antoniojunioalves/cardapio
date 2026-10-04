@@ -1,0 +1,1 @@
+ALTER TABLE "delivery_settings" ALTER COLUMN "delivery_enabled" SET DEFAULT false;

@@ -344,6 +344,16 @@ describe('status do estabelecimento', () => {
 })
 
 describe('entrega', () => {
+  it('nasce com entrega e retirada desligadas: é o dono quem escolhe', async () => {
+    const resposta = await comoDono('GET', '/delivery')
+
+    expect(resposta.statusCode).toBe(200)
+    expect(resposta.json()).toMatchObject({
+      configuracao: { deliveryEnabled: false, pickupEnabled: false, feeMode: 'FIXED' },
+      regioes: [],
+    })
+  })
+
   it('salva configuração e regiões numa chamada', async () => {
     const resposta = await comoDono('PUT', '/delivery', {
       configuracao: {
@@ -407,6 +417,22 @@ describe('entrega', () => {
         { name: 'Centro', feeInCents: 500, isActive: true, sortOrder: 0 },
         { name: 'centro', feeInCents: 900, isActive: true, sortOrder: 1 },
       ],
+    })
+
+    expect(resposta.statusCode).toBe(400)
+  })
+
+  it('recusa tempo de entrega invertido', async () => {
+    const resposta = await comoDono('PUT', '/delivery', {
+      configuracao: {
+        deliveryEnabled: true,
+        pickupEnabled: true,
+        feeMode: 'FIXED',
+        fixedFeeInCents: 500,
+        estimatedMinMinutes: 60,
+        estimatedMaxMinutes: 30,
+      },
+      regioes: [],
     })
 
     expect(resposta.statusCode).toBe(400)

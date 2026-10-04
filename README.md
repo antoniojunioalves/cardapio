@@ -9,10 +9,11 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 18 concluída** — o estabelecimento se cadastra pela página inicial
+**Status atual: Fase 22 concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
-publicado quando o dono confirma o e-mail. As fases 22 a 28 fecham o MVP — telas de gestão e o
-sistema no ar (ver
+publicado quando o dono confirma o e-mail. Pelo painel ele já configura o estabelecimento, os
+horários, a entrega e as formas de pagamento. As fases 23 a 28 fecham o MVP — as telas do
+cardápio, de usuários e de clientes, e o sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
@@ -21,8 +22,10 @@ de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a s�
 entre em [localhost:5173/entrar](http://localhost:5173/entrar) só com e-mail e senha — o sistema
 acha o estabelecimento pelo e-mail e leva ao painel dele. O painel abre no Início, com o resumo
 dos pedidos de hoje e a lista do que falta configurar, e tem um menu lateral (gaveta no celular)
-que leva aos Pedidos e às Configurações do estabelecimento; ele também avisa quando o plano se
-aproxima do limite de pedidos do mês. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
+que leva aos Pedidos e às Configurações — com as abas Estabelecimento, Horários, Entrega e
+Pagamento; ele também avisa quando o plano se aproxima do limite de pedidos do mês. Um
+estabelecimento recém-cadastrado só recebe pedidos depois de ligar a entrega ou a retirada e de
+escolher ao menos uma forma de pagamento. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 Depois de `pnpm db:seed`, dá para entrar com:
 

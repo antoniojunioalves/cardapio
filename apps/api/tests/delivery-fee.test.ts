@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   atingePedidoMinimo,
   resolverTaxaDeEntrega,
+  temComoReceber,
   type ConfiguracaoDeEntrega,
   type RegiaoDeEntrega,
 } from '../src/settings/delivery-fee.js'
@@ -113,6 +114,37 @@ describe('entrega desabilitada', () => {
         tipo: 'DELIVERY',
       }),
     ).toEqual({ ok: false, motivo: 'ENTREGA_INDISPONIVEL' })
+  })
+})
+
+describe('há como o pedido chegar ao cliente?', () => {
+  const desligado = { deliveryEnabled: false, pickupEnabled: false, feeMode: 'FIXED' } as const
+
+  it('não, do jeito que o estabelecimento nasce', () => {
+    expect(temComoReceber(desligado, 0)).toBe(false)
+  })
+
+  it('sim, só com retirada', () => {
+    expect(temComoReceber({ ...desligado, pickupEnabled: true }, 0)).toBe(true)
+  })
+
+  it('sim, com entrega de taxa fixa — não depende de região', () => {
+    expect(temComoReceber({ ...desligado, deliveryEnabled: true }, 0)).toBe(true)
+  })
+
+  it('entrega por região só conta com ao menos uma região ativa', () => {
+    const porRegiaoSemRetirada = {
+      ...desligado,
+      deliveryEnabled: true,
+      feeMode: 'BY_REGION',
+    } as const
+
+    expect(temComoReceber(porRegiaoSemRetirada, 0)).toBe(false)
+    expect(temComoReceber(porRegiaoSemRetirada, 1)).toBe(true)
+  })
+
+  it('regiões cadastradas não ligam a entrega sozinhas', () => {
+    expect(temComoReceber({ ...desligado, feeMode: 'BY_REGION' }, 3)).toBe(false)
   })
 })
 

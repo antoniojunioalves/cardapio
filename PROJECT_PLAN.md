@@ -1,9 +1,9 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-01
-**Fase atual:** 21 — concluída, aguardando validação
-**Próxima:** 22 — horários, entrega e retirada, formas de pagamento. As fases 22 a 28 fecham o MVP
-(ver "O que falta para o MVP")
+**Atualizado em:** 2026-10-02
+**Fase atual:** 22 — concluída, aguardando validação
+**Próxima:** 23 — categorias e produtos. As fases 23 a 28 fecham o MVP (ver "O que falta para o
+MVP")
 
 ---
 
@@ -87,9 +87,13 @@ gratuito passou a limitar o cardápio a 20 produtos e 10 categorias.
 a descrição, o fuso, o logo e a capa, o contato, o endereço, o pedido mínimo e o tempo de preparo —
 tudo num "Salvar" só. E o Início mostra o que ainda falta para receber pedidos.
 
-**Ainda não existe:** as telas de horários, entrega e pagamento, do cardápio, de usuários e de
-clientes — isso ainda é configurado pela API. As fases 22 a 28 fecham o MVP; ver "O que falta para
-o MVP".
+**Horários, entrega e pagamento também (Fase 22).** Configurações ganhou abas — Estabelecimento,
+Horários, Entrega e Pagamento —, cada uma com o seu endereço e o seu "Salvar". Um estabelecimento
+novo nasce com a entrega e a retirada desligadas, e o cardápio só recebe pedidos depois que o dono
+escolhe como entrega e como recebe.
+
+**Ainda não existe:** as telas do cardápio, de usuários e de clientes — isso ainda é configurado
+pela API. As fases 23 a 28 fecham o MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -124,8 +128,8 @@ o MVP".
 | 19b | Ajustes visuais do cardápio: janela "Info" e menu de baixo                                                          | ✅ Concluída |
 | 20  | Tratamento de imagens no upload e limites do plano gratuito (20 produtos, 10 categorias)                            | ✅ Concluída |
 | 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ✅ Concluída |
-| 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ⬜ Próxima   |
-| 23  | Categorias e produtos                                                                                               | ⬜           |
+| 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ✅ Concluída |
+| 23  | Categorias e produtos                                                                                               | ⬜ Próxima   |
 | 24  | Grupos de opção, adicionais e combos                                                                                | ⬜           |
 | 25  | Usuários e senha                                                                                                    | ⬜           |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
@@ -136,6 +140,128 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 22 — concluída
+
+As três configurações que faltavam para um estabelecimento receber pedidos sem tocar na API:
+horário de funcionamento, entrega e retirada, e formas de pagamento.
+
+### Microtasks
+
+| #   | Tarefa                                                                                        | Status |
+| --- | --------------------------------------------------------------------------------------------- | ------ |
+| 1   | Configurações com abas: Estabelecimento, Horários, Entrega e Pagamento, cada uma num endereço | ✅     |
+| 2   | Aba Horários: a semana, vários horários por dia, "repetir nos outros dias"                    | ✅     |
+| 3   | Aba Entrega: entrega, retirada, taxa fixa ou por região, tempo de entrega                     | ✅     |
+| 4   | Aba Pagamento: liga e desliga as formas do catálogo                                           | ✅     |
+| 5   | Regras do horário em `@repo/shared`, as mesmas na tela e na API                               | ✅     |
+| 6   | Estabelecimento novo nasce com entrega e retirada desligadas (migration `0023`)               | ✅     |
+| 7   | Cardápio sem como receber ou sem forma de pagamento não recebe pedidos                        | ✅     |
+| 8   | Lista do Início: os passos de horário, entrega e pagamento levam à aba certa                  | ✅     |
+| 9   | Testes: regras, API, as três abas, a navegação e a lista                                      | ✅     |
+
+### Decisões e achados desta fase
+
+**Abas dentro de Configurações, e não itens novos no menu** (decisão do Junio). O menu continua
+com um item só. Cada aba é uma rota filha de `/admin/configuracoes` — `horarios`, `entrega`,
+`pagamento` —, e por isso é um link: abre direto pelo endereço, volta com o botão de voltar e é
+para onde a lista do Início leva. Cada aba tem o seu "Salvar". No celular a faixa de abas rola de
+lado, e a aba aberta é trazida para a vista.
+
+**O estabelecimento nasce com a entrega e a retirada desligadas** (decisão do Junio). Fecha o
+achado da Fase 21: antes nascia com entrega ligada e grátis, sem o dono ter decidido. A migration
+`0023` só troca o padrão da coluna; quem já tinha a entrega configurada continua como estava.
+
+**Sem como receber ou sem como pagar, o cardápio não recebe pedidos.** É a consequência da decisão
+acima. O cardápio público responde `NAO_RECEBENDO` — o mesmo status do limite do plano, sem dizer
+qual é o motivo — quando não há entrega nem retirada funcionando, ou quando nenhuma forma de
+pagamento está habilitada. A criação do pedido já recusava com esse status; não mudou. "Entrega
+funcionando" é uma função só (`temComoReceber`), usada pelo cardápio e pela lista do Início:
+entrega por região sem nenhuma região ativa não conta.
+
+**As regras do horário foram para `@repo/shared`.** Hora válida, abrir e fechar na mesma hora e
+sobreposição no mesmo dia são conferidas pela mesma função na tela e na API. A tela mostra o erro
+no horário que tem o problema; a API recusa a grade.
+
+**A API ganhou uma regra: o tempo mínimo de entrega não passa do máximo.** O tempo de preparo já
+tinha; o de entrega aceitava invertido.
+
+**A tela só deixa salvar o que a API aceita.** Ao menos entrega ou retirada; com taxa por região,
+ao menos uma região ativa; nomes de região sem repetição. Uma parte do formulário que esteja com
+erro não some da tela ao desligar a entrega ou trocar o tipo de taxa — escondida, seria um
+"Salvar" que não faz nada, sem explicação.
+
+**A regra entre campos roda mesmo com outro campo inválido.** Como na Fase 21, com o `when` do
+`refine` — agora num auxiliar só (`comCamposValidos`). A checagem por mutação mostrou que o
+primeiro teste disso passava sem o `when`: o Zod só pula a regra quando o campo vizinho falha numa
+conversão, não num tamanho. O teste foi refeito com uma taxa que não é valor.
+
+**Corrigido na validação do Junio: a mensagem de uma regra ficava na tela depois de corrigida.**
+Ele marcou "Taxa fixa" e continuou vendo "Com a taxa por região, cadastre ao menos uma região
+ativa". O erro de uma regra entre campos fica guardado num campo só, e o formulário só conferia de
+novo o campo em que a pessoa mexia; corrigir pelo outro lado deixava a mensagem até o próximo
+"Salvar". Agora mexer num campo confere de novo os que dependem dele (`reconferir`, em
+`form-fields.ts`) — só os que já estão com erro, para não cobrar antes da hora. O mesmo defeito
+existia em mais sete lugares, todos corrigidos e com teste: desligar a entrega, ligar a entrega
+com "ligue a entrega ou a retirada" na tela, o tempo mínimo de entrega, o nome repetido e a região
+ativa, a hora de fechar e o outro horário do dia na aba Horários, e o tempo de preparo na aba
+Estabelecimento, que vinha da Fase 21.
+
+**Uma linha de região em branco não é uma região.** Achado ao repetir o caso dele no navegador:
+quem clicava em "Adicionar região", desistia e marcava "Taxa fixa" ficava impedido de salvar por
+causa da linha vazia. Sem nome e sem taxa, a linha não é cobrada, não conta como região ativa e
+não é enviada. Com a taxa preenchida, o nome passa a ser cobrado.
+
+**Um teste que olha uma vez só pode passar por acaso.** O primeiro teste de "a mensagem some ao
+acrescentar uma região" passava, e no navegador a mensagem voltava: o formulário confere a lista
+de novo logo depois, e o teste olhava antes. As esperas por "a mensagem sumiu" agora olham, dão
+tempo ao formulário e olham de novo (`sumiuDeVez`).
+
+**Salvar marca a lista do Início para ser relida.** O teste que eu tinha passava sem a marca — ao
+voltar ao Início a lista seria relida de qualquer jeito. Ficou um teste direto da marca, para os
+três "Salvar".
+
+**As peças comuns das abas viraram componentes** (`form-parts.tsx`): o cartão da seção, o aviso de
+quem só pode ver, o rodapé com o "Salvar", a espera dos dados e a caixa de marcar com explicação.
+A aba Estabelecimento passou a usá-las.
+
+**Visto num navegador de verdade**, em 360, 390 e 1280 px, num estabelecimento descartável criado
+do zero: o cardápio respondeu `NAO_RECEBENDO` recém-criado, com horário e sem entrega, e com
+entrega e sem pagamento; abriu depois da forma de pagamento. Três ajustes saíram das capturas: o
+campo de hora era estreito para um navegador em inglês (AM/PM), o "Remover" da região estava
+desalinhado e a aba aberta ficava fora da vista no celular.
+
+Nenhuma rota nova. A coleção do Postman mudou só nas descrições — importe de novo.
+
+### Verificação executada
+
+| Verificação                                       | Resultado                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `pnpm verify`                                     | **900 testes** (583 API + 277 web + 40 shared); formatação, typecheck, lint e build   |
+| Clone limpo, `--frozen-lockfile`                  | os mesmos 900 testes                                                                  |
+| Cardápio sem a regra de entrega ou retirada       | falha "entrega por região sem nenhuma região ativa não é entrega" e o pedido recusado |
+| Cardápio sem a regra da forma de pagamento        | falha "com retirada e sem forma de pagamento, continua sem receber"                   |
+| Tempo de entrega invertido aceito pela API        | falha "recusa tempo de entrega invertido"                                             |
+| Encostar dois horários contando como sobreposição | falha "encostar não é sobrepor"                                                       |
+| Erro do horário no intervalo errado               | falha "o erro vai para o intervalo que tem o problema"                                |
+| Parte com erro sumindo ao desligar a entrega      | falha "uma parte com erro não some da tela ao desligar a entrega"                     |
+| Regra entre campos sem o `when`                   | falham os dois testes de regra com campo vizinho inválido                             |
+| Menu do painel marcando só o endereço exato       | falha "o menu do painel continua marcando Configurações dentro de uma aba"            |
+| Salvar sem marcar a lista do Início               | falha "gravar … marca a lista do que falta para ser relida", nos três                 |
+| Campo sem conferir de novo os que dependem dele   | falha o teste de cada um dos oito casos, um por mutação                               |
+| Conferir de novo mesmo sem erro na tela           | falha "escolher taxa por região pela primeira vez não cobra a região antes da hora"   |
+| Linha de região em branco enviada, ou contando    | falha "uma linha de região em branco não é região" e o de salvar com taxa fixa        |
+| O caso do Junio, num navegador de verdade         | por região → salvar → taxa fixa: a mensagem some; com a linha em branco, salva        |
+| Navegador de verdade, em 360, 390 e 1280 px       | as três abas, de um cadastro novo até o cardápio abrir; sem erro no console           |
+| Validação do Junio                                | a fazer                                                                               |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
+
+**O que não conferi.** O navegador que uso aqui mostra o campo de hora no formato de 12 horas
+(AM/PM), qualquer que seja o idioma pedido. Num navegador em português ele aparece em 24 horas;
+isso fica para a validação do Junio.
 
 ---
 
@@ -638,10 +764,11 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 21 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
-(MVP.md, "Como saber que acabou"). O passo 1 — cadastrar pela página inicial e confirmar o e-mail
-— e os passos 4 a 7 funcionam de ponta a ponta. Os passos 2 e 3 só funcionam **pela API**, e o
-sistema ainda não está no ar. As fases 22 a 28 fecham essa distância.
+As fases 1 a 22 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+(MVP.md, "Como saber que acabou"). Os passos 1 e 2 — cadastrar pela página inicial, confirmar o
+e-mail, entrar e configurar o estabelecimento, os horários, a entrega e o pagamento — e os passos
+4 a 7 funcionam de ponta a ponta. O passo 3, o cardápio, só funciona **pela API**, e o sistema
+ainda não está no ar. As fases 23 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -672,9 +799,8 @@ vazio**, como faria alguém que nunca viu o sistema.
 
 ### Fases 22 a 24 — Configurações restantes e cardápio
 
-- **22:** horários, entrega e retirada, formas de pagamento. Decidir o padrão da entrega de um
-  estabelecimento novo, que hoje nasce ligada e grátis (achado da Fase 21). Cada tela acrescenta o
-  seu caminho ao passo correspondente de "o que falta para receber pedidos".
+- **22 (concluída):** horários, entrega e retirada, formas de pagamento, em abas dentro de
+  Configurações. O estabelecimento novo passou a nascer com a entrega e a retirada desligadas.
 - **23:** categorias e produtos, com imagem. Reordenação de produtos em lote
   (`PUT /products/order`), como a de categorias, se a tela precisar.
 - **24:** grupos de opção, adicionais e combos.
@@ -882,7 +1008,7 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Estabelecimento novo nasce com entrega habilitada e taxa zero — o dono não decidiu isso                                                                           | Fase 22, com a tela de entrega           |
+| Sair de uma aba das configurações com alterações não salvas perde o que foi digitado, sem aviso                                                                   | A decidir; ver ROADMAP                   |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
 | Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                                           | A definir pelo Junio                     |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |

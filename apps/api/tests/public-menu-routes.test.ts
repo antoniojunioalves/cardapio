@@ -207,6 +207,14 @@ beforeAll(async () => {
     categoryId: pizzas.id,
     priceInCents: 4500,
   })
+  // Pronta para receber, e pausada pelo dono: é a pausa que o status mostra.
+  await substituirEntrega(ctxPizzaria, pizzaria.userId, {
+    configuracao: { deliveryEnabled: false, pickupEnabled: true },
+    regioes: [],
+  })
+  await definirFormasDePagamento(ctxPizzaria, pizzaria.userId, [
+    { paymentMethodId: ids.pixId, isEnabled: true, sortOrder: 0 },
+  ])
   await atualizarConfiguracoes(ctxPizzaria, pizzaria.userId, { isAcceptingOrders: false })
 
   const ctxSuspenso = tenantContextFromUser(suspenso.tenantId)
@@ -303,6 +311,96 @@ describe('isolamento entre estabelecimentos', () => {
   it('cada um tem o próprio status', async () => {
     expect((await cardapioDe(pizzaria.slug)).status).toEqual({ aberto: false, motivo: 'PAUSADO' })
     expect((await cardapioDe(lanchonete.slug)).status.aberto).toBeTypeOf('boolean')
+  })
+})
+
+describe('sem como receber ou pagar, o cardápio não recebe pedidos', () => {
+  const SEMPRE_ABERTO = [0, 1, 2, 3, 4, 5, 6].flatMap((dayOfWeek) => [
+    { dayOfWeek, opensAt: '00:00', closesAt: '12:00' },
+    { dayOfWeek, opensAt: '12:00', closesAt: '00:00' },
+  ])
+  let novo: TenantDeTeste
+  let produtoId: string
+
+  beforeAll(async () => {
+    // Como um estabelecimento recém-cadastrado que já pôs horário e produto,
+    // mas ainda não escolheu entrega nem forma de pagamento.
+    novo = await criarTenantComUsuario()
+    const ctx = tenantContextFromUser(novo.tenantId)
+    await substituirHorarios(ctx, novo.userId, SEMPRE_ABERTO)
+    const categoria = await criarCategoria(ctx, novo.userId, { name: 'Itens' })
+    const produto = await criarProduto(ctx, novo.userId, {
+      name: 'Item',
+      categoryId: categoria.id,
+      priceInCents: 1000,
+    })
+    produtoId = produto.id
+  })
+
+  afterAll(async () => {
+    await removerTenantDeTeste(novo)
+  })
+
+  const status = async () => (await cardapioDe(novo.slug)).status
+  const NAO_RECEBENDO = { aberto: false, motivo: 'NAO_RECEBENDO' }
+
+  it('o estabelecimento nasce sem entrega nem retirada', async () => {
+    const { delivery } = await cardapioDe(novo.slug)
+
+    expect(delivery).toMatchObject({ deliveryEnabled: false, pickupEnabled: false })
+    expect(await status()).toEqual(NAO_RECEBENDO)
+  })
+
+  it('com retirada e sem forma de pagamento, continua sem receber', async () => {
+    const ctx = tenantContextFromUser(novo.tenantId)
+    await substituirEntrega(ctx, novo.userId, {
+      configuracao: { deliveryEnabled: false, pickupEnabled: true },
+      regioes: [],
+    })
+
+    expect(await status()).toEqual(NAO_RECEBENDO)
+  })
+
+  it('com as duas coisas, abre', async () => {
+    const ctx = tenantContextFromUser(novo.tenantId)
+    await definirFormasDePagamento(ctx, novo.userId, [
+      { paymentMethodId: ids.pixId, isEnabled: true, sortOrder: 0 },
+    ])
+
+    expect((await status()).aberto).toBe(true)
+  })
+
+  it('entrega por região sem nenhuma região ativa não é entrega', async () => {
+    const ctx = tenantContextFromUser(novo.tenantId)
+    await substituirEntrega(ctx, novo.userId, {
+      configuracao: { deliveryEnabled: true, pickupEnabled: false, feeMode: 'BY_REGION' },
+      regioes: [{ name: 'Centro', feeInCents: 500, isActive: false, sortOrder: 0 }],
+    })
+
+    expect(await status()).toEqual(NAO_RECEBENDO)
+  })
+
+  it('o pedido é recusado pela mesma regra, sem depender da tela', async () => {
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/api/v1/public/${novo.slug}/orders`,
+      payload: {
+        idempotencyKey: '00000000-0000-4000-8000-000000000022',
+        customer: { phone: '(11) 98765-4321', name: 'Maria' },
+        fulfillment: 'PICKUP',
+        address: null,
+        deliveryRegionId: null,
+        paymentMethodId: ids.pixId,
+        changeForInCents: null,
+        notes: null,
+        items: [{ productId: produtoId, quantity: 1, notes: null, options: {} }],
+        expectedTotalInCents: 1000,
+      },
+    })
+
+    expect(resposta.statusCode, resposta.body).toBe(422)
+    const { error } = resposta.json<{ error: { details: { problemas: { tipo: string }[] } } }>()
+    expect(error.details.problemas.map((p) => p.tipo)).toContain('ESTABELECIMENTO_FECHADO')
   })
 })
 

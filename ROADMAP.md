@@ -87,6 +87,8 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   - o que acontece quando a região do endereço é desativada ou removida, e quando o bairro do
     endereço não corresponde a nenhuma região;
   - se o cliente pode discordar da região sugerida, e como o lojista fica sabendo.
+- Reordenar as regiões de entrega pela tela. Hoje o cliente as vê na ordem em que foram
+  cadastradas (Fase 22); para mudar, é preciso remover e cadastrar de novo.
 - Integração com Google Maps e Apple Maps
 - Geocoding e armazenamento de latitude/longitude
 - Seleção de endereço por pin no mapa
@@ -144,6 +146,14 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Painel: menu recolhível só com ícones e busca no menu, como na referência que o Junio trouxe na
   Fase 18c. Fazem sentido quando o menu tiver itens demais para caber; hoje são dois. O quadro de
   pedidos em colunas não está aqui: é fase própria do MVP (PROJECT_PLAN.md, pendências).
+- **Aviso de alterações não salvas no painel.** Cada aba das Configurações tem o seu "Salvar"
+  (Fase 22); quem digita e troca de aba, ou sai pelo menu, perde o que digitou sem aviso. O aviso
+  pede uma troca na forma como as rotas são montadas (o bloqueio de navegação do React Router só
+  existe no roteador de dados), e por isso não entrou junto das abas.
+- Exceções ao horário de funcionamento: feriados e dias fechados fora da grade da semana. Hoje a
+  saída é a pausa manual ("Recebendo pedidos"), que o dono precisa lembrar de desfazer.
+- Ordenar as formas de pagamento pela tela. A API já guarda a ordem por estabelecimento; a tela
+  da Fase 22 só liga e desliga, e mantém a ordem do catálogo.
 - Consulta do registro de auditoria no painel. O registro existe desde a Fase 4, e a permissão
   `audit:read` já está no RBAC; no MVP basta o registro (decisão do Junio).
 

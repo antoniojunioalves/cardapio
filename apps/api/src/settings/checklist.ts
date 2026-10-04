@@ -8,6 +8,8 @@
  * do pedido (`orders/service.ts`), com as mesmas informações.
  */
 
+import { temComoReceber } from './delivery-fee.js'
+
 export const PASSOS = [
   'emailConfirmed',
   'whatsapp',
@@ -42,15 +44,12 @@ export interface Checklist {
 
 export function montarChecklist(situacao: SituacaoDoEstabelecimento): Checklist {
   const { entrega } = situacao
-  // Entrega por região sem nenhuma região ativa não entrega em lugar nenhum.
-  const entregaFunciona =
-    entrega.deliveryEnabled && (entrega.feeMode === 'FIXED' || entrega.regioesAtivas > 0)
 
   const feito: Record<Passo, boolean> = {
     emailConfirmed: situacao.status !== 'PENDING',
     whatsapp: situacao.whatsapp !== null,
     businessHours: situacao.horarios > 0,
-    fulfillment: entregaFunciona || entrega.pickupEnabled,
+    fulfillment: temComoReceber(entrega, entrega.regioesAtivas),
     paymentMethods: situacao.formasDePagamento > 0,
     products: situacao.produtosAVenda > 0,
   }

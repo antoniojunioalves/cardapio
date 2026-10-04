@@ -3,8 +3,12 @@ import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
 import { AdminLayout } from '@/features/admin/components/AdminLayout'
+import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
+import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
+import { AdminHoursPage } from '@/pages/AdminHoursPage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
+import { AdminPaymentPage } from '@/pages/AdminPaymentPage'
 import { AdminSettingsPage } from '@/pages/AdminSettingsPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
@@ -35,6 +39,10 @@ import { SignupPage } from '@/pages/SignupPage'
  * — o Início no índice, os pedidos em `/admin/pedidos`. Tela nova do painel:
  * uma rota filha aqui e uma entrada em `features/admin/menu.ts`.
  *
+ * As configurações têm abas, e cada aba é uma rota filha de
+ * `/admin/configuracoes` (`SettingsTabs`): a do estabelecimento no índice, e
+ * `horarios`, `entrega` e `pagamento`.
+ *
  * O login é um só, em `/entrar`, com e-mail e senha: a pessoa não precisa
  * saber o endereço do estabelecimento para entrar.
  */
@@ -53,7 +61,12 @@ export function AppRoutes() {
       <Route path="/:tenantSlug/admin" element={<AdminLayout />}>
         <Route index element={<AdminHomePage />} />
         <Route path="pedidos" element={<AdminOrdersPage />} />
-        <Route path="configuracoes" element={<AdminSettingsPage />} />
+        <Route path="configuracoes" element={<SettingsTabs />}>
+          <Route index element={<AdminSettingsPage />} />
+          <Route path="horarios" element={<AdminHoursPage />} />
+          <Route path="entrega" element={<AdminDeliveryPage />} />
+          <Route path="pagamento" element={<AdminPaymentPage />} />
+        </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

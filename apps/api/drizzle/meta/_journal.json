@@ -162,6 +162,13 @@
       "when": 1790859865935,
       "tag": "0022_login_por_email",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790966221739,
+      "tag": "0023_entrega_nasce_desligada",
+      "breakpoints": true
     }
   ]
 }

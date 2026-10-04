@@ -25,13 +25,13 @@ interface TextoDoPasso {
   titulo: string
   /** O que fazer, para quem ainda não fez. */
   comoFazer: string
-  /** A tela do painel onde se resolve, depois de `/{slug}/admin/`. Sem ela, a tela ainda não existe. */
-  caminho?: string
+  /** Onde se resolve: a tela do painel, depois de `/{slug}/admin/`, e o que o link diz. Sem isto, a tela ainda não existe. */
+  onde?: { caminho: string; rotulo: string }
 }
 
 /**
  * O que cada passo diz na lista do Início. Cada tela de gestão que nasce
- * acrescenta aqui o seu `caminho`, e o passo vira um link.
+ * acrescenta aqui o seu `onde`, e o passo ganha um link.
  */
 export const PASSOS: Record<Passo, TextoDoPasso> = {
   emailConfirmed: {
@@ -41,19 +41,22 @@ export const PASSOS: Record<Passo, TextoDoPasso> = {
   whatsapp: {
     titulo: 'Informar o WhatsApp do estabelecimento',
     comoFazer: 'É para ele que o cliente envia o pedido.',
-    caminho: 'configuracoes',
+    onde: { caminho: 'configuracoes', rotulo: 'Abrir as configurações' },
   },
   businessHours: {
     titulo: 'Cadastrar o horário de funcionamento',
     comoFazer: 'Sem horário, o cardápio aparece sempre fechado.',
+    onde: { caminho: 'configuracoes/horarios', rotulo: 'Cadastrar os horários' },
   },
   fulfillment: {
     titulo: 'Definir entrega ou retirada',
     comoFazer: 'O cliente precisa de ao menos uma forma de receber o pedido.',
+    onde: { caminho: 'configuracoes/entrega', rotulo: 'Configurar a entrega' },
   },
   paymentMethods: {
     titulo: 'Escolher as formas de pagamento',
     comoFazer: 'O cliente escolhe como vai pagar ao receber.',
+    onde: { caminho: 'configuracoes/pagamento', rotulo: 'Escolher as formas de pagamento' },
   },
   products: {
     titulo: 'Cadastrar ao menos um produto',

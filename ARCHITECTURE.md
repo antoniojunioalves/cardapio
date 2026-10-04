@@ -722,6 +722,13 @@ lembrar de desfazer depois.
 O módulo não conhece banco nem framework — recebe intervalos, fuso e instante, devolve o status.
 É o que permite cobri-lo com dezenas de casos de borda em milissegundos.
 
+**As regras de uma grade valem igual na tela e na API** (Fase 22): `problemasDosHorarios`, em
+`packages/shared/src/business-hours.ts`, diz o problema de cada intervalo — hora inválida, abrir
+e fechar na mesma hora, sobreposição com outro do mesmo dia. A tela mostra o erro no intervalo; a
+API recusa a grade. A sobreposição só é conferida entre intervalos que não atravessam a
+meia-noite: comparar um 18:00–02:00 com os do dia seguinte exigiria pôr a semana numa linha do
+tempo, e o lojista revisa a grade na tela.
+
 ### 7.3 Entrega
 
 Taxa fixa ou por região. Cálculo por distância depende de geocoding e está no ROADMAP; não
@@ -735,6 +742,15 @@ página aberta continuaria conseguindo escolhê-la.
 Configuração e regiões são salvas numa transação só. Separadas, haveria um instante com modo já
 em `BY_REGION` e nenhuma região cadastrada, visível para quem consultasse o cardápio.
 
+**A entrega e a retirada nascem desligadas** (Fase 22). Quem decide como o pedido chega ao cliente
+é o dono, e não um padrão: antes, um cadastro novo ia ao ar com entrega ligada e grátis.
+`temComoReceber` (`settings/delivery-fee.ts`) responde se há ao menos um jeito de o pedido chegar
+— retirada, ou entrega que funcione; entrega por região sem região ativa não conta. A mesma função
+serve à lista do Início e ao cardápio público, que sem isso responde `NAO_RECEBENDO` (8.8).
+
+Pela API, salvar exige ao menos entrega ou retirada ligada, e o tempo mínimo não pode passar do
+máximo. O estado "as duas desligadas" só existe no nascimento.
+
 ### 7.4 Formas de pagamento
 
 Catálogo global mais uma tabela de junção tenant-scoped, o mesmo desenho de `roles`/`user_roles`.
@@ -746,6 +762,9 @@ ligada acabaria com estabelecimento aceitando vale-refeição sem ter máquina. 
 a linha, para não perder a ordenação quando voltar a habilitar.
 
 **Nenhum pagamento é processado.** No MVP o cliente declara como vai pagar ao receber.
+
+**Sem nenhuma forma habilitada, o cardápio não recebe pedidos** (Fase 22): responde
+`NAO_RECEBENDO`, como quando não há entrega nem retirada. O checkout não teria o que oferecer.
 
 ### 7.5 Substituição em vez de CRUD
 
@@ -886,6 +905,11 @@ estabelecimento, status, horários, entrega, formas de pagamento e cardápio.
 - **A resposta é montada campo a campo** em `src/public-menu/service.ts`, nunca por spread de
   linha do banco: uma coluna nova não pode vazar para o público só por existir.
 - **Sem cache** (`Cache-Control: no-cache`): status e disponibilidade mudam a cada minuto.
+- **`NAO_RECEBENDO` tem três causas, e a resposta não diz qual:** passou do limite do plano com a
+  tolerância (seção 12), não há entrega nem retirada funcionando (7.3) ou nenhuma forma de pagamento
+  está habilitada (7.4). As duas últimas são o estado de um estabelecimento recém-cadastrado. A
+  situação dele não é assunto de quem abre o cardápio; quem precisa saber é o dono, e a lista do
+  Início diz. Como o cálculo do pedido lê o mesmo status, o pedido é recusado pela mesma regra.
 
 ---
 
@@ -1124,6 +1148,36 @@ telefone com máscara, valor em reais — e entrega o corpo da API: só dígitos
 que ficou em branco. `paraFormulario` faz o caminho inverso. Um "Salvar" grava tudo; as imagens
 ficam fora do formulário e são gravadas ao escolher o arquivo, por outra rota. Sem
 `settings:update`, a pessoa vê tudo com os campos desligados.
+
+**Configurações tem abas, e cada aba é um endereço** (Fase 22). `SettingsTabs` é uma rota de
+moldura debaixo de `/admin/configuracoes`, com o título, a faixa de abas e a aba aberta; as abas
+são rotas filhas — Estabelecimento no índice, e `horarios`, `entrega` e `pagamento`. São links, e
+não botões: dá para chegar direto pelo endereço, que é o que a lista do Início faz. No menu do
+painel, "Configurações" continua marcado dentro de qualquer aba; só o Início exige o endereço
+exato. No celular a faixa rola de lado e a aba aberta é trazida para a vista.
+
+Cada aba segue o padrão da primeira, com o seu módulo (`hours.ts`, `delivery.ts`, `payment.ts`):
+um schema que recebe o que a pessoa digita e entrega o corpo da API, `paraFormulario` no caminho
+inverso e um "Salvar" próprio, que grava a aba inteira — a semana, a entrega com as regiões, as
+formas de pagamento. As peças comuns estão em `components/form-parts.tsx`, e os campos que se
+repetem (reais, minutos), em `form-fields.ts`.
+
+Quatro regras da tela, todas com teste:
+
+- **uma regra entre campos roda mesmo com outro campo inválido** (`comCamposValidos`, para o
+  `when` do `refine`). Sem isso a pessoa só veria "ligue a entrega ou a retirada" depois de
+  corrigir uma taxa mal digitada;
+- **uma parte do formulário com erro não some da tela.** As taxas só aparecem com a entrega
+  ligada, e as regiões só no modo por região; com erro, ficam à vista até a pessoa corrigir.
+  Escondidas, o "Salvar" não faria nada, sem explicação;
+- **mexer num campo confere de novo os que dependem dele** (`reconferir`). O erro de uma regra
+  entre campos fica guardado num campo só — "cadastre ao menos uma região ativa" fica nas regiões
+  —, e o React Hook Form só confere de novo o campo que mudou. Sem isso, trocar para taxa fixa
+  deixava a mensagem na tela até o próximo "Salvar". Só é conferido o que já está com erro, para
+  não cobrar o que a pessoa ainda nem preencheu;
+- **uma linha de região em branco não é uma região.** Sem nome e sem taxa, não é cobrada, não
+  conta como região ativa e não é enviada: quem clica em "Adicionar região" e desiste continua
+  podendo salvar.
 
 ### 9.7 Temas
 

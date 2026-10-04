@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { mascararCepDigitado, mascararTelefoneDigitado } from '@repo/shared'
-import type { ReactNode } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 
 import { SelectField } from '@/components/SelectField'
@@ -18,18 +17,11 @@ import {
   type DadosDoFormulario,
   type ValoresDoFormulario,
 } from '../settings'
+import { reconferir } from '../form-fields'
+import { AvisoDeSomenteLeitura, Marcavel, RodapeDeSalvar, Secao } from './form-parts'
 import { ImageField } from './ImageField'
 
 type Campo = keyof ValoresDoFormulario
-
-function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-stack rounded-card bg-surface p-card shadow-card">
-      <h2 className="text-body font-semibold text-content">{titulo}</h2>
-      {children}
-    </section>
-  )
-}
 
 interface SettingsFormProps {
   slug: string
@@ -50,7 +42,7 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
     defaultValues: paraFormulario(configuracoes),
     mode: 'onTouched',
   })
-  const { register, control, formState, handleSubmit, reset, setError } = form
+  const { register, control, formState, handleSubmit, reset, setError, trigger } = form
   const erros = formState.errors
 
   function aoEnviar(dados: DadosDoFormulario) {
@@ -73,11 +65,7 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
 
   return (
     <div className="flex flex-col gap-section-y">
-      {!podeEditar && (
-        <p role="note" className="text-caption rounded-control bg-surface p-3 text-content-muted">
-          Você pode ver as configurações, mas só quem administra o estabelecimento as altera.
-        </p>
-      )}
+      {!podeEditar && <AvisoDeSomenteLeitura />}
 
       <Secao titulo="Imagens">
         <div className="grid grid-cols-1 gap-stack sm:grid-cols-[12rem_1fr]">
@@ -283,17 +271,12 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
           </Secao>
 
           <Secao titulo="Pedidos">
-            <label className="flex items-start gap-3">
-              <input type="checkbox" className="mt-1 size-5" {...register('isAcceptingOrders')} />
-              <span>
-                <span className="text-body block font-semibold text-content">
-                  Recebendo pedidos
-                </span>
-                <span className="text-caption block text-content-muted">
-                  Desmarque para pausar o cardápio sem mexer no horário de funcionamento.
-                </span>
-              </span>
-            </label>
+            <Marcavel
+              type="checkbox"
+              titulo="Recebendo pedidos"
+              descricao="Desmarque para pausar o cardápio sem mexer no horário de funcionamento."
+              {...register('isAcceptingOrders')}
+            />
             <TextField
               rotulo="Pedido mínimo (R$)"
               inputMode="decimal"
@@ -307,7 +290,9 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
                 rotulo="Tempo de preparo mínimo (min)"
                 inputMode="numeric"
                 erro={erros.prepTimeMinMinutes?.message}
-                {...register('prepTimeMinMinutes')}
+                {...register('prepTimeMinMinutes', {
+                  onChange: reconferir({ formState, trigger }, 'prepTimeMaxMinutes'),
+                })}
               />
               <TextField
                 rotulo="Tempo de preparo máximo (min)"
@@ -320,27 +305,11 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
         </fieldset>
 
         {podeEditar && (
-          <div className="flex flex-col gap-2">
-            {salvar.isError && (
-              <p role="alert" className="text-caption text-danger">
-                {salvar.error instanceof ApiError && salvar.error.status === 400
-                  ? 'Confira os campos marcados e tente de novo.'
-                  : 'Não foi possível salvar agora. Tente de novo.'}
-              </p>
-            )}
-            {salvar.isSuccess && !formState.isDirty && (
-              <p role="status" className="text-caption font-semibold text-success">
-                Configurações salvas.
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={salvar.isPending || !formState.isDirty}
-              className="text-body rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover disabled:opacity-50"
-            >
-              {salvar.isPending ? 'Salvando…' : 'Salvar alterações'}
-            </button>
-          </div>
+          <RodapeDeSalvar
+            envio={salvar}
+            alterado={formState.isDirty}
+            sucesso="Configurações salvas."
+          />
         )}
       </form>
     </div>

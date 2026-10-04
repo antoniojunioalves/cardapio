@@ -111,6 +111,14 @@ export function IconeConfiguracoes(props: IconeProps) {
   )
 }
 
+export function IconeRemover(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </Icone>
+  )
+}
+
 export function IconeFeito(props: IconeProps) {
   return (
     <Icone {...props}>
