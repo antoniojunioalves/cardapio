@@ -23,6 +23,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Login de usuário administrativo, só com e-mail e senha — o sistema acha o estabelecimento
 - [x] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF` — _pela API; a tela é
       da Fase 25_
+- [ ] Permissões por pessoa: perfis prontos, e o dono montando as permissões de cada um (marcar
+      esgotado separado de mudar preço, por exemplo) — _Fase 25, a rever com o Junio_
 - [ ] Troca da própria senha, redefinição pelo dono e "Esqueci minha senha" por e-mail —
       _Fase 25_
 - [x] Painel com menu lateral e tela Início, com o resumo dos pedidos de hoje
@@ -36,13 +38,13 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 - [x] Formas de pagamento habilitáveis por tenant
 - [x] Estabelecimento novo nasce sem entrega nem retirada: o cardápio só recebe pedidos depois
       que o dono escolhe como entrega e como recebe
-- [ ] Categorias com ordenação — _Fase 23_
-- [ ] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem — _Fase 23_
+- [x] Categorias com ordenação
+- [x] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem
 - [ ] Grupos de opções com mínimo, máximo e obrigatoriedade — _Fase 24_
 - [ ] Adicionais com alteração de preço — _Fase 24_
 - [ ] Combos — _Fase 24_
-- [x] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — _logo e capa
-      pela tela; as fotos de produto são da Fase 23_
+- [x] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — logo, capa
+      e foto de produto pela tela
 - [x] Lista de pedidos com atualização de status
 - [x] Pedidos novos chegando em tempo real
 - [ ] Lista de clientes e histórico de pedidos — _Fase 26_
@@ -145,8 +147,8 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 22:** os passos 1 e 2 — cadastrar, confirmar o e-mail, entrar e
+> **Situação ao fim da Fase 23:** os passos 1 e 2 — cadastrar, confirmar o e-mail, entrar e
 > configurar o estabelecimento, os horários, a entrega e o pagamento — e os passos 4 a 7 funcionam
-> de ponta a ponta, e os testes provam o isolamento. O passo 3 ainda só funciona pela API, e o
-> sistema ainda não está no ar. As fases 23 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta
-> para o MVP".
+> de ponta a ponta, e os testes provam o isolamento. Do passo 3, categorias e produtos já se
+> cadastram pela tela; opções, adicionais e combos ainda só pela API. E o sistema ainda não está no
+> ar. As fases 24 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".

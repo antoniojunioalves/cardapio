@@ -111,6 +111,65 @@ export function IconeConfiguracoes(props: IconeProps) {
   )
 }
 
+export function IconeCardapio(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" />
+      <path d="M5 17a3 3 0 0 1 3-3h11M9 8h6" />
+    </Icone>
+  )
+}
+
+export function IconeSubir(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="m6 15 6-6 6 6" />
+    </Icone>
+  )
+}
+
+export function IconeDescer(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Icone>
+  )
+}
+
+export function IconeVoltar(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="M19 12H5M11 6l-6 6 6 6" />
+    </Icone>
+  )
+}
+
+export function IconeMais(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Icone>
+  )
+}
+
+export function IconeEditar(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="m13.5 6.5 4 4" />
+    </Icone>
+  )
+}
+
+export function IconeLixeira(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </Icone>
+  )
+}
+
 export function IconeRemover(props: IconeProps) {
   return (
     <Icone {...props}>

@@ -153,6 +153,32 @@ describe('escrita', () => {
     expect(r.statusCode).toBe(400)
   })
 
+  it('A não reordena os produtos de uma categoria de B', async () => {
+    const r = await comoA('PUT', '/products/order', {
+      categoryId: categoriaDeB,
+      ids: [produtoDeB],
+    })
+
+    expect(r.statusCode).toBe(404)
+  })
+
+  it('A não inclui um produto de B na reordenação de uma categoria sua', async () => {
+    const minha = (await comoA('POST', '/categories', { name: 'Reordenável de A' })).json<{
+      id: string
+    }>().id
+    const meu = (
+      await comoA('POST', '/products', { categoryId: minha, name: 'De A', priceInCents: 100 })
+    ).json<{ id: string }>().id
+
+    const r = await comoA('PUT', '/products/order', { categoryId: minha, ids: [meu, produtoDeB] })
+
+    expect(r.statusCode).toBe(400)
+    const [deB] = await withTenant(tenantContextFromUser(tenantB.tenantId), (tx) =>
+      tx.select({ ordem: products.sortOrder }).from(products).where(eq(products.id, produtoDeB)),
+    )
+    expect(deB?.ordem).toBe(0)
+  })
+
   it('A não envia imagem para um produto de B', async () => {
     // Com uma imagem válida, para o pedido passar da validação e chegar ao
     // serviço. Sem corpo, a rota responderia 400 antes de consultar qualquer

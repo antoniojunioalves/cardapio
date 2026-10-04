@@ -9,7 +9,7 @@
  * continua marcado em `configuracoes/horarios`.
  */
 
-export type IconeDoMenu = 'inicio' | 'pedidos' | 'configuracoes'
+export type IconeDoMenu = 'inicio' | 'pedidos' | 'cardapio' | 'configuracoes'
 
 export interface ItemDoMenu {
   rotulo: string
@@ -28,6 +28,8 @@ export interface ItemDoMenu {
 export const MENU: readonly ItemDoMenu[] = [
   { rotulo: 'Início', caminho: '', icone: 'inicio' },
   { rotulo: 'Pedidos', caminho: 'pedidos', icone: 'pedidos', permissao: 'orders:read' },
+  // Fica entre as telas do dia a dia: é aqui que se marca o que acabou.
+  { rotulo: 'Cardápio', caminho: 'cardapio', icone: 'cardapio', permissao: 'products:read' },
   {
     rotulo: 'Configurações',
     caminho: 'configuracoes',

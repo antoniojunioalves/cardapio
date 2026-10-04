@@ -9,11 +9,12 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 22 concluída** — o estabelecimento se cadastra pela página inicial
+**Status atual: Fase 23 concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
 publicado quando o dono confirma o e-mail. Pelo painel ele já configura o estabelecimento, os
-horários, a entrega e as formas de pagamento. As fases 23 a 28 fecham o MVP — as telas do
-cardápio, de usuários e de clientes, e o sistema no ar (ver
+horários, a entrega e as formas de pagamento, e cadastra as categorias e os produtos, com foto.
+As fases 24 a 28 fecham o MVP — as telas de opções e combos, de usuários e de clientes, e o
+sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
 [localhost:5173/lanchonete-do-ze](http://localhost:5173/lanchonete-do-ze) (das 18:00 às 02:00,
@@ -22,8 +23,8 @@ de terça a domingo), a `pizzaria-da-esquina` (almoço e jantar, de segunda a s�
 entre em [localhost:5173/entrar](http://localhost:5173/entrar) só com e-mail e senha — o sistema
 acha o estabelecimento pelo e-mail e leva ao painel dele. O painel abre no Início, com o resumo
 dos pedidos de hoje e a lista do que falta configurar, e tem um menu lateral (gaveta no celular)
-que leva aos Pedidos e às Configurações — com as abas Estabelecimento, Horários, Entrega e
-Pagamento; ele também avisa quando o plano se aproxima do limite de pedidos do mês. Um
+que leva aos Pedidos, ao Cardápio — categorias e produtos, com o que esgotou marcado na própria
+lista — e às Configurações, com as abas Estabelecimento, Horários, Entrega e Pagamento; ele também avisa quando o plano se aproxima do limite de pedidos do mês. Um
 estabelecimento recém-cadastrado só recebe pedidos depois de ligar a entrega ou a retirada e de
 escolher ao menos uma forma de pagamento. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 

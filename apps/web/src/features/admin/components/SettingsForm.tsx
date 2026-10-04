@@ -12,6 +12,8 @@ import {
   fusosParaEscolher,
   paraFormulario,
   UFS,
+  useEnviarImagem,
+  useRemoverImagem,
   useSalvarConfiguracoes,
   type Configuracoes,
   type DadosDoFormulario,
@@ -37,6 +39,10 @@ interface SettingsFormProps {
  */
 export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormProps) {
   const salvar = useSalvarConfiguracoes(slug)
+  const envioDoLogo = useEnviarImagem(slug, 'logo')
+  const remocaoDoLogo = useRemoverImagem(slug, 'logo')
+  const envioDaCapa = useEnviarImagem(slug, 'cover')
+  const remocaoDaCapa = useRemoverImagem(slug, 'cover')
   const form = useForm<ValoresDoFormulario, unknown, DadosDoFormulario>({
     resolver: zodResolver(formularioSchema),
     defaultValues: paraFormulario(configuracoes),
@@ -70,8 +76,8 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
       <Secao titulo="Imagens">
         <div className="grid grid-cols-1 gap-stack sm:grid-cols-[12rem_1fr]">
           <ImageField
-            slug={slug}
-            qual="logo"
+            envio={envioDoLogo}
+            remocao={remocaoDoLogo}
             rotulo="Logo"
             dica="Quadrado fica melhor."
             url={configuracoes.logoUrl}
@@ -79,8 +85,8 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
             moldura="size-32"
           />
           <ImageField
-            slug={slug}
-            qual="cover"
+            envio={envioDaCapa}
+            remocao={remocaoDaCapa}
             rotulo="Capa"
             dica="Aparece no topo do cardápio. Uma foto larga fica melhor."
             url={configuracoes.coverUrl}

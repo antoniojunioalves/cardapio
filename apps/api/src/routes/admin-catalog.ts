@@ -17,6 +17,7 @@ import {
   removerImagemDaCategoria,
   removerImagemDoProduto,
   reordenarCategorias,
+  reordenarProdutos,
   trocarImagemDaCategoria,
   trocarImagemDoProduto,
 } from '../catalog/service.js'
@@ -295,6 +296,33 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
       ),
   )
 
+  typed.put(
+    '/products/order',
+    {
+      schema: {
+        tags: tag,
+        summary: 'Reordena os produtos de uma categoria',
+        description:
+          'Recebe a categoria e a lista **completa** dos produtos dela, na ordem desejada. Uma ' +
+          'lista parcial, ou com produto de outra categoria, é recusada (`ORDER_INCOMPLETE`). ' +
+          'Devolve os produtos da categoria, já na ordem nova.',
+        body: z.object({ categoryId: z.uuid(), ids: z.array(z.uuid()).min(1).max(500) }),
+        response: { 200: z.array(produtoSchema) },
+        security: seguranca,
+      },
+      onRequest: requireAuth('products:update'),
+    },
+    async (request) =>
+      (
+        await reordenarProdutos(
+          tenantContextOf(request),
+          currentUser(request).id,
+          request.body.categoryId,
+          request.body.ids,
+        )
+      ).map((p) => apresentarProduto(p, storage)),
+  )
+
   typed.get(
     '/products/:id',
     {
@@ -341,6 +369,9 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
       schema: {
         tags: tag,
         summary: 'Altera um produto — inclusive preço e disponibilidade',
+        description:
+          'Só os campos enviados mudam. Trocar de categoria sem informar `sortOrder` põe o ' +
+          'produto no fim da categoria nova.',
         params: paramsComId,
         body: patchDeProduto,
         response: { 200: produtoSchema },

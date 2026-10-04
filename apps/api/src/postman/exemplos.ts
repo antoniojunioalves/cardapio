@@ -67,6 +67,11 @@ export const VARIAVEIS: VariavelDaColecao[] = [
   { chave: 'categoryId', valor: '', descricao: 'Primeira categoria listada, ou a criada.' },
   { chave: 'categoryIdsJson', valor: '[]', descricao: 'Todas as categorias, para reordenar.' },
   { chave: 'productId', valor: '', descricao: 'Primeiro produto listado, ou o criado.' },
+  {
+    chave: 'productIdsJson',
+    valor: '[]',
+    descricao: 'Todos os produtos da categoria listada, para reordenar.',
+  },
   { chave: 'comboId', valor: '', descricao: 'Primeiro combo listado.' },
   { chave: 'comboComponentId', valor: '', descricao: 'Produto simples para compor o combo.' },
   { chave: 'optionGroupId', valor: '', descricao: 'Primeiro grupo de opção listado, ou o criado.' },
@@ -99,6 +104,7 @@ export const VALORES_PARA_VALIDAR: Record<string, string> = {
   categoryId: '01900000-0000-7000-8000-000000000002',
   categoryIdsJson: '["01900000-0000-7000-8000-000000000002"]',
   productId: '01900000-0000-7000-8000-000000000003',
+  productIdsJson: '["01900000-0000-7000-8000-000000000003"]',
   comboComponentId: '01900000-0000-7000-8000-000000000004',
   optionGroupId: '01900000-0000-7000-8000-000000000005',
   paymentMethodId: '01900000-0000-7000-8000-000000000006',
@@ -288,6 +294,10 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
     corpo: { ids: '{{json:categoryIdsJson}}' },
     nota: 'Precisa de todas as categorias: rode antes "Categorias, na ordem de exibição". Reordene a lista à vontade.',
   },
+  'PUT /api/v1/admin/products/order': {
+    corpo: { categoryId: '{{categoryId}}', ids: '{{json:productIdsJson}}' },
+    nota: 'Precisa de todos os produtos da categoria: rode antes "Produtos, opcionalmente de uma categoria", que filtra pela `categoryId`. Reordene a lista à vontade.',
+  },
   'PATCH /api/v1/admin/categories/:id': {
     corpo: { description: 'Doces da casa, feitos no dia', isActive: true },
   },
@@ -298,6 +308,7 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
       'const produtos = pm.response.json();',
       'if (Array.isArray(produtos) && produtos.length > 0) {',
       "  pm.collectionVariables.set('productId', produtos[0].id);",
+      "  pm.collectionVariables.set('productIdsJson', JSON.stringify(produtos.map((p) => p.id)));",
       "  const combo = produtos.find((p) => p.type === 'COMBO');",
       "  const simples = produtos.find((p) => p.type === 'SIMPLE');",
       "  if (combo) pm.collectionVariables.set('comboId', combo.id);",

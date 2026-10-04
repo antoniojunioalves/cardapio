@@ -1,9 +1,9 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-02
-**Fase atual:** 22 — concluída, aguardando validação
-**Próxima:** 23 — categorias e produtos. As fases 23 a 28 fecham o MVP (ver "O que falta para o
-MVP")
+**Atualizado em:** 2026-10-03
+**Fase atual:** 23 — concluída, aguardando validação
+**Próxima:** 24 — grupos de opção, adicionais e combos. As fases 24 a 28 fecham o MVP (ver "O que
+falta para o MVP")
 
 ---
 
@@ -92,8 +92,13 @@ Horários, Entrega e Pagamento —, cada uma com o seu endereço e o seu "Salvar
 novo nasce com a entrega e a retirada desligadas, e o cardápio só recebe pedidos depois que o dono
 escolhe como entrega e como recebe.
 
-**Ainda não existe:** as telas do cardápio, de usuários e de clientes — isso ainda é configurado
-pela API. As fases 23 a 28 fecham o MVP; ver "O que falta para o MVP".
+**O cardápio também (Fase 23).** A tela Cardápio mostra as categorias na ordem em que o cliente
+as vê, cada uma com os seus produtos. Dali se marca o que esgotou, se muda a ordem e se chega às
+páginas de criar e editar categorias e produtos, com a foto do produto. O uso do plano gratuito
+(produtos e categorias) aparece no topo.
+
+**Ainda não existe:** as telas de opções, adicionais e combos, de usuários e de clientes — isso
+ainda é configurado pela API. As fases 24 a 28 fecham o MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -129,8 +134,8 @@ pela API. As fases 23 a 28 fecham o MVP; ver "O que falta para o MVP".
 | 20  | Tratamento de imagens no upload e limites do plano gratuito (20 produtos, 10 categorias)                            | ✅ Concluída |
 | 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ✅ Concluída |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ✅ Concluída |
-| 23  | Categorias e produtos                                                                                               | ⬜ Próxima   |
-| 24  | Grupos de opção, adicionais e combos                                                                                | ⬜           |
+| 23  | Categorias e produtos                                                                                               | ✅ Concluída |
+| 24  | Grupos de opção, adicionais e combos                                                                                | ⬜ Próxima   |
 | 25  | Usuários e senha                                                                                                    | ⬜           |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
 | 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
@@ -140,6 +145,184 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 23 — concluída
+
+A tela do cardápio: categorias e produtos, com a foto do produto, sem tocar na API.
+
+### Microtasks
+
+| #   | Tarefa                                                                                              | Status |
+| --- | --------------------------------------------------------------------------------------------------- | ------ |
+| 1   | API: `PUT /products/order`, a ordem dos produtos de uma categoria, com a lista completa dela        | ✅     |
+| 2   | API: produto movido de categoria sem posição entra no fim da categoria nova                         | ✅     |
+| 3   | Item "Cardápio" no menu, e a lista: categorias na ordem do cardápio, cada uma com os seus produtos  | ✅     |
+| 4   | "Disponível" na lista, gravado na hora; subir e descer categorias e produtos                        | ✅     |
+| 5   | Páginas de criar e editar categoria e produto, com a confirmação antes de excluir                   | ✅     |
+| 6   | Foto do produto pela página dele, com as recusas da Fase 20 explicadas                              | ✅     |
+| 7   | Uso do plano no topo; no limite, "Novo produto" e "Nova categoria" se desligam e a tela diz por quê | ✅     |
+| 8   | Lista do Início: o passo "ao menos um produto" leva ao cardápio                                     | ✅     |
+| 9   | Testes: API, isolamento, regras da lista, formulários, a tela e as permissões                       | ✅     |
+| 10  | Categorias recolhíveis na lista (pedido do Junio na validação)                                      | ✅     |
+| 11  | Foto como primeiro item do quadro do produto (pedido do Junio na validação)                         | ✅     |
+| 12  | Lápis e lixeira ao lado do nome, na categoria e no produto (pedido do Junio na validação)           | ✅     |
+| 13  | "Novo produto" no alto da categoria, com texto; linha entre o nome e os produtos (pedido do Junio)  | ✅     |
+
+### Decisões e achados desta fase
+
+**Um item "Cardápio" no menu, entre as telas do dia a dia**, logo depois de Pedidos — e não no
+rodapé, com Configurações: marcar o que esgotou é coisa de todo dia. A permissão do item é
+`products:read`, que o atendente também tem.
+
+**Uma lista só, como o cliente vê**: as categorias na ordem do cardápio, cada uma com os seus
+produtos. Escolhi assim em vez de duas telas (categorias e produtos) porque é como o dono
+reconhece o próprio cardápio. Criar e editar abrem uma página própria
+(`/admin/cardapio/produtos/novo`, `/admin/cardapio/produtos/:id`, o mesmo para categorias) — no
+celular, um formulário longo numa janela sobre a lista seria apertado. **Decisão minha, para o
+Junio validar.**
+
+**As categorias são recolhíveis** (pedido do Junio na validação: "para eu escolher qual categoria
+eu quero criar e ou editar os produtos"). Começam recolhidas, cada uma com o nome e um resumo —
+"3 produtos · 1 esgotado" —, e o cabeçalho inteiro abre e fecha. A tela lembra as abertas
+enquanto a aba do navegador estiver aberta (`sessionStorage`): ir editar um produto e voltar não
+fecha a categoria; no dia seguinte, a lista começa recolhida de novo. Abrem sozinhas a categoria
+recém-criada e a do produto de onde se voltou — a de agora, se ele mudou de categoria. Com mais
+de uma, há "Abrir todas" e "Recolher todas". A ordem das categorias se muda com elas recolhidas,
+e os botões de subir e descer ficam lado a lado no cabeçalho, para a categoria recolhida ocupar
+uma linha só. O nome que o leitor de tela anuncia vem pronto ("Lanches, 3 produtos · 1
+esgotado"): montado a partir dos blocos, saía colado no jsdom e com um espaço antes da vírgula no
+Chrome — só o navegador de verdade mostrou o segundo.
+
+**Lápis e lixeira ao lado do nome** (pedido do Junio na validação), na categoria e no produto —
+o lápis azul e a lixeira vermelha, com as cores do tema para informação e perigo (`info`, o mesmo
+azul do botão "Info" do cardápio, e `danger`). O lápis leva à página de edição; o nome do produto também — e é o único caminho para quem só pode
+ver. O nome da categoria continua abrindo e recolhendo. A lixeira abre a mesma janela de
+confirmação das páginas de edição (`ConfirmarExclusao`), e a lista mostra o aviso depois de
+excluir. Numa categoria com produtos, a janela explica o que fazer em vez de oferecer o botão —
+um ícone desligado, no celular, não diria por quê. Cada ícone só aparece para quem tem a
+permissão: o lápis com `…:update`, a lixeira com `…:delete`. O link de texto "Editar categoria",
+no rodapé da categoria aberta, saiu: o lápis faz o mesmo. Os textos da exclusão ficaram num lugar
+só (`AO_EXCLUIR`, `porQueNaoExcluirCategoria`), para a lista e as páginas dizerem o mesmo.
+
+**"Novo produto" no alto da categoria, com texto, e uma linha entre o nome e os produtos**
+(pedidos do Junio na validação). O botão saiu do rodapé da categoria e virou "+ Novo produto" —
+com o texto, e não só o "+". A partir da largura média ele fica ao lado do lápis e da lixeira,
+como o Junio sugeriu; no celular não cabe na mesma linha (passaria da largura da tela), e fica
+na linha logo abaixo do nome. Aparece mesmo com a categoria recolhida. O cabeçalho virou uma grade
+com posições fixas, e não uma linha que quebra sozinha: assim é o nome comprido que quebra, e não
+as setas que pulam para baixo. A linha que separa um produto do outro passou a aparecer também
+antes do primeiro.
+
+**"Disponível" fica na lista e grava na hora.** É o que muda todo dia. O resto do produto se edita
+na página dele, com um "Salvar". **A caixa muda antes de a API responder**, e volta ao que era se
+ela recusar: o navegador de verdade mostrou que, esperando a resposta, o toque parecia perdido —
+com a API atrasada em 2 s de propósito, a caixa agora muda em cerca de 45 ms.
+
+**Subir e descer por botões, e não arrastando.** Funciona igual no celular, no teclado e no leitor
+de tela. A categoria manda a lista completa (`PUT /categories/order`, que já existia); o produto,
+a lista completa da categoria dele — a rota nova `PUT /products/order`, prevista no plano "se a
+tela precisar". Precisou: sem ela, a ordem dos produtos só mudaria por `sortOrder` produto a
+produto, em vários pedidos que não são uma transação.
+
+**Produto movido de categoria vai para o fim da nova.** Antes, levava a posição que tinha na
+antiga, que não quer dizer nada na outra, e ficava intercalado com os produtos de lá. Com
+`sortOrder` informado, fica onde foi pedido.
+
+**A foto vai depois de criar o produto.** A rota de imagem é a do produto, e só existe depois que
+ele existe. Criar leva direto à página do produto, com o aviso "Agora você pode enviar a foto".
+O campo de imagem (`ImageField`) deixou de ser só das configurações: recebe o envio e a remoção
+de quem o usa.
+
+**A foto é o primeiro item do quadro do produto** (pedido do Junio na validação), antes da
+categoria e do nome — e não uma seção à parte, no fim da página. No produto novo, o mesmo lugar
+mostra a moldura vazia e "Você envia a foto logo depois de criar o produto". A foto continua
+gravada ao escolher o arquivo, por outra rota: enviá-la não mexe no que foi digitado nos campos e
+ainda não foi salvo — há teste disso, porque agora as duas coisas estão no mesmo quadro. O aviso
+de que o produto é um combo saiu de dentro do quadro e foi para cima dele.
+
+**A categoria não tem envio de imagem na tela.** A API guarda a imagem da categoria desde a Fase
+6, mas o cardápio público não a mostra — o botão não teria efeito para o cliente. **Decisão do
+Junio (2026-10-04): fica sem imagem.** O cardápio não mostra imagem de categoria, e a tela não
+oferece o envio; a rota da API continua lá, sem uso pela tela.
+
+**Os combos aparecem na lista, com o selo "Combo", e se editam como qualquer produto** — nome,
+preço, foto, disponibilidade. Os itens que os compõem, e criar um combo, são da Fase 24.
+
+**O limite do plano aparece antes de a pessoa esbarrar nele.** O topo diz "4 de 20 produtos e 3
+de 10 categorias do plano Grátis"; no limite, "Novo produto" e "Nova categoria" se desligam com a
+explicação. A recusa da API (`PLAN_PRODUCT_LIMIT`, `PLAN_CATEGORY_LIMIT`) continua sendo a que
+vale, e a tela mostra a frase dela.
+
+**Excluir pede confirmação, e diz o que acontece.** Uma janela pergunta antes. Categoria com
+produtos não se exclui: o botão fica desligado, com o que fazer. Produto que está num combo é
+recusado pela API, e a janela mostra em qual combo.
+
+**O botão "Criar" fica sempre ligado; o "Salvar" de uma edição, só com alteração.** Desligado
+num formulário vazio, o botão de criar não dizia o que faltava; ligado, mostra.
+
+**O atendente vê o cardápio e o que esgotou, sem alterar nada.** O papel dele só tem
+`products:read` e `categories:read`. Em muitos estabelecimentos é o atendente quem marca o que
+acabou; hoje ele não consegue, e dar `products:update` ao papel deixaria trocar o preço também.
+**Decisão do Junio (2026-10-04): vai para a Fase 25**, dentro de uma revisão maior das
+permissões — por pessoa, com perfis prontos e o dono montando as de cada um (ver "Fase 25").
+
+**Visto num navegador de verdade, a partir de um cadastro novo**, em 390 e 1280 px: cardápio vazio,
+categoria em branco recusada, nome repetido no campo, produto criado com foto (guardada em WebP),
+ordem de produto e de categoria, esgotado, e a exclusão com a janela de confirmação. O cardápio
+público refletiu a ordem e o esgotado. Duas correções saíram das capturas: a caixa de
+"Disponível" (acima) e o título "Foto" que aparecia duas vezes na página do produto. Depois de a
+foto ir para dentro do quadro, a página foi vista de novo em 390 e 1280 px: digitar o preço,
+enviar a foto e salvar manteve o preço digitado.
+
+**Achado no caminho, não corrigido: o limite global de requisições é por endereço.** Rodando o
+percurso três vezes seguidas, a API temporária recusou com 429 — são 100 requisições por minuto
+por IP (`RATE_LIMIT_MAX`, Fase 2), e uma volta inteira pelo painel faz dezenas. Para uma pessoa
+não chega perto. Mas os aparelhos de um mesmo estabelecimento costumam sair pelo mesmo IP; se
+forem vários, o limite pode apertar. Anotado para a Fase 28, junto da revisão do rate limit.
+
+**Uma leitura de status do painel já existia na moldura.** O indicador "Conectando… / Ao vivo" é
+um `role="status"`; os testes acham os avisos da tela pelo texto, não pelo papel.
+
+Rota nova: a coleção do Postman ganhou "Reordena os produtos de uma categoria" e a variável
+`productIdsJson` — importe de novo.
+
+### Verificação executada
+
+| Verificação                                                     | Resultado                                                                                                                   |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                                                   | **975 testes** (595 API + 340 web + 40 shared); formatação, typecheck, lint e build                                         |
+| Clone limpo, `--frozen-lockfile`                                | os mesmos 975 testes                                                                                                        |
+| Reordenação sem conferir a lista completa                       | falham "recusa lista parcial" e "recusa produto de outra categoria"                                                         |
+| Reordenação sem conferir a categoria                            | falham o 404 e o teste de isolamento com dois estabelecimentos                                                              |
+| Produto movido mantendo a posição antiga                        | falha "movido sem dizer a posição, entra no fim da categoria nova"                                                          |
+| Consulta de ordem sem filtrar pela categoria                    | falha "no banco, a ordem só alcança os produtos da categoria informada"                                                     |
+| Categorias fora da ordem do cardápio                            | falham os testes da lista e do agrupamento                                                                                  |
+| "Disponível" mandando o valor errado, ou sem atualizar          | falha "marcar como esgotado grava na hora, só a disponibilidade"                                                            |
+| Reordenar produto sem a categoria                               | falha "sobe um produto dentro da categoria"                                                                                 |
+| Limite do plano sem desligar a criação                          | falham os dois testes de limite                                                                                             |
+| Atendente vendo a caixa de "Disponível"                         | falha "o atendente vê o cardápio e o que esgotou, sem alterar nada"                                                         |
+| Excluir sem confirmar                                           | falham os dois testes de exclusão                                                                                           |
+| Categoria com produtos podendo ser excluída                     | falha "com produtos dentro, não se exclui"                                                                                  |
+| Criar produto voltando à lista em vez da página dele            | falha "cria a partir da categoria, e vai para a página dele"                                                                |
+| "Disponível" esperando a API para mudar                         | falha "a caixa muda na hora, antes de a API responder"                                                                      |
+| Falha sem a caixa voltar ao que era                             | falha "falha ao marcar avisa na linha do produto, e a caixa volta ao que era"                                               |
+| Categorias começando abertas, ou o conteúdo à vista recolhido   | falham "as categorias começam recolhidas" e "o cabeçalho abre e recolhe"                                                    |
+| Sem lembrar as abertas, ou sem abrir a pedida na chegada        | falham os testes da volta do produto e da categoria recém-criada                                                            |
+| Armazenamento do navegador falhando sem proteção                | falha "sem armazenamento no navegador, a lista funciona do mesmo jeito"                                                     |
+| Foto depois dos campos                                          | falham os dois testes da posição da foto, no produto existente e no novo                                                    |
+| Formulário refeito depois de enviar a foto                      | falha "enviar a foto não apaga o que foi digitado e ainda não foi salvo"                                                    |
+| Lixeira excluindo sem perguntar                                 | falham "a lixeira do produto pergunta antes" e "fechar a janela não exclui nada"                                            |
+| Categoria com produtos sem a explicação na janela               | falha "a lixeira de uma categoria com produtos explica o que fazer"                                                         |
+| Lixeira para quem não pode excluir                              | falham os dois testes de permissão dos ícones                                                                               |
+| Lápis ausente, ou depois do preço                               | falham os testes do lápis do produto e da categoria                                                                         |
+| Exclusão sem reler o uso do plano                               | falha "excluir pela lixeira manda reler o uso do plano"                                                                     |
+| "Novo produto" de volta ao rodapé, ou só com a categoria aberta | falha "Novo produto fica no alto da categoria, com texto, mesmo recolhida"                                                  |
+| Navegador de verdade, em 390 e 1280 px                          | de um cadastro novo ao cardápio público com a ordem e o esgotado; sem erro no console além do 409 esperado do nome repetido |
+| Validação do Junio                                              | a fazer                                                                                                                     |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
 
 ---
 
@@ -764,11 +947,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 22 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
-(MVP.md, "Como saber que acabou"). Os passos 1 e 2 — cadastrar pela página inicial, confirmar o
-e-mail, entrar e configurar o estabelecimento, os horários, a entrega e o pagamento — e os passos
-4 a 7 funcionam de ponta a ponta. O passo 3, o cardápio, só funciona **pela API**, e o sistema
-ainda não está no ar. As fases 23 a 28 fecham essa distância.
+As fases 1 a 23 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+(MVP.md, "Como saber que acabou"). Os passos 1 e 2 e os passos 4 a 7 funcionam de ponta a ponta;
+do passo 3, categorias e produtos já se cadastram pela tela, e opções, adicionais e combos ainda
+só **pela API**. E o sistema ainda não está no ar. As fases 24 a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -801,19 +983,33 @@ vazio**, como faria alguém que nunca viu o sistema.
 
 - **22 (concluída):** horários, entrega e retirada, formas de pagamento, em abas dentro de
   Configurações. O estabelecimento novo passou a nascer com a entrega e a retirada desligadas.
-- **23:** categorias e produtos, com imagem. Reordenação de produtos em lote
-  (`PUT /products/order`), como a de categorias, se a tela precisar.
+- **23 (concluída):** categorias e produtos, com a foto do produto, numa tela Cardápio. A
+  reordenação de produtos em lote (`PUT /products/order`) entrou: a tela precisou.
 - **24:** grupos de opção, adicionais e combos.
 - Todas sobre rotas que já existem: `admin-settings.ts`, `admin-catalog.ts` e
   `admin-customization.ts`.
-- As telas de categorias e produtos (Fase 23) mostram o uso do plano — `products` e `categories`,
-  em `GET /api/v1/admin/plan` — e a recusa `PLAN_PRODUCT_LIMIT` / `PLAN_CATEGORY_LIMIT` da Fase 20.
-- O envio de imagem pelas telas (Fases 21 e 23) trata as recusas da Fase 20: 413 (mais de 15 MB),
-  415 (não é JPEG, PNG nem WebP) e 422 (`UNREADABLE_IMAGE`, `IMAGE_TOO_LARGE`).
+- A tela de combos (Fase 24) começa da página de produto da Fase 23, que hoje só avisa que os
+  itens do combo "ainda não são editados pelo painel". Criar um combo também é dela: a página de
+  produto novo cria só produto simples.
 
 ### Fase 25 — Usuários e senha
 
 - Tela de usuários sobre a API da Fase 14.
+- **Permissões maleáveis, por pessoa** (decisão do Junio, 2026-10-04): alguns perfis prontos, e o
+  dono com autonomia total para montar as permissões de cada pessoa como quiser. O exemplo dele:
+  um funcionário marca produto como esgotado mas não mexe no preço; outro mexe no preço mas não
+  marca esgotado. **A rever com o Junio no começo da fase**, antes de implementar.
+- Para isso, as permissões ficam mais finas onde hoje uma só cobre coisas diferentes. A primeira:
+  `products:update` cobre preço, nome, descrição, foto e disponibilidade; marcar esgotado precisa
+  ser uma permissão separada. Rever as outras com o mesmo olho — pedidos, configurações, cardápio.
+- Ponto de desenho a resolver na fase: hoje os papéis são **globais** (OWNER, ADMIN e STAFF são
+  iguais em todo estabelecimento — ARCHITECTURE.md, 6.4). Permissões por pessoa pedem que o dono
+  escolha permissões além do papel: por usuário, ou com perfis próprios do estabelecimento. A
+  conferência na API não muda — continua sendo por permissão, rota a rota (`requireAuth`).
+- Garantias a considerar no desenho: o dono não perde o acesso total; quem monta permissões não
+  dá a outra pessoa o que ele mesmo não tem; toda mudança de permissão vai para a auditoria; e
+  quem perdeu uma permissão deixa de tê-la na hora (as conexões ao vivo de um usuário alterado já
+  fecham desde a Fase 19).
 - Cada pessoa troca a própria senha, e o dono redefine a de um atendente.
 - As regras de senha do cadastro (`REGRAS_DA_SENHA`, Fase 18) passam a valer para toda senha do
   painel: criação de usuário, troca e redefinição.
@@ -1008,13 +1204,15 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                              | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Sair de uma aba das configurações com alterações não salvas perde o que foi digitado, sem aviso                                                                   | A decidir; ver ROADMAP                   |
+| Permissões por pessoa: perfis prontos, o dono montando as de cada um, "marcar esgotado" separado de "mudar preço"                                                 | Fase 25 (decisão do Junio)               |
+| Sair de um formulário do painel (aba das configurações, página de produto ou categoria) com alterações não salvas perde o que foi digitado, sem aviso             | A decidir; ver ROADMAP                   |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
 | Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                                           | A definir pelo Junio                     |
 | Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |
 | CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
 | Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |
 | Rate limit conta em memória — vira limite por instância se houver mais de uma                                                                                     | Fase 28, se houver mais de uma instância |
+| Rate limit global por IP (100/min): os aparelhos de um estabelecimento costumam sair pelo mesmo IP                                                                | Fase 28, com a revisão do rate limit     |
 | Os catálogos (papéis, formas de pagamento, planos) só são semeados pelo seed de demonstração — já separados em `seed-rbac`, `seed-payment-methods` e `seed-plans` | Fase 28 (seed essencial de produção)     |
 | Contrato do cardápio público copiado no web, fora do `packages/shared`                                                                                            | Quando o contrato mudar de novo          |
 | Checkout não lembra os dados no aparelho ao voltar ao cardápio                                                                                                    | ROADMAP                                  |

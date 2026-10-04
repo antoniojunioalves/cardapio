@@ -521,6 +521,12 @@ a linha diretamente.
 Permissões seguem `recurso:acao` (`products:create`). Formato previsível é o que permite
 conferir permissão comparando strings, sem tabela de tradução no meio.
 
+**A Fase 25 revê este desenho** (decisão do Junio): permissões por pessoa, com perfis prontos e o
+dono montando as de cada um, e permissões mais finas — marcar esgotado separado de mudar o preço,
+que hoje são o mesmo `products:update`. Os papéis globais deixam de bastar; como fica — permissões
+por usuário, ou perfis do estabelecimento — é decisão daquela fase. A conferência rota a rota por
+permissão continua igual.
+
 ### 6.5 A cadeia de proteção de uma rota
 
 `requireAuth()` é a única forma exportada de proteger uma rota, e devolve a cadeia pronta:
@@ -806,6 +812,12 @@ e aceitar `25.9` esconderia o erro de quem achou que era em reais.
 
 `isAvailable` é o controle de estoque do MVP. Estoque com quantidade e baixa automática estão no
 ROADMAP.
+
+**A ordem dos produtos é por categoria** (Fase 23). `PUT /api/v1/admin/products/order` recebe a
+categoria e a lista **completa** dos produtos dela, com a mesma regra da ordem das categorias: uma
+lista parcial, ou com produto de outra categoria ou de outro estabelecimento, é recusada inteira
+(`ORDER_INCOMPLETE`), e as posições vão de dez em dez. Um produto **movido de categoria** sem
+`sortOrder` vai para o fim da nova: a posição que tinha na antiga não quer dizer nada na outra.
 
 O preço gravado no produto é o **atual**. Nenhum pedido o lê depois de criado: na Fase 11 ele é
 copiado para o item do pedido.
@@ -1178,6 +1190,52 @@ Quatro regras da tela, todas com teste:
 - **uma linha de região em branco não é uma região.** Sem nome e sem taxa, não é cobrada, não
   conta como região ativa e não é enviada: quem clica em "Adicionar região" e desiste continua
   podendo salvar.
+
+**O Cardápio** (Fase 23) é uma lista e quatro páginas. A lista, em `/admin/cardapio`
+(`pages/AdminMenuPage.tsx`), mostra as categorias na ordem do cardápio, cada uma com os seus
+produtos (`agruparPorCategoria`, em `features/admin/catalog.ts`, pura); as páginas criam e editam
+categoria e produto (`cardapio/categorias/nova`, `cardapio/categorias/:id`,
+`cardapio/produtos/novo?categoria=…`, `cardapio/produtos/:id`). O item do menu, sem `end`,
+continua marcado em todas elas.
+
+- **As categorias são recolhíveis** e começam recolhidas: o cabeçalho é um botão com
+  `aria-expanded`, e o conteúdo fica no documento com `hidden`. As abertas ficam no
+  `sessionStorage` (`open-categories.ts`) — duram a aba do navegador —, e quem chega à lista vindo
+  de uma categoria recém-criada ou de um produto traz no `state` da navegação qual abrir. Sem
+  armazenamento no navegador, a lista funciona igual, só não lembra.
+- **"Disponível" grava na hora**, da lista, com um `PATCH` só da disponibilidade
+  (`useDisponibilidade`). A caixa muda antes da resposta — o cache é alterado no `onMutate` — e,
+  se a API recusar, só aquele produto volta ao que era. Cada linha tem o seu envio, e a falha
+  aparece na linha.
+- **Subir e descer** mandam a lista completa — das categorias, ou dos produtos da categoria —, e
+  a resposta da API substitui o que está em cache. Durante o envio, os botões de ordem ficam
+  desligados: dois cliques rápidos não mandam duas ordens a partir da mesma lista velha.
+- **Cada gravação marca para releitura o uso do plano e a lista do Início**: criar e excluir mexem
+  na contagem do plano, e a disponibilidade mexe em "ao menos um produto à venda".
+- **A foto vai depois de criar, e é o primeiro item do quadro do produto.** A rota de imagem é
+  a do produto; criar leva à página dele. O campo da foto fica dentro do formulário, mas grava
+  por conta própria: a resposta atualiza o produto no cache sem refazer o formulário, e o que
+  foi digitado e não salvo continua nos campos.
+  `ImageField` recebe o envio e a remoção de quem o usa (`useImagemDoProduto`, e as do logo e da
+  capa nas configurações), e as recusas de tamanho, formato e imagem ilegível viram frases.
+- **O limite do plano aparece antes**: o topo da lista mostra o uso (`cardapioNoPlano`, em
+  `plan.ts`), e no limite a criação se desliga com a explicação. A recusa da API continua sendo a
+  que vale: a tela mostra a frase dela (409), como mostra a de nome repetido e a de produto que
+  está num combo.
+- **Lápis e lixeira ao lado do nome** de cada categoria e produto (`EditarEExcluir`), cada um só
+  para quem tem a permissão — o lápis azul (`info`), a lixeira vermelha (`danger`). "+ Novo
+  produto" fica no cabeçalho da categoria: uma grade de posições fixas, em que ele ocupa a segunda
+  linha no celular e entra ao lado do lápis e da lixeira a partir de `sm` — o mesmo elemento nas
+  duas larguras, para o leitor de tela não o ouvir duas vezes. O lápis leva à página de edição, como o nome do produto; o nome da
+  categoria abre e recolhe.
+- **Excluir pede confirmação** numa janela (`ConfirmarExclusao`, em `catalog-parts.tsx`), a mesma
+  na lixeira da lista e no "Excluir" das páginas, que diz o que acontece e mostra a recusa da API.
+  Na lista, a página guarda qual item está sendo excluído e a janela é uma só; a linha do produto
+  some do cache, e a página — que continua montada — mostra o aviso. Categoria com produtos: na
+  página, o botão fica desligado com a frase embaixo; na lista, a janela explica sem oferecer o
+  botão.
+- Sem a permissão de alterar, a lista não mostra caixas nem botões de ordem, e as páginas abrem
+  só para leitura.
 
 ### 9.7 Temas
 

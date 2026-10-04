@@ -4,9 +4,45 @@ import { z } from 'zod'
 import { formatarPreco, lerReais } from '@/utils/money'
 
 /**
- * Campos que as abas das configurações repetem: o que a pessoa digita entra
+ * Campos que os formulários do painel repetem: o que a pessoa digita entra
  * como texto, e sai no formato que a API espera.
  */
+
+/** Texto livre que pode ficar em branco: em branco, vai `null` para a API. */
+export const textoOpcional = (maximo: number) =>
+  z
+    .string()
+    .trim()
+    .max(maximo, `Use no máximo ${String(maximo)} caracteres.`)
+    .transform((valor) => (valor === '' ? null : valor))
+
+/**
+ * O teto de preço da API: R$ 100.000,00. Não é regra de negócio — é a trava
+ * contra um zero a mais digitado sem querer.
+ */
+export const PRECO_MAXIMO_EM_CENTAVOS = 10_000_000
+
+/** Um preço em reais, obrigatório, que sai em centavos. Zero vale: há item grátis. */
+export const preco = z.string().transform((valor, ctx) => {
+  const texto = valor.trim()
+  const centavos = texto === '' ? null : lerReais(texto)
+  if (centavos === null) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        texto === '' ? 'Informe o preço, como 25,90.' : 'Informe um valor em reais, como 25,90.',
+    })
+    return z.NEVER
+  }
+  if (centavos > PRECO_MAXIMO_EM_CENTAVOS) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'O preço passa de R$ 100.000,00. Confira se não sobrou um zero.',
+    })
+    return z.NEVER
+  }
+  return centavos
+})
 
 /** Minutos, de 0 a um dia. Em branco, vai `null`. */
 export const minutosOpcionais = z.string().transform((valor, ctx) => {

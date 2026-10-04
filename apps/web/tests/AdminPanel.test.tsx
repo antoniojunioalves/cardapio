@@ -106,6 +106,8 @@ function plano(extra: Partial<UsoDoPlano['orders']>): UsoDoPlano {
     plan: { code: 'FREE', name: 'Gratuito' },
     orders: { used: 10, limit: 100, ceiling: 110, state: 'LIVRE', ...extra },
     users: { active: 1, limit: 2 },
+    products: { used: 3, limit: 20 },
+    categories: { used: 1, limit: 10 },
   }
 }
 const LIVRE = plano({})

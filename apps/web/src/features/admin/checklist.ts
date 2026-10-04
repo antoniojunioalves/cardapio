@@ -61,5 +61,6 @@ export const PASSOS: Record<Passo, TextoDoPasso> = {
   products: {
     titulo: 'Cadastrar ao menos um produto',
     comoFazer: 'É o que o cliente vê e pede no cardápio.',
+    onde: { caminho: 'cardapio', rotulo: 'Abrir o cardápio' },
   },
 }

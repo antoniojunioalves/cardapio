@@ -4,7 +4,7 @@ import { useId, type ComponentProps, type ReactNode } from 'react'
 import { ApiError } from '@/services/api'
 
 /**
- * As peças que as abas das configurações têm em comum: o cartão de uma seção,
+ * As peças que os formulários do painel têm em comum: o cartão de uma seção,
  * o aviso de quem só pode ver, o rodapé com o "Salvar" e a espera dos dados.
  */
 
@@ -17,11 +17,15 @@ export function Secao({ titulo, children }: { titulo: string; children: ReactNod
   )
 }
 
-/** Sem `settings:update`, a pessoa vê tudo e não altera nada. */
-export function AvisoDeSomenteLeitura() {
+/** Sem a permissão de alterar, a pessoa vê tudo e não altera nada. */
+export function AvisoDeSomenteLeitura({
+  texto = 'Você pode ver as configurações, mas só quem administra o estabelecimento as altera.',
+}: {
+  texto?: string
+}) {
   return (
     <p role="note" className="text-caption rounded-control bg-surface p-3 text-content-muted">
-      Você pode ver as configurações, mas só quem administra o estabelecimento as altera.
+      {texto}
     </p>
   )
 }
@@ -75,17 +79,36 @@ interface RodapeDeSalvarProps {
   alterado: boolean
   /** O que dizer quando grava: "Horários salvos." */
   sucesso: string
+  /** O texto do botão. Sem ele, "Salvar alterações". */
+  rotulo?: string
+  /** Para uma recusa que a tela explica do seu jeito; sem resposta, vale a mensagem padrão. */
+  explicarFalha?: (erro: unknown) => string | null
+}
+
+/** A mensagem padrão de um envio recusado. */
+function falhaAoSalvar(erro: unknown): string {
+  if (erro instanceof ApiError) {
+    if (erro.status === 400) return 'Confira os campos marcados e tente de novo.'
+    // 409: um conflito que só a API vê — nome repetido, limite do plano. A
+    // mensagem dela já é escrita para quem usa o painel.
+    if (erro.status === 409) return erro.message
+  }
+  return 'Não foi possível salvar agora. Tente de novo.'
 }
 
 /** O "Salvar" de uma aba, com o resultado do último envio acima dele. */
-export function RodapeDeSalvar({ envio, alterado, sucesso }: RodapeDeSalvarProps) {
+export function RodapeDeSalvar({
+  envio,
+  alterado,
+  sucesso,
+  rotulo = 'Salvar alterações',
+  explicarFalha,
+}: RodapeDeSalvarProps) {
   return (
     <div className="flex flex-col gap-2">
       {envio.isError && (
         <p role="alert" className="text-caption text-danger">
-          {envio.error instanceof ApiError && envio.error.status === 400
-            ? 'Confira os campos marcados e tente de novo.'
-            : 'Não foi possível salvar agora. Tente de novo.'}
+          {explicarFalha?.(envio.error) ?? falhaAoSalvar(envio.error)}
         </p>
       )}
       {envio.isSuccess && !alterado && (
@@ -98,7 +121,7 @@ export function RodapeDeSalvar({ envio, alterado, sucesso }: RodapeDeSalvarProps
         disabled={envio.isPending || !alterado}
         className="text-body rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover disabled:opacity-50"
       >
-        {envio.isPending ? 'Salvando…' : 'Salvar alterações'}
+        {envio.isPending ? 'Salvando…' : rotulo}
       </button>
     </div>
   )

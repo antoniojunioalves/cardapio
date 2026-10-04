@@ -67,6 +67,11 @@
       "description": "Primeiro produto listado, ou o criado."
     },
     {
+      "key": "productIdsJson",
+      "value": "[]",
+      "description": "Todos os produtos da categoria listada, para reordenar."
+    },
+    {
       "key": "comboId",
       "value": "",
       "description": "Primeiro combo listado."
@@ -1158,6 +1163,7 @@
                   "const produtos = pm.response.json();",
                   "if (Array.isArray(produtos) && produtos.length > 0) {",
                   "  pm.collectionVariables.set('productId', produtos[0].id);",
+                  "  pm.collectionVariables.set('productIdsJson', JSON.stringify(produtos.map((p) => p.id)));",
                   "  const combo = produtos.find((p) => p.type === 'COMBO');",
                   "  const simples = produtos.find((p) => p.type === 'SIMPLE');",
                   "  if (combo) pm.collectionVariables.set('comboId', combo.id);",
@@ -1238,6 +1244,41 @@
           }
         },
         {
+          "name": "Reordena os produtos de uma categoria",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"ids\": {{productIdsJson}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/products/order",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "products",
+                "order"
+              ]
+            },
+            "description": "Recebe a categoria e a lista **completa** dos produtos dela, na ordem desejada. Uma lista parcial, ou com produto de outra categoria, é recusada (`ORDER_INCOMPLETE`). Devolve os produtos da categoria, já na ordem nova.\n\nPrecisa de todos os produtos da categoria: rode antes \"Produtos, opcionalmente de uma categoria\", que filtra pela `categoryId`. Reordene a lista à vontade."
+          }
+        },
+        {
           "name": "Um produto",
           "request": {
             "method": "GET",
@@ -1302,7 +1343,7 @@
                 }
               ]
             },
-            "description": ""
+            "description": "Só os campos enviados mudam. Trocar de categoria sem informar `sortOrder` põe o produto no fim da categoria nova."
           }
         },
         {
