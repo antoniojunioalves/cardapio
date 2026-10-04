@@ -19,7 +19,9 @@ import {
   insertProduct,
   listCategories,
   listProducts,
+  proximaOrdemDeProduto,
   reorderCategories,
+  reorderProducts,
   updateCategory,
   updateProduct,
   type CategoriaPatch,
@@ -326,11 +328,18 @@ export async function atualizarProduto(
       )
     }
 
+    // Mudou de categoria sem dizer a posição: vai para o fim da nova. A posição
+    // que tinha na antiga não quer dizer nada na outra, e o deixaria
+    // intercalado com os produtos de lá de um jeito que ninguém pediu.
+    let alteracao = patch
     if (patch.categoryId !== undefined && patch.categoryId !== anterior.categoryId) {
       await exigirCategoria(tx, patch.categoryId)
+      if (patch.sortOrder === undefined) {
+        alteracao = { ...patch, sortOrder: await proximaOrdemDeProduto(tx, patch.categoryId) }
+      }
     }
 
-    const atualizado = await updateProduct(tx, id, patch)
+    const atualizado = await updateProduct(tx, id, alteracao)
     if (!atualizado) throw produtoNaoEncontrado()
 
     const alteracoes = diferencas(anterior, atualizado)
@@ -359,6 +368,51 @@ export async function atualizarProduto(
     }
 
     return atualizado
+  })
+}
+
+/**
+ * Reordena os produtos de uma categoria.
+ *
+ * Como a das categorias, exige a lista **completa** — agora a da categoria.
+ * Um produto de outra categoria, ou de outro estabelecimento, não pertence ao
+ * conjunto, e a operação inteira é recusada.
+ */
+export async function reordenarProdutos(
+  context: TenantContext,
+  actorUserId: string,
+  categoryId: string,
+  ids: readonly string[],
+): Promise<Product[]> {
+  return withTenant(context, async (tx) => {
+    await exigirCategoria(tx, categoryId)
+
+    const existentes = new Set((await listProducts(tx, { categoryId })).map((p) => p.id))
+    const informados = new Set(ids)
+
+    const completa =
+      informados.size === ids.length &&
+      informados.size === existentes.size &&
+      [...informados].every((id) => existentes.has(id))
+
+    if (!completa) {
+      throw new AppError(
+        'Informe todos os produtos da categoria, cada um uma vez.',
+        400,
+        'ORDER_INCOMPLETE',
+      )
+    }
+
+    await reorderProducts(tx, categoryId, ids)
+
+    await recordAudit(tx, context, {
+      action: 'product.reordered',
+      entityType: 'product',
+      actorUserId,
+      metadata: { categoryId, ordem: ids },
+    })
+
+    return listProducts(tx, { categoryId })
   })
 }
 

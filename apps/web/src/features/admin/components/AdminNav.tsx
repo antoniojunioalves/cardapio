@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router'
 
 import {
+  IconeCardapio,
   IconeConfiguracoes,
   IconeExterno,
   IconeInicio,
@@ -15,6 +16,7 @@ import { caminhoDoPainel, itensDoMenu, type IconeDoMenu, type ItemDoMenu } from 
 const ICONES: Record<IconeDoMenu, (props: IconeProps) => ReactNode> = {
   inicio: IconeInicio,
   pedidos: IconePedidos,
+  cardapio: IconeCardapio,
   configuracoes: IconeConfiguracoes,
 }
 

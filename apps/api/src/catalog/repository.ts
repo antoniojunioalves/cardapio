@@ -1,4 +1,4 @@
-import { asc, count, eq, sql } from 'drizzle-orm'
+import { and, asc, count, eq, sql } from 'drizzle-orm'
 
 import { categories, products, type Category, type Product } from '../db/schema/index.js'
 import type { TenantContext } from '../tenant/context.js'
@@ -132,7 +132,11 @@ export async function findProduct(tx: TenantTransaction, id: string): Promise<Pr
   return produto ?? null
 }
 
-async function proximaOrdemDeProduto(tx: TenantTransaction, categoryId: string): Promise<number> {
+/** Próxima posição disponível na categoria, para o produto entrar no fim dela. */
+export async function proximaOrdemDeProduto(
+  tx: TenantTransaction,
+  categoryId: string,
+): Promise<number> {
   const [linha] = await tx
     .select({ maximo: sql<number | null>`max(${products.sortOrder})` })
     .from(products)
@@ -168,6 +172,30 @@ export async function updateProduct(
     .where(eq(products.id, id))
     .returning()
   return atualizado ?? null
+}
+
+/**
+ * Aplica a ordem informada aos produtos de uma categoria, de dez em dez, como
+ * `reorderCategories`. Devolve quantas linhas foram atualizadas; um id de
+ * outro estabelecimento ou de outra categoria não conta.
+ */
+export async function reorderProducts(
+  tx: TenantTransaction,
+  categoryId: string,
+  ids: readonly string[],
+): Promise<number> {
+  let atualizadas = 0
+
+  for (const [indice, id] of ids.entries()) {
+    const linhas = await tx
+      .update(products)
+      .set({ sortOrder: indice * 10, updatedAt: new Date() })
+      .where(and(eq(products.id, id), eq(products.categoryId, categoryId)))
+      .returning({ id: products.id })
+    atualizadas += linhas.length
+  }
+
+  return atualizadas
 }
 
 export async function deleteProduct(tx: TenantTransaction, id: string): Promise<Product | null> {

@@ -192,6 +192,14 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Catálogo
 
+- **Imagem da categoria no cardápio público — decidido que não, por ora** (Junio, 2026-10-04). A
+  API guarda a imagem da categoria desde a Fase 6, mas o cardápio não a mostra e a tela não
+  oferece o envio. Fica aqui como registro, se um dia a ideia voltar: onde ela apareceria (faixa
+  no topo da categoria, ícone na barra de categorias) e o peso a mais na página.
+- **Busca e filtro na lista do cardápio do painel** — "só os esgotados", por nome. Com o limite de
+  20 produtos do plano gratuito, a lista inteira ainda cabe na tela; com o plano pago, deixa de
+  caber.
+
 ### Preço do combo parametrizável por estabelecimento
 
 Pedido na validação da Fase 7b. Hoje o preço do combo é **fixo**, digitado pelo lojista, e não

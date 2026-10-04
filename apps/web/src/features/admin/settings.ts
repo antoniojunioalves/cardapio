@@ -16,6 +16,7 @@ import {
   minutosValidos,
   reais,
   reaisSemSimbolo,
+  textoOpcional,
 } from './form-fields'
 import { comSessao, useSessaoStore } from './session'
 
@@ -91,14 +92,6 @@ export const UFS = [
   'TO',
 ] as const
 
-/** Texto livre que pode ficar em branco: em branco, vai `null` para a API. */
-const opcional = (maximo: number) =>
-  z
-    .string()
-    .trim()
-    .max(maximo, `Use no máximo ${String(maximo)} caracteres.`)
-    .transform((valor) => (valor === '' ? null : valor))
-
 /** Telefone como a pessoa digitou; em branco é `null`, e o resto vira só dígitos, com o país. */
 const telefoneOpcional = z.string().transform((valor, ctx) => {
   if (valor.trim() === '') return null
@@ -118,7 +111,7 @@ const telefoneOpcional = z.string().transform((valor, ctx) => {
 export const formularioSchema = z
   .object({
     name: textoObrigatorio(120, 'Informe o nome do estabelecimento.'),
-    description: opcional(2000),
+    description: textoOpcional(2000),
     timezone: z.string().refine(fusoValido, 'Escolha o fuso horário.'),
 
     whatsappPhone: telefoneOpcional,
@@ -142,11 +135,11 @@ export const formularioSchema = z
       }
       return normalizado
     }),
-    addressStreet: opcional(160),
-    addressNumber: opcional(20),
-    addressComplement: opcional(80),
-    addressNeighborhood: opcional(80),
-    addressCity: opcional(80),
+    addressStreet: textoOpcional(160),
+    addressNumber: textoOpcional(20),
+    addressComplement: textoOpcional(80),
+    addressNeighborhood: textoOpcional(80),
+    addressCity: textoOpcional(80),
     addressState: z
       .string()
       .transform((valor) => (valor === '' ? null : valor))

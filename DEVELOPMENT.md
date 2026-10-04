@@ -519,6 +519,24 @@ Para uma tela nova:
    `PASSOS` (`features/admin/checklist.ts`) — o caminho e o que o link diz: o passo ganha um link
    no Início.
 
+**Uma tela de cadastro** — lista e páginas de criar e editar — segue o Cardápio (Fase 23): a
+lista em `pages/AdminMenuPage.tsx`, as páginas em `AdminProductPage.tsx` e
+`AdminCategoryPage.tsx`, e o módulo `features/admin/catalog.ts`, com as consultas, as gravações e
+as regras puras da lista. Algumas escolhas que valem para as próximas:
+
+- criar leva à página do item (ou de volta à lista, com o aviso no `state` da navegação);
+- o botão "Criar" fica sempre ligado — clicar mostra o que falta; o "Salvar" de uma edição, só com
+  alteração (`RodapeDeSalvar`, com `rotulo` e `explicarFalha`);
+- excluir usa `Excluir` (`catalog-parts.tsx`), que confirma numa janela e mostra a recusa da API;
+- imagem usa `ImageField`, passando o envio e a remoção do item (`useImagemDoProduto`);
+- a gravação guarda a resposta da API no cache (`setQueryData`) e marca para releitura o que
+  depende dela — o plano, a lista do Início;
+- estado só da tela, como quais categorias estão abertas, vai no `sessionStorage`, sempre dentro de
+  `try`/`catch`: numa janela anônima ou com o armazenamento bloqueado, a tela tem de funcionar
+  igual, só sem lembrar;
+- um botão cujo texto é feito de vários blocos (nome e resumo) recebe o nome acessível pronto, em
+  `aria-label`: o navegador junta os blocos de jeitos diferentes, e o jsdom de outro.
+
 **Uma aba nova em Configurações** não é item do menu: é uma entrada em `ABAS_DAS_CONFIGURACOES`
 (`menu.ts`) e uma rota filha de `configuracoes` em `App.tsx`. A página da aba não tem `<h1>` nem
 título próprio — são da moldura, `SettingsTabs`. Siga uma das que existem (`hours.ts` e
@@ -545,6 +563,12 @@ nunca o contrário. A moldura já cuida do menu — gaveta no celular, coluna fi
 Nos testes, `abrirComLocal('/lanchonete-do-ze/admin/…')` com a sessão guardada abre a tela dentro
 da moldura; veja `abrirInicio` em `tests/AdminPanel.test.tsx`. O jsdom não aplica CSS: a gaveta se
 testa pelo `aria-expanded` do botão "Menu", não por estar ou não visível.
+
+A moldura já tem um `role="status"` — o indicador "Conectando… / Ao vivo". Um aviso da tela
+("Produto salvo.") se acha pelo texto, e não por `findByRole('status')`, que pega o indicador.
+Para uma tela de cadastro, `tests/AdminMenu.test.tsx` tem uma API simulada que guarda estado
+(`simularApi`): criar, alterar, reordenar e excluir mudam o que as leituras seguintes devolvem,
+e o teste percorre o fluxo inteiro, da lista à página e de volta.
 
 ### Testando uma página
 

@@ -6,9 +6,12 @@ import { AdminLayout } from '@/features/admin/components/AdminLayout'
 import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
 import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
+import { AdminCategoryPage } from '@/pages/AdminCategoryPage'
 import { AdminHoursPage } from '@/pages/AdminHoursPage'
+import { AdminMenuPage } from '@/pages/AdminMenuPage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
 import { AdminPaymentPage } from '@/pages/AdminPaymentPage'
+import { AdminProductPage } from '@/pages/AdminProductPage'
 import { AdminSettingsPage } from '@/pages/AdminSettingsPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
@@ -39,6 +42,10 @@ import { SignupPage } from '@/pages/SignupPage'
  * — o Início no índice, os pedidos em `/admin/pedidos`. Tela nova do painel:
  * uma rota filha aqui e uma entrada em `features/admin/menu.ts`.
  *
+ * O cardápio é uma lista, em `/admin/cardapio`, e cada categoria e cada
+ * produto se cria e se edita numa página própria: `cardapio/produtos/novo`,
+ * `cardapio/produtos/:id`, e o mesmo para `categorias`.
+ *
  * As configurações têm abas, e cada aba é uma rota filha de
  * `/admin/configuracoes` (`SettingsTabs`): a do estabelecimento no índice, e
  * `horarios`, `entrega` e `pagamento`.
@@ -61,6 +68,11 @@ export function AppRoutes() {
       <Route path="/:tenantSlug/admin" element={<AdminLayout />}>
         <Route index element={<AdminHomePage />} />
         <Route path="pedidos" element={<AdminOrdersPage />} />
+        <Route path="cardapio" element={<AdminMenuPage />} />
+        <Route path="cardapio/categorias/nova" element={<AdminCategoryPage />} />
+        <Route path="cardapio/categorias/:categoriaId" element={<AdminCategoryPage />} />
+        <Route path="cardapio/produtos/novo" element={<AdminProductPage />} />
+        <Route path="cardapio/produtos/:produtoId" element={<AdminProductPage />} />
         <Route path="configuracoes" element={<SettingsTabs />}>
           <Route index element={<AdminSettingsPage />} />
           <Route path="horarios" element={<AdminHoursPage />} />

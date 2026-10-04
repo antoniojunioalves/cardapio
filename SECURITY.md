@@ -406,6 +406,14 @@ criação do pedido recusa. Antes da Fase 22, um cadastro novo ia ao ar com entr
 sem o dono ter decidido. A resposta pública não diz o motivo — é o mesmo status do limite do
 plano.
 
+**O cardápio pela tela** (Fase 23) usa as rotas da Fase 6, cada ação com a sua permissão:
+`categories:create`, `categories:update`, `categories:delete` e o mesmo para `products`. A tela
+esconde o que a pessoa não pode fazer; quem recusa é a API. A rota nova, `PUT /products/order`,
+pede `products:update`, recusa uma lista com produto de outra categoria ou de outro
+estabelecimento — a operação inteira, sem mexer em nada — e responde 404 a uma categoria de outro
+estabelecimento; há teste com dois estabelecimentos. A reordenação vai para a auditoria
+(`product.reordered`, com a categoria e a ordem).
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.

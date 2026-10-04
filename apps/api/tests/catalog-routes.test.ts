@@ -5,6 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../src/app.js'
+import { reorderProducts } from '../src/catalog/repository.js'
 import { closeDatabase } from '../src/db/index.js'
 import { auditLogs } from '../src/db/schema/index.js'
 import { storage } from '../src/storage/index.js'
@@ -219,6 +220,111 @@ describe('ordem das categorias', () => {
   })
 })
 
+describe('ordem dos produtos de uma categoria', () => {
+  async function categoriaComTres() {
+    const categoria = await novaCategoria()
+    const produtos = [
+      await novoProduto(categoria.id),
+      await novoProduto(categoria.id),
+      await novoProduto(categoria.id),
+    ]
+    return { categoria, ids: produtos.map((p) => p.id) }
+  }
+
+  it('aplica a ordem informada, e só nessa categoria', async () => {
+    const { categoria, ids } = await categoriaComTres()
+    const outra = await categoriaComTres()
+    const invertida = [...ids].reverse()
+
+    const r = await chamar('PUT', '/products/order', { categoryId: categoria.id, ids: invertida })
+
+    expect(r.statusCode, r.body).toBe(200)
+    expect(r.json<Produto[]>().map((p) => p.id)).toEqual(invertida)
+    const daOutra = (await chamar('GET', `/products?categoryId=${outra.categoria.id}`))
+      .json<Produto[]>()
+      .map((p) => p.id)
+    expect(daOutra).toEqual(outra.ids)
+  })
+
+  it('registra na auditoria a categoria e a ordem nova', async () => {
+    const { categoria, ids } = await categoriaComTres()
+    const invertida = [...ids].reverse()
+
+    await chamar('PUT', '/products/order', { categoryId: categoria.id, ids: invertida })
+
+    expect(await acoesAuditadas()).toContainEqual({
+      action: 'product.reordered',
+      metadata: { categoryId: categoria.id, ordem: invertida },
+    })
+  })
+
+  it('recusa lista parcial e id repetido', async () => {
+    const { categoria, ids } = await categoriaComTres()
+    const [a = '', b = ''] = ids
+
+    const parcial = await chamar('PUT', '/products/order', {
+      categoryId: categoria.id,
+      ids: [a, b],
+    })
+    const repetido = await chamar('PUT', '/products/order', {
+      categoryId: categoria.id,
+      ids: [a, b, a],
+    })
+
+    expect(parcial.statusCode).toBe(400)
+    expect(codigo(parcial)).toBe('ORDER_INCOMPLETE')
+    expect(repetido.statusCode).toBe(400)
+  })
+
+  it('recusa produto de outra categoria no meio da lista', async () => {
+    const { categoria, ids } = await categoriaComTres()
+    const intruso = (await categoriaComTres()).ids[0] ?? ''
+
+    const r = await chamar('PUT', '/products/order', {
+      categoryId: categoria.id,
+      ids: [...ids, intruso],
+    })
+
+    expect(r.statusCode).toBe(400)
+    expect(codigo(r)).toBe('ORDER_INCOMPLETE')
+  })
+
+  it('no banco, a ordem só alcança os produtos da categoria informada', async () => {
+    // A segunda barreira: o serviço já recusa a lista com um intruso, mas a
+    // consulta também não move produto de outra categoria.
+    const { categoria } = await categoriaComTres()
+    const intruso = (await categoriaComTres()).ids[0] ?? ''
+
+    const atualizadas = await withTenant(tenantContextFromUser(dono.tenantId), (tx) =>
+      reorderProducts(tx, categoria.id, [intruso]),
+    )
+
+    expect(atualizadas).toBe(0)
+  })
+
+  it('categoria inexistente responde 404', async () => {
+    const r = await chamar('PUT', '/products/order', {
+      categoryId: '01a0d928-0000-7000-8000-000000000000',
+      ids: ['01a0d928-0000-7000-8000-000000000001'],
+    })
+
+    expect(r.statusCode).toBe(404)
+  })
+
+  it('quem só lê não reordena', async () => {
+    const { categoria, ids } = await categoriaComTres()
+
+    const r = await chamar(
+      'PUT',
+      '/products/order',
+      { categoryId: categoria.id, ids },
+      tokenDoAtendente,
+    )
+
+    expect(r.statusCode).toBe(403)
+  })
+})
+
 describe('produtos', () => {
   it('cria com preço em centavos e devolve imageUrl nula', async () => {
     const categoria = await novaCategoria()
@@ -284,6 +390,47 @@ describe('produtos', () => {
     const r = await chamar('PATCH', `/products/${produto.id}`, { categoryId: destino.id })
 
     expect(r.json<Produto>().categoryId).toBe(destino.id)
+  })
+
+  it('movido sem dizer a posição, entra no fim da categoria nova', async () => {
+    const origem = await novaCategoria()
+    const destino = await novaCategoria()
+    // Na origem ele é o primeiro (posição 0); no destino já há dois, em 0 e 10.
+    const movido = await novoProduto(origem.id)
+    const [primeiro, segundo] = [await novoProduto(destino.id), await novoProduto(destino.id)]
+
+    await chamar('PATCH', `/products/${movido.id}`, { categoryId: destino.id })
+
+    const ordem = (await chamar('GET', `/products?categoryId=${destino.id}`))
+      .json<Produto[]>()
+      .map((p) => p.id)
+    expect(ordem).toEqual([primeiro?.id, segundo?.id, movido.id])
+  })
+
+  it('movido dizendo a posição, fica onde foi pedido', async () => {
+    const origem = await novaCategoria()
+    const destino = await novaCategoria()
+    const movido = await novoProduto(origem.id)
+    const outro = await novoProduto(destino.id, { sortOrder: 50 })
+
+    await chamar('PATCH', `/products/${movido.id}`, { categoryId: destino.id, sortOrder: 0 })
+
+    const ordem = (await chamar('GET', `/products?categoryId=${destino.id}`))
+      .json<Produto[]>()
+      .map((p) => p.id)
+    expect(ordem).toEqual([movido.id, outro.id])
+  })
+
+  it('alterar outro campo não mexe na posição', async () => {
+    const categoria = await novaCategoria()
+    const produto = await novoProduto(categoria.id, { sortOrder: 30 })
+
+    const r = await chamar('PATCH', `/products/${produto.id}`, {
+      categoryId: categoria.id,
+      name: 'Renomeado',
+    })
+
+    expect(r.json<{ sortOrder: number }>().sortOrder).toBe(30)
   })
 
   it('exclui o produto', async () => {

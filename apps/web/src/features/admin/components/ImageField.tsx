@@ -1,8 +1,7 @@
+import type { UseMutationResult } from '@tanstack/react-query'
 import { useId, type ChangeEvent } from 'react'
 
 import { ApiError } from '@/services/api'
-
-import { useEnviarImagem, useRemoverImagem, type ImagemDoEstabelecimento } from '../settings'
 
 /** O que a pessoa lê quando o envio da imagem é recusado. */
 function mensagemDaFalha(erro: unknown): string {
@@ -16,33 +15,33 @@ function mensagemDaFalha(erro: unknown): string {
 }
 
 interface ImageFieldProps {
-  slug: string
-  qual: ImagemDoEstabelecimento
+  /** "Logo", "Capa", "Foto": vira "Enviar foto", "Trocar foto" e "Foto atual". */
   rotulo: string
   dica: string
   url: string | null
   podeEditar: boolean
   /** A proporção da moldura da prévia: o logo é quadrado, a capa é larga. */
   moldura: string
+  /** A gravação do arquivo escolhido — a rota de imagem de quem usa o campo. */
+  envio: UseMutationResult<unknown, Error, File>
+  remocao: UseMutationResult<unknown, Error, void>
 }
 
 /**
- * Uma imagem do estabelecimento — logo ou capa —, com a prévia e os botões de
+ * Uma imagem — logo, capa, foto de produto —, com a prévia e os botões de
  * enviar e remover. A imagem é gravada na hora, e não com o "Salvar" do
  * formulário: é outra rota, e a pessoa vê o resultado ao escolher o arquivo.
  */
 export function ImageField({
-  slug,
-  qual,
   rotulo,
   dica,
   url,
   podeEditar,
   moldura,
+  envio,
+  remocao,
 }: ImageFieldProps) {
   const id = useId()
-  const envio = useEnviarImagem(slug, qual)
-  const remocao = useRemoverImagem(slug, qual)
   const ocupado = envio.isPending || remocao.isPending
   const falha = envio.error ?? remocao.error
 
