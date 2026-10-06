@@ -50,6 +50,10 @@ const grupoSchema = z.object({
   maxSelections: z.number(),
   isRequired: z.boolean(),
   options: z.array(opcaoSchema),
+  /** Quem usa o grupo: mudar o grupo muda todos eles. */
+  products: z
+    .array(z.object({ id: z.uuid(), name: z.string() }))
+    .describe('Os produtos que usam o grupo, em ordem alfabética.'),
 })
 
 const dadosDoGrupo = z.object({
@@ -97,6 +101,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
       schema: {
         tags: tag,
         summary: 'Grupos de opção, com as opções de cada um',
+        description: 'Cada grupo traz também os produtos que o usam (`products`).',
         response: { 200: z.array(grupoSchema) },
         security: seguranca,
       },

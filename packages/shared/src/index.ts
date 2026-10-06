@@ -6,6 +6,7 @@
  */
 export * from './business-hours.js'
 export * from './customer.js'
+export * from './option-groups.js'
 export * from './order.js'
 export * from './order-status.js'
 export * from './phone.js'

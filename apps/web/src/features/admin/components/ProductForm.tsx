@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 
@@ -8,6 +9,7 @@ import { TextField } from '@/components/TextField'
 import { ApiError } from '@/services/api'
 
 import {
+  alteracaoDoProduto,
   AO_EXCLUIR,
   formularioDeProdutoSchema,
   produtoNovo,
@@ -21,9 +23,12 @@ import {
   type ValoresDoProduto,
 } from '../catalog'
 import { caminhoDoPainel } from '../menu'
+import { useSalvarProdutoEOpcoes } from '../option-groups'
 import { Excluir } from './catalog-parts'
+import { ComboItemsSection } from './ComboItemsSection'
 import { AvisoDeSomenteLeitura, Marcavel, RodapeDeSalvar, Secao } from './form-parts'
 import { ImageField } from './ImageField'
+import { ProductOptionsSection } from './ProductOptionsSection'
 
 /** O recado da página do produto para quem acabou de criá-lo. */
 export interface ChegadaAoProduto {
@@ -46,9 +51,13 @@ const SOMENTE_LEITURA =
   'Você pode ver o cardápio, mas só quem administra o estabelecimento o altera.'
 
 /**
- * Criar ou editar um produto: categoria, nome, descrição, preço e se está
- * disponível. A foto vai depois de criado — a rota de imagem é a do produto —,
- * e é gravada ao escolher o arquivo.
+ * Criar ou editar um produto: nome, preço, se está disponível, categoria e
+ * descrição — e, ao criar, se é um produto ou um combo. A foto, as opções e os
+ * itens do combo vão depois de criado: as rotas são as do produto.
+ *
+ * No produto que já existe, as opções ficam no mesmo quadro dos campos e são
+ * gravadas pelo mesmo "Salvar". A foto grava ao escolher o arquivo, e os itens
+ * do combo têm o quadro e o "Salvar" deles.
  */
 export function ProductForm({
   slug,
@@ -59,8 +68,11 @@ export function ProductForm({
   podeExcluir = false,
 }: ProductFormProps) {
   const navigate = useNavigate()
-  const salvar = useSalvarProduto(slug)
+  const criar = useSalvarProduto(slug)
+  const alterar = useSalvarProdutoEOpcoes(slug)
   const excluir = useExcluirProduto(slug)
+  // Os grupos de opção escolhidos e ainda não salvos; `null` enquanto valem os gravados.
+  const [opcoes, setOpcoes] = useState<string[] | null>(null)
   const { register, formState, handleSubmit, reset } = useForm<
     ValoresDoProduto,
     unknown,
@@ -73,21 +85,42 @@ export function ProductForm({
     mode: 'onTouched',
   })
   const erros = formState.errors
+  const camposAlterados = formState.isDirty
+  const alterado = camposAlterados || opcoes !== null
 
   function aoEnviar(dados: DadosDoProduto) {
-    salvar.mutate(
-      { id: produto?.id, dados },
+    if (produto) {
+      // Cada parte só vai se mudou: salvar as opções não regrava os campos.
+      alterar.mutate(
+        {
+          produto,
+          dados: camposAlterados ? alteracaoDoProduto(dados) : undefined,
+          grupos: opcoes ?? undefined,
+        },
+        {
+          onSuccess: (salvo) => {
+            reset(produtoParaFormulario(salvo))
+            setOpcoes(null)
+          },
+        },
+      )
+      return
+    }
+    criar.mutate(
+      { dados },
       {
         onSuccess: (salvo) => {
-          if (produto) {
-            reset(produtoParaFormulario(salvo))
-            return
-          }
-          // Para a página do produto criado, onde a foto pode ser enviada. Sem
-          // guardar esta página no histórico: "voltar" leva ao cardápio.
+          // Para a página do produto criado, onde vão a foto, as opções e os
+          // itens do combo. Sem guardar esta página no histórico: "voltar"
+          // leva ao cardápio.
           void navigate(caminhoDoPainel(slug, `cardapio/produtos/${salvo.id}`), {
             replace: true,
-            state: { aviso: 'Produto criado. Agora você pode enviar a foto.' },
+            state: {
+              aviso:
+                salvo.type === 'COMBO'
+                  ? 'Combo criado. Agora escolha os itens dele e envie a foto.'
+                  : 'Produto criado. Agora você pode enviar a foto e escolher as opções.',
+            },
           })
         },
       },
@@ -102,10 +135,27 @@ export function ProductForm({
         className="flex flex-col gap-section-y"
       >
         {!podeEditar && <AvisoDeSomenteLeitura texto={SOMENTE_LEITURA} />}
-        {produto?.type === 'COMBO' && (
-          <p role="note" className="text-caption rounded-control bg-brand-50 p-3 text-brand-800">
-            Este produto é um combo. Os itens que o compõem ainda não são editados pelo painel.
-          </p>
+
+        {/* O tipo se escolhe uma vez, ao criar: a API não deixa mudar depois. */}
+        {!produto && (
+          <Secao titulo="O que você vai cadastrar">
+            <div role="radiogroup" aria-label="Tipo" className="flex flex-col gap-stack">
+              <Marcavel
+                type="radio"
+                value="SIMPLE"
+                titulo="Produto"
+                descricao="Um item do cardápio: um lanche, uma bebida, uma sobremesa."
+                {...register('type')}
+              />
+              <Marcavel
+                type="radio"
+                value="COMBO"
+                titulo="Combo"
+                descricao="Vários produtos por um preço só. Os itens dele você escolhe logo depois de criar."
+                {...register('type')}
+              />
+            </div>
+          </Secao>
         )}
 
         <fieldset disabled={!podeEditar} className="min-w-0">
@@ -114,12 +164,39 @@ export function ProductForm({
               A foto é a primeira coisa do produto, como no cardápio. Ela é
               gravada ao escolher o arquivo, por outra rota, e não pelo
               "Salvar": enviar a foto não mexe no que foi digitado nos campos.
+              Em tela grande, o nome, o preço e o "Disponível" ficam ao lado dela.
             */}
-            {produto ? (
-              <FotoDoProduto slug={slug} produto={produto} podeEditar={podeEditar} />
-            ) : (
-              <FotoAntesDeCriar />
-            )}
+            <div className="flex flex-col gap-stack lg:flex-row lg:items-start lg:gap-6">
+              <div className="lg:w-48 lg:shrink-0">
+                {produto ? (
+                  <FotoDoProduto slug={slug} produto={produto} podeEditar={podeEditar} />
+                ) : (
+                  <FotoAntesDeCriar />
+                )}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-stack">
+                <TextField
+                  rotulo="Nome"
+                  placeholder="X-Burger"
+                  erro={erros.name?.message}
+                  {...register('name')}
+                />
+                <TextField
+                  rotulo="Preço (R$)"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  erro={erros.priceInCents?.message}
+                  className="sm:max-w-48"
+                  {...register('priceInCents')}
+                />
+                <Marcavel
+                  type="checkbox"
+                  titulo="Disponível"
+                  descricao="Desmarque quando acabar: o produto continua no cardápio, marcado como esgotado."
+                  {...register('isAvailable')}
+                />
+              </div>
+            </div>
             <SelectField
               rotulo="Categoria"
               erro={erros.categoryId?.message}
@@ -131,40 +208,31 @@ export function ProductForm({
                 </option>
               ))}
             </SelectField>
-            <TextField
-              rotulo="Nome"
-              placeholder="X-Burger"
-              erro={erros.name?.message}
-              {...register('name')}
-            />
             <TextAreaField
               rotulo="Descrição"
               dica="Opcional. O que vem nele, o tamanho, o que acompanha."
               erro={erros.description?.message}
               {...register('description')}
             />
-            <TextField
-              rotulo="Preço (R$)"
-              inputMode="decimal"
-              placeholder="0,00"
-              erro={erros.priceInCents?.message}
-              className="sm:max-w-48"
-              {...register('priceInCents')}
-            />
-            <Marcavel
-              type="checkbox"
-              titulo="Disponível"
-              descricao="Desmarque quando acabar: o produto continua no cardápio, marcado como esgotado."
-              {...register('isAvailable')}
-            />
+            {produto && (
+              <ProductOptionsSection
+                slug={slug}
+                produtoId={produto.id}
+                escolhidos={opcoes}
+                aoMudar={setOpcoes}
+                podeEditar={podeEditar}
+                ocupado={alterar.isPending}
+                porSalvar={alterado}
+              />
+            )}
           </Secao>
         </fieldset>
 
         {podeEditar && (
           <RodapeDeSalvar
-            envio={salvar}
+            envio={produto ? alterar : criar}
             // Criando, o botão fica ligado: clicar mostra o que falta preencher.
-            alterado={produto ? formState.isDirty : true}
+            alterado={produto ? alterado : true}
             sucesso="Produto salvo."
             rotulo={produto ? 'Salvar alterações' : 'Criar produto'}
             // "Categoria não encontrada", "produto não encontrado": excluídos por outra pessoa.
@@ -174,6 +242,10 @@ export function ProductForm({
           />
         )}
       </form>
+
+      {produto?.type === 'COMBO' && (
+        <ComboItemsSection slug={slug} combo={produto} podeEditar={podeEditar} />
+      )}
 
       {produto && podeExcluir && (
         <Excluir
@@ -212,7 +284,6 @@ function FotoDoProduto({
   return (
     <ImageField
       rotulo="Foto"
-      dica="Aparece no cardápio, ao lado do nome. JPEG, PNG ou WebP, até 15 MB; a foto é reduzida e guardada sem a localização de onde foi tirada."
       url={produto.imageUrl}
       podeEditar={podeEditar}
       moldura="size-40"

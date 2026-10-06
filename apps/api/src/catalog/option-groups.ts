@@ -1,3 +1,4 @@
+import { mensagemDoProblemaDoGrupo, problemasDoGrupoDeOpcoes } from '@repo/shared'
 import { asc, count, eq, inArray } from 'drizzle-orm'
 
 import { recordAudit } from '../audit/record.js'
@@ -5,6 +6,7 @@ import {
   optionGroups,
   options,
   productOptionGroups,
+  products,
   type Option,
   type OptionGroup,
 } from '../db/schema/index.js'
@@ -24,6 +26,11 @@ import { findProduct } from './repository.js'
 export interface GrupoComOpcoes extends OptionGroup {
   isRequired: boolean
   options: Option[]
+  /**
+   * Os produtos que usam o grupo, pelo nome. Mudar o grupo muda todos eles — a
+   * tela precisa dizer quais antes de a pessoa salvar.
+   */
+  products: { id: string; name: string }[]
 }
 
 export interface DadosDaOpcao {
@@ -45,41 +52,16 @@ export interface DadosDoGrupo {
 const grupoNaoEncontrado = () => new NotFoundError('Grupo de opções não encontrado.')
 
 /**
- * Coerência entre os limites de seleção e as opções do grupo.
- *
- * O caso que importa é o mínimo maior que o número de opções: "escolha 2" com
- * uma opção só torna o produto **impossível de pedir**, e ninguém perceberia
- * até o cliente travar no checkout. O máximo acima do número de opções é
- * inofensivo, mas é sempre engano de cadastro.
- *
- * Função pura, sem banco: devolve a lista de problemas, vazia se estiver tudo
- * certo.
+ * Coerência entre os limites de escolha e as opções do grupo. As regras são as
+ * de `@repo/shared`, as mesmas que a tela do grupo aplica enquanto a pessoa
+ * edita; aqui viram a lista de problemas da resposta 400.
  */
 export function problemasDoGrupo(
   dados: Pick<DadosDoGrupo, 'minSelections' | 'maxSelections' | 'options'>,
 ): string[] {
-  const problemas: string[] = []
-  const total = dados.options.length
-
-  if (total === 0) problemas.push('o grupo precisa de ao menos uma opção')
-  if (dados.minSelections > dados.maxSelections) {
-    problemas.push('o mínimo de escolhas não pode ser maior que o máximo')
-  }
-  if (total > 0 && dados.minSelections > total) {
-    problemas.push(
-      `o grupo exige ${String(dados.minSelections)} escolha(s) mas tem ${String(total)} opção(ões) — o produto ficaria impossível de pedir`,
-    )
-  }
-  if (total > 0 && dados.maxSelections > total) {
-    problemas.push(
-      `o máximo de escolhas (${String(dados.maxSelections)}) passa do número de opções (${String(total)})`,
-    )
-  }
-
-  const nomes = dados.options.map((o) => o.name.trim().toLowerCase())
-  if (new Set(nomes).size !== nomes.length) problemas.push('há opções com o mesmo nome')
-
-  return problemas
+  return problemasDoGrupoDeOpcoes(dados).map((problema) =>
+    mensagemDoProblemaDoGrupo(problema, dados),
+  )
 }
 
 function exigirGrupoCoerente(dados: DadosDoGrupo): void {
@@ -113,20 +95,54 @@ async function carregarOpcoes(
   return porGrupo
 }
 
+/** Os produtos que usam cada grupo, em ordem alfabética. Uma consulta só para todos. */
+async function carregarProdutos(
+  tx: TenantTransaction,
+  groupIds: readonly string[],
+): Promise<Map<string, { id: string; name: string }[]>> {
+  const porGrupo = new Map<string, { id: string; name: string }[]>(groupIds.map((id) => [id, []]))
+  if (groupIds.length === 0) return porGrupo
+
+  const linhas = await tx
+    .select({ groupId: productOptionGroups.groupId, id: products.id, name: products.name })
+    .from(productOptionGroups)
+    .innerJoin(products, eq(products.id, productOptionGroups.productId))
+    .where(inArray(productOptionGroups.groupId, [...groupIds]))
+    .orderBy(asc(products.name))
+
+  for (const { groupId, id, name } of linhas) porGrupo.get(groupId)?.push({ id, name })
+  return porGrupo
+}
+
 /**
  * "Obrigatório" é derivado, nunca gravado: é `minSelections >= 1`. Gravar os
  * dois permitiria um grupo obrigatório com mínimo zero.
  */
-function montar(grupo: OptionGroup, opcoes: Option[]): GrupoComOpcoes {
-  return { ...grupo, isRequired: grupo.minSelections >= 1, options: opcoes }
+function montar(
+  grupo: OptionGroup,
+  opcoes: Option[],
+  usadoEm: { id: string; name: string }[],
+): GrupoComOpcoes {
+  return { ...grupo, isRequired: grupo.minSelections >= 1, options: opcoes, products: usadoEm }
+}
+
+/** Os grupos informados, com as opções e os produtos que os usam, na ordem recebida. */
+async function montarGrupos(
+  tx: TenantTransaction,
+  grupos: readonly OptionGroup[],
+): Promise<GrupoComOpcoes[]> {
+  const ids = grupos.map((g) => g.id)
+  const opcoes = await carregarOpcoes(tx, ids)
+  const usadoEm = await carregarProdutos(tx, ids)
+  return grupos.map((g) => montar(g, opcoes.get(g.id) ?? [], usadoEm.get(g.id) ?? []))
 }
 
 async function buscarGrupo(tx: TenantTransaction, id: string): Promise<GrupoComOpcoes | null> {
   const [grupo] = await tx.select().from(optionGroups).where(eq(optionGroups.id, id)).limit(1)
   if (!grupo) return null
 
-  const opcoes = await carregarOpcoes(tx, [grupo.id])
-  return montar(grupo, opcoes.get(grupo.id) ?? [])
+  const [montado] = await montarGrupos(tx, [grupo])
+  return montado ?? null
 }
 
 /**
@@ -194,11 +210,7 @@ async function contarProdutosQueUsam(tx: TenantTransaction, groupId: string): Pr
 export async function listarGrupos(context: TenantContext): Promise<GrupoComOpcoes[]> {
   return withTenant(context, async (tx) => {
     const grupos = await tx.select().from(optionGroups).orderBy(asc(optionGroups.name))
-    const opcoes = await carregarOpcoes(
-      tx,
-      grupos.map((g) => g.id),
-    )
-    return grupos.map((g) => montar(g, opcoes.get(g.id) ?? []))
+    return montarGrupos(tx, grupos)
   })
 }
 
@@ -368,13 +380,16 @@ async function gruposDoProduto(
   if (ids.length === 0) return []
 
   const grupos = await tx.select().from(optionGroups).where(inArray(optionGroups.id, ids))
-  const opcoes = await carregarOpcoes(tx, ids)
   const porId = new Map(grupos.map((g) => [g.id, g]))
 
-  return ids.flatMap((id) => {
-    const grupo = porId.get(id)
-    return grupo ? [montar(grupo, opcoes.get(id) ?? [])] : []
-  })
+  // Na ordem do produto, e não na que o banco devolveu.
+  return montarGrupos(
+    tx,
+    ids.flatMap((id) => {
+      const grupo = porId.get(id)
+      return grupo ? [grupo] : []
+    }),
+  )
 }
 
 export async function listarGruposDoProduto(

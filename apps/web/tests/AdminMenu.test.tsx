@@ -6,224 +6,25 @@ import {
   formularioDeProdutoSchema,
   moverNaLista,
   produtoNovo,
-  type Categoria,
-  type Produto,
 } from '../src/features/admin/catalog'
-import { cardapioNoPlano, type UsoDoPlano } from '../src/features/admin/plan'
+import { cardapioNoPlano } from '../src/features/admin/plan'
 import { useSessaoStore } from '../src/features/admin/session'
 import {
-  abrirComLocal,
-  localAtual,
-  mockarRotas,
-  pararConexaoAoVivo,
-  type Resposta,
-} from './helpers/pagina'
+  abrirNoCardapio,
+  ADMIN,
+  ATENDENTE,
+  CATEGORIAS,
+  categoria,
+  conflito,
+  DONO,
+  plano,
+  PRODUTOS,
+  sessao,
+  simularApi,
+} from './helpers/cardapio-admin'
+import { abrirComLocal, localAtual, mockarRotas, pararConexaoAoVivo } from './helpers/pagina'
 
-const ADMIN = '/lanchonete-do-ze/admin'
-
-const sessao = (permissions: string[]) => ({
-  accessToken: 'token-de-acesso',
-  user: { id: 'u', tenantId: 't', name: 'Zé', email: 'ze@exemplo.com', permissions },
-  establishment: { id: 't', slug: 'lanchonete-do-ze', name: 'Lanchonete do Zé', status: 'ACTIVE' },
-})
-const DONO = sessao([
-  'orders:read',
-  'settings:read',
-  'categories:read',
-  'categories:create',
-  'categories:update',
-  'categories:delete',
-  'products:read',
-  'products:create',
-  'products:update',
-  'products:delete',
-])
-const ATENDENTE = sessao(['orders:read', 'categories:read', 'products:read'])
-
-const categoria = (dados: Partial<Categoria> & Pick<Categoria, 'id' | 'name'>): Categoria => ({
-  description: null,
-  imageUrl: null,
-  isActive: true,
-  sortOrder: 0,
-  ...dados,
-})
-const produto = (
-  dados: Partial<Produto> & Pick<Produto, 'id' | 'name' | 'categoryId'>,
-): Produto => ({
-  type: 'SIMPLE',
-  description: null,
-  priceInCents: 1000,
-  imageUrl: null,
-  isAvailable: true,
-  sortOrder: 0,
-  ...dados,
-})
-
-/** A ordem de propósito embaralhada: quem ordena é a tela, pela posição. */
-const CATEGORIAS: Categoria[] = [
-  categoria({ id: 'c-bebidas', name: 'Bebidas', sortOrder: 10 }),
-  categoria({ id: 'c-sobremesas', name: 'Sobremesas', sortOrder: 20, isActive: false }),
-  categoria({ id: 'c-lanches', name: 'Lanches', sortOrder: 0, description: 'Na chapa' }),
-]
-const PRODUTOS: Produto[] = [
-  produto({ id: 'p-refri', name: 'Refrigerante', categoryId: 'c-bebidas', priceInCents: 600 }),
-  produto({
-    id: 'p-combo',
-    name: 'Combo do Zé',
-    categoryId: 'c-lanches',
-    type: 'COMBO',
-    priceInCents: 3990,
-    sortOrder: 20,
-  }),
-  produto({
-    id: 'p-xburger',
-    name: 'X-Burger',
-    categoryId: 'c-lanches',
-    priceInCents: 2590,
-    sortOrder: 0,
-  }),
-  produto({
-    id: 'p-xsalada',
-    name: 'X-Salada',
-    categoryId: 'c-lanches',
-    priceInCents: 2790,
-    sortOrder: 10,
-    isAvailable: false,
-  }),
-]
-
-function plano(produtos: [number, number | null], categorias: [number, number | null]): UsoDoPlano {
-  return {
-    plan: { code: 'FREE', name: 'Grátis' },
-    orders: { used: 0, limit: 100, ceiling: 110, state: 'LIVRE' },
-    users: { active: 1, limit: 2 },
-    products: { used: produtos[0], limit: produtos[1] },
-    categories: { used: categorias[0], limit: categorias[1] },
-  }
-}
-
-interface Api {
-  categorias?: Categoria[]
-  produtos?: Produto[]
-  plano?: UsoDoPlano
-  /** Respostas forçadas, por `MÉTODO /caminho` depois de `/admin`: `'POST /categories'`. */
-  forcar?: Record<string, Resposta>
-}
-
-interface Envio {
-  metodo: string
-  caminho: string
-  corpo: unknown
-}
-
-/**
- * Uma API do cardápio que guarda o que recebe: criar, alterar, reordenar e
- * excluir mudam a lista que as leituras seguintes devolvem. Devolve o que foi
- * enviado, sem as leituras.
- */
-function simularApi(api: Api = {}) {
-  let categorias = structuredClone(api.categorias ?? CATEGORIAS)
-  let produtos = structuredClone(api.produtos ?? PRODUTOS)
-  let novos = 0
-  const enviados: Envio[] = []
-  const ok = (corpo: unknown): Resposta => ({ status: 200, corpo })
-
-  mockarRotas((url, metodo, corpo) => {
-    const caminho = /\/api\/v1\/admin(\/.*)$/.exec(url)?.[1] ?? url
-    if (metodo !== 'GET') enviados.push({ metodo, caminho, corpo })
-    const forcada = api.forcar?.[`${metodo} ${caminho}`]
-    if (forcada) return forcada
-
-    const dados = (corpo ?? {}) as Record<string, unknown>
-    const [, recurso, id, sub] = caminho.split('/')
-
-    if (caminho === '/plan') return ok(api.plano ?? plano([4, 20], [3, 10]))
-    if (caminho === '/setup-checklist') return ok({ ready: true, steps: [] })
-    if (caminho === '/orders/summary') return ok({ new: 0, inProgress: 0, completedToday: 0 })
-
-    if (recurso === 'categories') {
-      if (id === 'order') {
-        const ids = dados.ids as string[]
-        categorias = ids.map((cid, i) => ({
-          ...(categorias.find((c) => c.id === cid) as Categoria),
-          sortOrder: i * 10,
-        }))
-        return ok(categorias)
-      }
-      if (metodo === 'GET') return ok(categorias)
-      if (metodo === 'POST') {
-        const criada = categoria({
-          id: `c-nova-${String(++novos)}`,
-          sortOrder: 100,
-          ...(dados as Partial<Categoria>),
-          name: dados.name as string,
-        })
-        categorias.push(criada)
-        return { status: 201, corpo: criada }
-      }
-      if (metodo === 'PATCH') {
-        categorias = categorias.map((c) => (c.id === id ? { ...c, ...dados } : c))
-        return ok(categorias.find((c) => c.id === id))
-      }
-      if (metodo === 'DELETE') {
-        categorias = categorias.filter((c) => c.id !== id)
-        return { status: 204, corpo: undefined }
-      }
-    }
-
-    if (recurso === 'products') {
-      if (id === 'order') {
-        const ids = dados.ids as string[]
-        const daCategoria = ids.map((pid, i) => ({
-          ...(produtos.find((p) => p.id === pid) as Produto),
-          sortOrder: i * 10,
-        }))
-        produtos = produtos.map((p) => daCategoria.find((d) => d.id === p.id) ?? p)
-        return ok(daCategoria)
-      }
-      if (sub === 'image') {
-        const imageUrl = metodo === 'PUT' ? 'http://api/uploads/foto-nova.webp' : null
-        produtos = produtos.map((p) => (p.id === id ? { ...p, imageUrl } : p))
-        return ok(produtos.find((p) => p.id === id))
-      }
-      if (metodo === 'GET' && id) {
-        const achado = produtos.find((p) => p.id === id)
-        return achado
-          ? ok(achado)
-          : { status: 404, corpo: { error: { message: 'Produto não encontrado.' } } }
-      }
-      if (metodo === 'GET') return ok(produtos)
-      if (metodo === 'POST') {
-        const criado = produto({
-          id: `p-novo-${String(++novos)}`,
-          ...(dados as Partial<Produto>),
-          name: dados.name as string,
-          categoryId: dados.categoryId as string,
-        })
-        produtos.push(criado)
-        return { status: 201, corpo: criado }
-      }
-      if (metodo === 'PATCH') {
-        produtos = produtos.map((p) => (p.id === id ? { ...p, ...dados } : p))
-        return ok(produtos.find((p) => p.id === id))
-      }
-      if (metodo === 'DELETE') {
-        produtos = produtos.filter((p) => p.id !== id)
-        return { status: 204, corpo: undefined }
-      }
-    }
-    return ok({})
-  })
-  return enviados
-}
-
-/** O painel num endereço do cardápio, com a API simulada. */
-function abrir(caminho: string, api: Api = {}, comSessao = DONO) {
-  const enviados = simularApi(api)
-  useSessaoStore.getState().guardar(comSessao)
-  abrirComLocal(`${ADMIN}/cardapio${caminho}`)
-  return enviados
-}
+const abrir = abrirNoCardapio
 
 const secao = (nome: string) => screen.getByRole('region', { name: nome })
 /** O cabeçalho da categoria, que abre e recolhe: "Lanches, 3 produtos · 1 esgotado". */
@@ -242,10 +43,6 @@ const escrever = (rotulo: string, valor: string) => {
 const clicar = (nome: string | RegExp) => {
   fireEvent.click(screen.getByRole('button', { name: nome }))
 }
-const conflito = (code: string, message: string): Resposta => ({
-  status: 409,
-  corpo: { error: { code, message } },
-})
 
 beforeEach(() => {
   localStorage.clear()
@@ -1032,7 +829,9 @@ describe('produto', () => {
     clicar('Criar produto')
 
     expect(
-      await screen.findByText('Produto criado. Agora você pode enviar a foto.'),
+      await screen.findByText(
+        'Produto criado. Agora você pode enviar a foto e escolher as opções.',
+      ),
     ).toHaveAttribute('role', 'status')
     expect(localAtual()).toBe(`${ADMIN}/cardapio/produtos/p-novo-1`)
     expect(screen.getByRole('heading', { level: 1, name: 'Editar produto' })).toBeVisible()
@@ -1042,6 +841,7 @@ describe('produto', () => {
         metodo: 'POST',
         caminho: '/products',
         corpo: {
+          type: 'SIMPLE',
           categoryId: 'c-bebidas',
           name: 'Suco de laranja',
           description: null,
@@ -1121,12 +921,6 @@ describe('produto', () => {
     ])
   })
 
-  it('um combo avisa que os itens dele ainda não se editam por aqui', async () => {
-    abrir('/produtos/p-combo')
-
-    expect(await screen.findByText(/Este produto é um combo/)).toBeVisible()
-  })
-
   it('a foto é a primeira coisa do quadro do produto, antes dos campos', async () => {
     abrir('/produtos/p-xburger')
     const foto = await screen.findByLabelText('Enviar foto')
@@ -1135,10 +929,52 @@ describe('produto', () => {
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
     const quadro = screen.getByRole('heading', { level: 2, name: 'Produto' })
     expect(antes(quadro, foto)).toBe(true)
-    expect(antes(foto, screen.getByLabelText('Categoria'))).toBe(true)
     expect(antes(foto, screen.getByLabelText('Nome'))).toBe(true)
     // Um quadro só: a foto não tem mais seção própria.
     expect(screen.queryByRole('heading', { level: 2, name: 'Foto' })).toBeNull()
+  })
+
+  it('os campos vêm na ordem: nome, preço, disponível, categoria e descrição', async () => {
+    abrir('/produtos/p-xburger')
+    await screen.findByLabelText('Enviar foto')
+
+    const campos: [string, HTMLElement][] = [
+      ['Categoria', screen.getByLabelText('Categoria')],
+      ['Descrição', screen.getByLabelText('Descrição')],
+      ['Disponível', screen.getByRole('checkbox', { name: /^Disponível/ })],
+      ['Nome', screen.getByLabelText('Nome')],
+      ['Preço', screen.getByLabelText('Preço (R$)')],
+    ]
+    const naTela = campos
+      .sort(([, a], [, b]) =>
+        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+      )
+      .map(([rotulo]) => rotulo)
+    expect(naTela).toEqual(['Nome', 'Preço', 'Disponível', 'Categoria', 'Descrição'])
+  })
+
+  it('a foto, o nome, o preço e o "Disponível" formam um bloco; categoria e descrição ficam fora', async () => {
+    abrir('/produtos/p-xburger')
+    const foto = await screen.findByLabelText('Enviar foto')
+
+    // O menor elemento que contém todos: em tela grande, o CSS põe o bloco em duas colunas.
+    const juntos = (...elementos: HTMLElement[]) => {
+      let no = elementos[0]?.parentElement
+      while (no && !elementos.every((elemento) => no?.contains(elemento))) no = no.parentElement
+      return no
+    }
+    const nome = screen.getByLabelText('Nome')
+    const preco = screen.getByLabelText('Preço (R$)')
+    const disponivel = screen.getByRole('checkbox', { name: /^Disponível/ })
+    const aoLado = juntos(nome, preco, disponivel)
+    const bloco = juntos(foto, nome, preco, disponivel)
+
+    // A foto fica de um lado e os três campos do outro.
+    expect(aoLado?.contains(foto)).toBe(false)
+    expect(aoLado?.parentElement).toBe(bloco)
+    for (const rotulo of ['Categoria', 'Descrição']) {
+      expect(bloco?.contains(screen.getByLabelText(rotulo))).toBe(false)
+    }
   })
 
   it('no produto novo, o lugar da foto também vem primeiro, explicando quando enviar', async () => {
@@ -1147,7 +983,7 @@ describe('produto', () => {
 
     expect(
       Boolean(
-        aviso.compareDocumentPosition(screen.getByLabelText('Categoria')) &
+        aviso.compareDocumentPosition(screen.getByLabelText('Nome')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true)

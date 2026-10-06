@@ -870,8 +870,15 @@ as opções só somam. Com desconto por opção, a soma de um item poderia ficar
 do pedido precisaria de uma trava a mais que um dia alguém esqueceria.
 
 **Um grupo não pode exigir mais escolhas do que tem opções.** "Escolha 2" com uma opção só torna
-o produto impossível de pedir, e ninguém perceberia até o cliente travar no checkout. A regra é
-uma função pura, `problemasDoGrupo`, testada sem banco.
+o produto impossível de pedir, e ninguém perceberia até o cliente travar no checkout. As regras do
+grupo — sem opções, mínimo acima do máximo, mínimo ou máximo acima do número de opções, nomes
+repetidos — moram em `packages/shared/src/option-groups.ts` desde a Fase 24
+(`problemasDoGrupoDeOpcoes`), com as frases para quem cadastra: a tela do grupo aplica as mesmas
+que a API, e a API devolve essas frases na recusa (`INVALID_OPTION_GROUP`).
+
+**O grupo diz em quais produtos é usado** (`products`, em ordem alfabética, desde a Fase 24): é o
+que deixa a tela avisar, antes de salvar, que a mudança vale para todos eles, e explicar por que
+um grupo em uso não se exclui. Uma consulta só, para todos os grupos de uma leitura.
 
 Na edição de um grupo, opções com id são alteradas, sem id são criadas, e as ausentes são
 removidas. Um id que não pertence ao grupo é recusado — sem isso, editar "Adicionais" poderia
@@ -1218,6 +1225,9 @@ continua marcado em todas elas.
   foi digitado e não salvo continua nos campos.
   `ImageField` recebe o envio e a remoção de quem o usa (`useImagemDoProduto`, e as do logo e da
   capa nas configurações), e as recusas de tamanho, formato e imagem ilegível viram frases.
+- **Depois da foto: nome, preço, "Disponível", categoria e descrição.** Em tela grande (`lg`), a
+  foto fica de um lado e o nome, o preço e o "Disponível" do outro; a categoria e a descrição
+  seguem abaixo, na largura toda. No celular e no tablet em pé, tudo empilhado, na mesma ordem.
 - **O limite do plano aparece antes**: o topo da lista mostra o uso (`cardapioNoPlano`, em
   `plan.ts`), e no limite a criação se desliga com a explicação. A recusa da API continua sendo a
   que vale: a tela mostra a frase dela (409), como mostra a de nome repetido e a de produto que
@@ -1236,6 +1246,40 @@ continua marcado em todas elas.
   botão.
 - Sem a permissão de alterar, a lista não mostra caixas nem botões de ordem, e as páginas abrem
   só para leitura.
+
+**Opções, adicionais e combos** (Fase 24). O Cardápio virou uma tela com abas (`CardapioTabs`,
+sobre a peça comum `TelaComAbas`, que serve também a Configurações): "Produtos", em
+`/admin/cardapio`, e "Opções e adicionais", em `/admin/cardapio/opcoes`. As páginas de criar e
+editar — de categoria, produto e grupo — ficam fora das abas, com o link de volta
+(`cardapio/opcoes/novo`, `cardapio/opcoes/:id`). O módulo é `features/admin/option-groups.ts`.
+
+- **A página do grupo** tem o nome, como o cliente escolhe (mínimo e máximo, com a frase que o
+  cliente vai ver, montada por `descreverRegraDoGrupo`, a mesma do cardápio público) e as opções,
+  com o acréscimo em reais, a disponibilidade e a ordem. O formulário usa as regras de
+  `@repo/shared`, cada uma com o `when` dos campos de que depende — com o mínimo inválido, o erro
+  do máximo continua aparecendo. Mexer no mínimo, no máximo ou na lista de opções reconfere os
+  limites (`reconferir`).
+- **Grupo usado por mais de um produto** ganha o aviso, em cima do formulário, de que a mudança
+  vale para todos.
+- **Na página do produto, as Opções ficam dentro do quadro do produto e vão no mesmo "Salvar"**
+  dos campos. `ProductOptionsSection` é controlado pelo formulário: a lista escolhida e ainda não
+  salva mora no `ProductForm` (`null` enquanto valem os grupos gravados), e acrescentar, tirar e
+  ordenar só mexem nela. `useSalvarProdutoEOpcoes` é o envio da página: `PATCH` do produto se os
+  campos mudaram, depois `PUT` da lista inteira de grupos se as opções mudaram — cada rota só é
+  chamada se tiver o que gravar, e as duas aceitam repetição. A foto grava ao escolher o arquivo,
+  e os itens do combo têm o quadro e o "Salvar" deles.
+- **"Criar um grupo novo para este produto"** abre a página do grupo com `?produto=`; ao criar, o
+  grupo entra no fim da lista do produto (`useSalvarGrupo` lê a lista atual e a regrava com o
+  novo) e a página volta ao produto. Com alteração por salvar na página do produto, o atalho dá
+  lugar a um recado: sair dali perderia o que não foi salvo.
+- **Produto ou combo se escolhe ao criar**, e só ali: a edição não manda o tipo
+  (`alteracaoDoProduto`), porque a API o recusa depois.
+- **A seção dos itens do combo** monta a lista e a grava num "Salvar" só; mostra o preço
+  separado (`precoAvulso`, pelos preços de agora) ao lado do preço do combo, e avisa quando o
+  combo aparece esgotado no cardápio — sem itens, ou com item esgotado.
+- **Botões vermelhos de texto** usam `botaoDeTextoPerigo`, e não `botaoDeTexto` com `text-danger`
+  por cima: duas classes de cor no mesmo elemento ganham pela ordem do CSS gerado, e não pela do
+  `className`.
 
 ### 9.7 Temas
 

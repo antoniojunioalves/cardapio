@@ -42,6 +42,7 @@ interface Grupo {
   maxSelections: number
   isRequired: boolean
   options: Opcao[]
+  products: { id: string; name: string }[]
 }
 interface Composicao {
   items: { productId: string; name: string; quantity: number }[]
@@ -210,6 +211,44 @@ describe('grupos de opção', () => {
 
     expect(r.statusCode).toBe(400)
     expect(codigo(r)).toBe('OPTION_NOT_IN_GROUP')
+  })
+
+  it('a recusa diz o problema em palavras, as mesmas da tela', async () => {
+    const r = await chamar('POST', '/option-groups', {
+      name: 'Escolha duas',
+      minSelections: 2,
+      maxSelections: 2,
+      options: [{ name: 'Única', priceDeltaInCents: 0 }],
+    })
+
+    expect(r.json<{ error: { details: string[] } }>().error.details).toContain(
+      'O grupo pede 2 escolhas, mas tem 1 opção: o produto ficaria impossível de pedir.',
+    )
+  })
+
+  it('diz em quais produtos o grupo é usado, na lista e no detalhe', async () => {
+    const adicionais = await grupo()
+    const livre = await grupo()
+    const xSalada = await produto({ name: 'X-Salada usa' })
+    const xBurger = await produto({ name: 'X-Burger usa' })
+    for (const p of [xSalada, xBurger]) {
+      await chamar('PUT', `/products/${p.id}/option-groups`, { groupIds: [adicionais.id] })
+    }
+
+    const detalhe = (await chamar('GET', `/option-groups/${adicionais.id}`)).json<Grupo>()
+    const lista = (await chamar('GET', '/option-groups')).json<Grupo[]>()
+
+    // Em ordem alfabética, pelo nome.
+    expect(detalhe.products).toEqual([
+      { id: xBurger.id, name: 'X-Burger usa' },
+      { id: xSalada.id, name: 'X-Salada usa' },
+    ])
+    expect(lista.find((g) => g.id === adicionais.id)?.products).toHaveLength(2)
+    expect(lista.find((g) => g.id === livre.id)?.products).toEqual([])
+  })
+
+  it('o grupo recém-criado não é usado por ninguém', async () => {
+    expect((await grupo()).products).toEqual([])
   })
 
   it('exclui grupo sem uso', async () => {

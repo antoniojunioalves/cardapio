@@ -40,9 +40,9 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
       que o dono escolhe como entrega e como recebe
 - [x] Categorias com ordenação
 - [x] Produtos com nome, descrição, imagem, preço, disponibilidade e ordem
-- [ ] Grupos de opções com mínimo, máximo e obrigatoriedade — _Fase 24_
-- [ ] Adicionais com alteração de preço — _Fase 24_
-- [ ] Combos — _Fase 24_
+- [x] Grupos de opções com mínimo, máximo e obrigatoriedade
+- [x] Adicionais com alteração de preço
+- [x] Combos
 - [x] Upload de imagens, sem metadados (como a localização GPS) e em tamanho leve — logo, capa
       e foto de produto pela tela
 - [x] Lista de pedidos com atualização de status
@@ -147,8 +147,8 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 23:** os passos 1 e 2 — cadastrar, confirmar o e-mail, entrar e
-> configurar o estabelecimento, os horários, a entrega e o pagamento — e os passos 4 a 7 funcionam
-> de ponta a ponta, e os testes provam o isolamento. Do passo 3, categorias e produtos já se
-> cadastram pela tela; opções, adicionais e combos ainda só pela API. E o sistema ainda não está no
-> ar. As fases 24 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".
+> **Situação ao fim da Fase 24:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
+> cadastro ao pedido chegando ao painel, com o cardápio inteiro (categorias, produtos, opções,
+> adicionais e combos) montado pelo painel —, e os testes provam o isolamento. Falta o sistema estar
+> no ar, além das telas de usuários e de clientes. As fases 25 a 28 fecham o MVP — ver
+> PROJECT_PLAN.md, "O que falta para o MVP".

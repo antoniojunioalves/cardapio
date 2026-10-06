@@ -414,6 +414,12 @@ estabelecimento — a operação inteira, sem mexer em nada — e responde 404 a
 estabelecimento; há teste com dois estabelecimentos. A reordenação vai para a auditoria
 (`product.reordered`, com a categoria e a ordem).
 
+**Opções, adicionais e combos pela tela** (Fase 24) usam as rotas de personalização da Fase 7, com
+as permissões de produto: `products:read` para ver, `products:update` para alterar. Nenhuma rota
+nova. A resposta dos grupos passou a trazer os produtos que usam cada um — só os do próprio
+estabelecimento, porque a consulta roda no contexto dele, sob RLS. As regras de um grupo são as
+mesmas na tela e na API (`@repo/shared`); quem recusa de verdade continua sendo a API.
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.

@@ -9,20 +9,31 @@ import { caminhoDoPainel } from '../menu'
 
 /** As peças que a lista do cardápio e as páginas de categoria e produto têm em comum. */
 
+/** Um link de volta, no topo das páginas de criar e editar. */
+export function Voltar({ para, rotulo, state }: { para: string; rotulo: string; state?: unknown }) {
+  return (
+    <Link
+      to={para}
+      state={state}
+      className="text-caption -ml-2 inline-flex w-fit items-center gap-1 rounded-control px-2 py-1.5 font-semibold text-primary hover:bg-primary/10"
+    >
+      <IconeVoltar className="size-4" />
+      {rotulo}
+    </Link>
+  )
+}
+
 /**
  * O link de volta à lista, no topo das páginas de categoria e de produto. Com
  * `abrir`, a lista chega com essa categoria aberta.
  */
 export function VoltarAoCardapio({ slug, abrir }: { slug: string; abrir?: string | undefined }) {
   return (
-    <Link
-      to={caminhoDoPainel(slug, 'cardapio')}
+    <Voltar
+      para={caminhoDoPainel(slug, 'cardapio')}
+      rotulo="Cardápio"
       state={abrir ? { abrir } : undefined}
-      className="text-caption -ml-2 inline-flex w-fit items-center gap-1 rounded-control px-2 py-1.5 font-semibold text-primary hover:bg-primary/10"
-    >
-      <IconeVoltar className="size-4" />
-      Cardápio
-    </Link>
+    />
   )
 }
 
