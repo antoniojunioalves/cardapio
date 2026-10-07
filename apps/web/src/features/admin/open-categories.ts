@@ -46,6 +46,10 @@ export function useCategoriasAbertas(slug: string, abrirNaChegada: string | unde
 
   return {
     aberta: (id: string) => abertas.has(id),
+    /** Abre uma categoria sem mexer nas outras — a que acabou de ser criada. */
+    abrir: (id: string) => {
+      setAbertas((atuais) => new Set(atuais).add(id))
+    },
     alternar: (id: string) => {
       setAbertas((atuais) => {
         const novas = new Set(atuais)

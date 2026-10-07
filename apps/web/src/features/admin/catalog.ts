@@ -261,14 +261,56 @@ export function useReordenarCategorias(slug: string) {
   })
 }
 
-/** Cria (sem `id`) ou altera um produto. */
-export function useSalvarProduto(slug: string) {
+/** O arquivo de uma imagem, como a rota de imagem o recebe. */
+function enviarImagem<T>(caminho: string, arquivo: File) {
+  const formulario = new FormData()
+  formulario.append('file', arquivo)
+  return comSessao<T>(caminho, { method: 'PUT', formulario })
+}
+
+/**
+ * Cria o produto e, se a pessoa já escolheu a foto, envia-a em seguida — a rota da foto é a do produto, que só existe depois de
+ * criado. Se a foto for recusada, o produto continua criado: o cadastro segue,
+ * e ela se envia de novo no passo do produto.
+ */
+export function useCriarProduto(slug: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, dados }: { id?: string | undefined; dados: Partial<DadosDoProduto> }) =>
-      id
-        ? comSessao<Produto>(`/api/v1/admin/products/${id}`, { method: 'PATCH', body: dados })
-        : comSessao<Produto>('/api/v1/admin/products', { method: 'POST', body: dados }),
+    mutationFn: async ({
+      dados,
+      foto,
+    }: {
+      dados: DadosDoProduto
+      foto?: File | null | undefined
+    }) => {
+      const criado = await comSessao<Produto>('/api/v1/admin/products', {
+        method: 'POST',
+        body: dados,
+      })
+      if (!foto) return { produto: criado, fotoRecusada: false }
+      try {
+        const comFoto = await enviarImagem<Produto>(
+          `/api/v1/admin/products/${criado.id}/image`,
+          foto,
+        )
+        return { produto: comFoto, fotoRecusada: false }
+      } catch {
+        return { produto: criado, fotoRecusada: true }
+      }
+    },
+    onSuccess: ({ produto }) => {
+      guardarProduto(queryClient, slug, produto)
+      marcarDependentes(queryClient, slug)
+    },
+  })
+}
+
+/** Altera um produto: os campos do passo dele. */
+export function useAlterarProduto(slug: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, dados }: { id: string; dados: Partial<Omit<DadosDoProduto, 'type'>> }) =>
+      comSessao<Produto>(`/api/v1/admin/products/${id}`, { method: 'PATCH', body: dados }),
     onSuccess: (produto) => {
       guardarProduto(queryClient, slug, produto)
       marcarDependentes(queryClient, slug)
@@ -340,11 +382,7 @@ export function useReordenarProdutos(slug: string) {
 /** Enviar e remover a imagem de um item: a rota responde com o item, e ele é guardado. */
 function useImagem<T>(caminho: string, aoGravar: (item: T) => void) {
   const envio = useMutation({
-    mutationFn: (arquivo: File) => {
-      const formulario = new FormData()
-      formulario.append('file', arquivo)
-      return comSessao<T>(caminho, { method: 'PUT', formulario })
-    },
+    mutationFn: (arquivo: File) => enviarImagem<T>(caminho, arquivo),
     onSuccess: aoGravar,
   })
   const remocao = useMutation({

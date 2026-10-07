@@ -14,14 +14,7 @@ import {
   type Opcao,
 } from '../src/features/admin/option-groups'
 import { useSessaoStore } from '../src/features/admin/session'
-import {
-  abrirNoCardapio,
-  ADMIN,
-  ATENDENTE,
-  GRUPOS,
-  PRODUTOS,
-  produto,
-} from './helpers/cardapio-admin'
+import { abrirNoCardapio, ADMIN, ATENDENTE, GRUPOS, PRODUTOS } from './helpers/cardapio-admin'
 import { localAtual, pararConexaoAoVivo } from './helpers/pagina'
 
 const abrir = abrirNoCardapio
@@ -33,15 +26,6 @@ const clicar = (nome: string | RegExp) => {
 }
 const opcao = (indice: number) =>
   within(screen.getByRole('group', { name: `Opção ${String(indice)}` }))
-/** Uma seção da página pelo título — esperando a página carregar. */
-const secaoDe = async (titulo: string) => {
-  const h2 = await screen.findByRole('heading', { level: 2, name: titulo })
-  return within(h2.closest('section') as HTMLElement)
-}
-/** As opções do produto, dentro do quadro dele — esperando a página carregar. */
-const opcoesDoProduto = async () => within(await screen.findByRole('region', { name: 'Opções' }))
-/** O "Salvar" da página do produto: o dos campos e das opções. */
-const salvarOProduto = () => screen.getByRole('button', { name: 'Salvar alterações' })
 /** O cartão de um grupo na lista, pelo nome. */
 const cartaoDoGrupo = (nome: string) =>
   within(screen.getByRole('heading', { level: 2, name: nome }).closest('li') as HTMLElement)
@@ -177,19 +161,16 @@ describe('itens do combo, sem tela', () => {
 // --- Abas e lista dos grupos ---------------------------------------------------------
 
 describe('as abas do cardápio', () => {
-  it('Produtos e Opções e adicionais, cada uma no seu endereço', async () => {
-    abrir('/opcoes')
+  it('Produtos e Opcionais, cada uma no seu endereço', async () => {
+    abrir('/opcionais')
     await screen.findByText('Adicionais')
 
     const abas = within(screen.getByRole('navigation', { name: 'Cardápio' }))
     expect(abas.getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
       ['Produtos', `${ADMIN}/cardapio`],
-      ['Opções e adicionais', `${ADMIN}/cardapio/opcoes`],
+      ['Opcionais', `${ADMIN}/cardapio/opcionais`],
     ])
-    expect(abas.getByRole('link', { name: 'Opções e adicionais' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
+    expect(abas.getByRole('link', { name: 'Opcionais' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('heading', { level: 1, name: 'Cardápio' })).toBeVisible()
     // O item do menu continua marcado.
     expect(
@@ -202,7 +183,7 @@ describe('as abas do cardápio', () => {
 
 describe('a lista dos grupos', () => {
   it('mostra cada grupo com a regra, as opções e onde ele é usado', async () => {
-    abrir('/opcoes')
+    abrir('/opcionais')
     await screen.findByText('Adicionais')
 
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
@@ -220,17 +201,16 @@ describe('a lista dos grupos', () => {
   })
 
   it('o estabelecimento novo vê exemplos e por onde começar', async () => {
-    abrir('/opcoes', { grupos: [] })
+    abrir('/opcionais', { grupos: [] })
 
-    expect(await screen.findByText('Nenhum grupo de opções ainda')).toBeVisible()
-    fireEvent.click(screen.getByRole('link', { name: 'Criar o primeiro grupo' }))
-    await waitFor(() => {
-      expect(localAtual()).toBe(`${ADMIN}/cardapio/opcoes/novo`)
-    })
+    expect(await screen.findByText('Nenhum grupo de opcionais ainda')).toBeVisible()
+    clicar('Criar o primeiro grupo')
+
+    expect(await screen.findByRole('dialog', { name: 'Novo grupo de opcionais' })).toBeVisible()
   })
 
   it('a lixeira de um grupo sem uso pergunta, exclui e a lista avisa', async () => {
-    const enviados = abrir('/opcoes')
+    const enviados = abrir('/opcionais')
     await screen.findByText('Retirar')
 
     clicar('Excluir o grupo Retirar')
@@ -249,7 +229,7 @@ describe('a lista dos grupos', () => {
   })
 
   it('a lixeira de um grupo em uso diz onde ele está, sem excluir', async () => {
-    const enviados = abrir('/opcoes')
+    const enviados = abrir('/opcionais')
     await screen.findByText('Adicionais')
 
     clicar('Excluir o grupo Adicionais')
@@ -263,37 +243,51 @@ describe('a lista dos grupos', () => {
   })
 
   it('o atendente vê os grupos, sem criar, editar nem excluir', async () => {
-    abrir('/opcoes', {}, ATENDENTE)
+    abrir('/opcionais', {}, ATENDENTE)
     await screen.findByText('Adicionais')
 
     expect(screen.getByRole('note')).toHaveTextContent('só quem administra o estabelecimento')
-    expect(screen.queryByRole('link', { name: /Novo grupo|^Editar/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Excluir/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Novo grupo|^Editar|^Excluir/ })).toBeNull()
   })
 })
 
-// --- A página do grupo -------------------------------------------------------------
+// --- A janela do grupo ---------------------------------------------------------------
 
-describe('criar um grupo', () => {
-  it('nome, como o cliente escolhe e as opções; volta à lista com ele', async () => {
-    const enviados = abrir('')
-    fireEvent.click(await screen.findByRole('link', { name: 'Opções e adicionais' }))
-    fireEvent.click(await screen.findByRole('link', { name: 'Novo grupo' }))
+describe('a janela do grupo: criar', () => {
+  const abrirNovo = async (api = {}) => {
+    const enviados = abrir('/opcionais', api)
+    await screen.findByText('Adicionais')
+    clicar('Novo grupo')
+    const janela = within(await screen.findByRole('dialog', { name: 'Novo grupo de opcionais' }))
+    return { enviados, janela }
+  }
 
-    // O primeiro "Nome" é o do grupo; cada opção tem o seu.
-    const [nome] = await screen.findAllByLabelText('Nome')
-    escrever(nome as HTMLElement, 'Molhos')
-    escrever(screen.getByLabelText('Mínimo'), '0')
-    escrever(screen.getByLabelText('Máximo'), '2')
-    expect(screen.getByText('Escolha até 2 · opcional')).toBeVisible()
+  it('abre sobre a lista, sem mudar de endereço', async () => {
+    const { janela } = await abrirNovo()
+
+    expect(janela.getByLabelText('Nome do grupo')).toHaveValue('')
+    expect(localAtual()).toBe(`${ADMIN}/cardapio/opcionais`)
+    expect(screen.getByRole('heading', { level: 2, name: 'Adicionais' })).toBeInTheDocument()
+  })
+
+  it('nome, como o cliente escolhe e as opções; a lista ganha o grupo e avisa', async () => {
+    const { enviados, janela } = await abrirNovo()
+
+    escrever(janela.getByLabelText('Nome do grupo'), 'Molhos')
+    escrever(janela.getByLabelText('Mínimo'), '0')
+    escrever(janela.getByLabelText('Máximo'), '2')
+    expect(janela.getByText('Escolha até 2 · opcional')).toBeVisible()
     escrever(opcao(1).getByLabelText('Nome'), 'Barbecue')
     clicar('Adicionar opção')
     escrever(opcao(2).getByLabelText('Nome'), 'Mostarda e mel')
     escrever(opcao(2).getByLabelText('A mais (R$)'), '1,5')
-    clicar('Criar grupo')
+    // O botão fica no rodapé da janela, fora do formulário, e é ele que o envia.
+    const criar = janela.getByRole('button', { name: 'Criar grupo' })
+    expect(criar.closest('form')).toBeNull()
+    fireEvent.click(criar)
 
     expect(await screen.findByText('Grupo “Molhos” criado.')).toHaveAttribute('role', 'status')
-    expect(localAtual()).toBe(`${ADMIN}/cardapio/opcoes`)
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(await screen.findByRole('heading', { level: 2, name: 'Molhos' })).toBeVisible()
     expect(enviados).toEqual([
       {
@@ -314,89 +308,114 @@ describe('criar um grupo', () => {
   })
 
   it('um grupo impossível de pedir não é enviado, e o erro diz por quê', async () => {
-    const enviados = abrir('/opcoes/novo')
-    const [nome] = await screen.findAllByLabelText('Nome')
+    const { enviados, janela } = await abrirNovo()
 
-    escrever(nome as HTMLElement, 'Escolha duas')
-    escrever(screen.getByLabelText('Mínimo'), '2')
-    escrever(screen.getByLabelText('Máximo'), '2')
+    escrever(janela.getByLabelText('Nome do grupo'), 'Escolha duas')
+    escrever(janela.getByLabelText('Mínimo'), '2')
+    escrever(janela.getByLabelText('Máximo'), '2')
     escrever(opcao(1).getByLabelText('Nome'), 'Única')
     clicar('Criar grupo')
 
     expect(
-      await screen.findByText(
+      await janela.findByText(
         'O grupo pede 2 escolhas, mas tem 1 opção: o produto ficaria impossível de pedir.',
       ),
     ).toBeVisible()
-    expect(screen.getByLabelText('Mínimo')).toHaveAttribute('aria-invalid', 'true')
+    expect(janela.getByLabelText('Mínimo')).toHaveAttribute('aria-invalid', 'true')
     expect(enviados).toEqual([])
   })
 
   it('acrescentar a opção que faltava tira o erro na hora', async () => {
-    abrir('/opcoes/novo')
-    const [nome] = await screen.findAllByLabelText('Nome')
-    escrever(nome as HTMLElement, 'Tamanho')
-    escrever(screen.getByLabelText('Mínimo'), '1')
-    escrever(screen.getByLabelText('Máximo'), '2')
+    const { janela } = await abrirNovo()
+    escrever(janela.getByLabelText('Nome do grupo'), 'Tamanho')
+    escrever(janela.getByLabelText('Mínimo'), '1')
+    escrever(janela.getByLabelText('Máximo'), '2')
     escrever(opcao(1).getByLabelText('Nome'), 'Pequeno')
     clicar('Criar grupo')
     const ERRO = 'O máximo de escolhas (2) passa do número de opções (1).'
-    await screen.findByText(ERRO)
+    await janela.findByText(ERRO)
 
     clicar('Adicionar opção')
 
     await waitFor(() => {
-      expect(screen.queryByText(ERRO)).toBeNull()
+      expect(janela.queryByText(ERRO)).toBeNull()
     })
   })
 
-  it('criado a partir de um produto, já entra nele e a página volta para o produto', async () => {
-    const enviados = abrir('/produtos/p-xsalada')
-    fireEvent.click(
-      await screen.findByRole('link', { name: 'Criar um grupo novo para este produto' }),
-    )
+  it('sem nada digitado, o Esc fecha a janela', async () => {
+    const { enviados } = await abrirNovo()
 
-    expect(await screen.findByRole('link', { name: 'Produto' })).toHaveAttribute(
-      'href',
-      `${ADMIN}/cardapio/produtos/p-xsalada`,
-    )
-    const [nome] = screen.getAllByLabelText('Nome')
-    escrever(nome as HTMLElement, 'Ponto da carne')
-    escrever(screen.getByLabelText('Mínimo'), '1')
-    escrever(opcao(1).getByLabelText('Nome'), 'Ao ponto')
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(enviados).toEqual([])
+  })
+
+  it('com algo digitado, fechar pergunta antes; descartar não cria nada', async () => {
+    const { enviados, janela } = await abrirNovo()
+    escrever(janela.getByLabelText('Nome do grupo'), 'Molhos')
+
+    fireEvent.click(janela.getByRole('button', { name: 'Fechar' }))
+
+    expect(await janela.findByText('O que você digitou não foi salvo.')).toBeVisible()
+    // Enquanto pergunta, o botão de criar dá lugar à escolha.
+    expect(janela.queryByRole('button', { name: 'Criar grupo' })).toBeNull()
+    fireEvent.click(janela.getByRole('button', { name: 'Continuar editando' }))
+    expect(janela.getByLabelText('Nome do grupo')).toHaveValue('Molhos')
+    expect(janela.getByRole('button', { name: 'Criar grupo' })).toBeVisible()
+
+    fireEvent.click(janela.getByRole('button', { name: 'Fechar' }))
+    fireEvent.click(await janela.findByRole('button', { name: 'Descartar' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('heading', { level: 2, name: 'Molhos' })).toBeNull()
+    expect(enviados).toEqual([])
+  })
+
+  it('a recusa da API aparece na janela, que continua aberta', async () => {
+    const { janela } = await abrirNovo({
+      forcar: { 'POST /option-groups': { status: 500, corpo: {} } },
+    })
+    escrever(janela.getByLabelText('Nome do grupo'), 'Molhos')
+    escrever(opcao(1).getByLabelText('Nome'), 'Barbecue')
     clicar('Criar grupo')
 
-    expect(
-      await screen.findByText('Grupo “Ponto da carne” criado e adicionado ao produto.'),
-    ).toHaveAttribute('role', 'status')
-    expect(localAtual()).toBe(`${ADMIN}/cardapio/produtos/p-xsalada`)
-    expect(enviados.map((e) => `${e.metodo} ${e.caminho}`)).toEqual([
-      'POST /option-groups',
-      'PUT /products/p-xsalada/option-groups',
-    ])
-    // O novo vai no fim, depois dos que o produto já tinha.
-    expect(enviados[1]?.corpo).toEqual({ groupIds: ['g-adicionais', 'g-novo-1'] })
-    expect(
-      await (await opcoesDoProduto()).findByRole('link', { name: 'Ponto da carne' }),
-    ).toBeVisible()
+    expect(await janela.findByRole('alert')).toHaveTextContent('Não foi possível salvar agora.')
+    expect(janela.getByLabelText('Nome do grupo')).toHaveValue('Molhos')
   })
 })
 
-describe('editar um grupo', () => {
-  it('avisa em quais produtos ele está, antes de a pessoa mudar', async () => {
-    abrir('/opcoes/g-adicionais')
+describe('a janela do grupo: editar', () => {
+  const abrirDe = async (nome: string) => {
+    const enviados = abrir('/opcionais')
+    await screen.findByText('Adicionais')
+    clicar(`Editar o grupo ${nome}`)
+    const janela = within(await screen.findByRole('dialog', { name: 'Editar grupo de opcionais' }))
+    return { enviados, janela }
+  }
 
-    expect(await screen.findByRole('note')).toHaveTextContent(
+  it('avisa em quais produtos ele está, antes de a pessoa mudar', async () => {
+    const { janela } = await abrirDe('Adicionais')
+
+    expect(janela.getByRole('note')).toHaveTextContent(
       'Este grupo está em X-Burger e X-Salada. O que você mudar aqui vale para todos eles.',
     )
-    expect(screen.getAllByLabelText('Nome')[0]).toHaveValue('Adicionais')
+    expect(janela.getByLabelText('Nome do grupo')).toHaveValue('Adicionais')
     expect(opcao(1).getByLabelText('A mais (R$)')).toHaveValue('5,00')
     expect(opcao(3).getByLabelText('Disponível')).not.toBeChecked()
+    expect(janela.getByRole('button', { name: 'Salvar alterações' })).toBeDisabled()
+  })
+
+  it('grupo em um produto só, ou em nenhum, não tem o aviso', async () => {
+    const { janela } = await abrirDe('Tamanho')
+
+    expect(janela.queryByRole('note')).toBeNull()
   })
 
   it('muda o preço, a ordem e o que está disponível; manda as opções com os ids', async () => {
-    const enviados = abrir('/opcoes/g-adicionais')
-    await screen.findByRole('note')
+    const { enviados, janela } = await abrirDe('Adicionais')
 
     escrever(opcao(1).getByLabelText('A mais (R$)'), '6')
     fireEvent.click(opcao(3).getByLabelText('Disponível'))
@@ -405,9 +424,16 @@ describe('editar um grupo', () => {
     clicar('Adicionar opção')
     escrever(opcao(3).getByLabelText('Nome'), 'Catupiry')
     escrever(opcao(3).getByLabelText('A mais (R$)'), '4')
-    clicar('Salvar alterações')
+    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
 
-    expect(await screen.findByText('Grupo salvo.')).toBeVisible()
+    expect(await screen.findByText('Grupo “Adicionais” salvo.')).toHaveAttribute('role', 'status')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // A lista já mostra o que mudou.
+    expect(
+      cartaoDoGrupo('Adicionais').getByText(
+        'Cheddar (+R$ 4,00), Bacon (+R$ 6,00), Catupiry (+R$ 4,00)',
+      ),
+    ).toBeVisible()
     expect(enviados[0]).toEqual({
       metodo: 'PUT',
       caminho: '/option-groups/g-adicionais',
@@ -423,371 +449,5 @@ describe('editar um grupo', () => {
         ],
       },
     })
-  })
-
-  it('em uso, não se exclui, e a página diz o que fazer', async () => {
-    abrir('/opcoes/g-adicionais')
-
-    expect(await screen.findByRole('button', { name: 'Excluir grupo' })).toBeDisabled()
-    expect(screen.getByText(/tire-o desses produtos antes/)).toBeVisible()
-  })
-
-  it('sem uso, exclui depois de confirmar e volta à lista', async () => {
-    const enviados = abrir('/opcoes/g-retirar')
-
-    await screen.findByRole('button', { name: 'Excluir grupo' })
-    clicar('Excluir grupo')
-    fireEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Excluir grupo' }),
-    )
-
-    expect(await screen.findByText('Grupo “Retirar” excluído.')).toHaveAttribute('role', 'status')
-    expect(localAtual()).toBe(`${ADMIN}/cardapio/opcoes`)
-    expect(enviados).toEqual([
-      { metodo: 'DELETE', caminho: '/option-groups/g-retirar', corpo: undefined },
-    ])
-  })
-
-  it('endereço de um grupo que não existe avisa', async () => {
-    abrir('/opcoes/g-nao-existe')
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Este grupo não existe mais.')
-  })
-})
-
-// --- As opções do produto ------------------------------------------------------------
-
-describe('as opções na página do produto', () => {
-  it('ficam dentro do quadro do produto, depois dos campos e antes do "Salvar"', async () => {
-    abrir('/produtos/p-xburger')
-    const titulo = await screen.findByRole('heading', { level: 3, name: 'Opções' })
-
-    const quadro = screen.getByRole('heading', { level: 2, name: 'Produto' }).closest('section')
-    expect(quadro).toContainElement(titulo)
-    const depois = (a: Element, b: Element) =>
-      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(depois(screen.getByLabelText('Descrição'), titulo)).toBe(true)
-    expect(depois(titulo, salvarOProduto())).toBe(true)
-    // Um quadro só: as opções não têm mais seção própria.
-    expect(screen.queryByRole('heading', { level: 2, name: 'Opções' })).toBeNull()
-  })
-
-  it('mostra os grupos do produto na ordem, com a regra de cada um', async () => {
-    abrir('/produtos/p-xburger')
-    const opcoes = await opcoesDoProduto()
-
-    expect(
-      (await opcoes.findAllByRole('link', { name: /Tamanho|Adicionais/ })).map(
-        (l) => l.textContent,
-      ),
-    ).toEqual(['Tamanho', 'Adicionais'])
-    expect(opcoes.getByText('Escolha 1 · obrigatório')).toBeVisible()
-    expect(opcoes.getByText('Escolha até 2 · opcional')).toBeVisible()
-  })
-
-  it('tirar, mudar a ordem e acrescentar não gravam nada: vão no "Salvar", a lista inteira', async () => {
-    const enviados = abrir('/produtos/p-xburger')
-    const opcoes = await opcoesDoProduto()
-    await opcoes.findByRole('link', { name: 'Tamanho' })
-    expect(salvarOProduto()).toBeDisabled()
-    const gruposNaTela = () =>
-      within(opcoes.getByRole('list'))
-        .getAllByRole('link')
-        .map((l) => l.textContent)
-
-    // Tirar é vermelho, como remover: sem a cor do botão comum por baixo.
-    const tirar = screen.getByRole('button', { name: 'Tirar Tamanho deste produto' })
-    expect(tirar).toHaveClass('text-danger')
-    expect(tirar).not.toHaveClass('text-primary')
-    clicar('Descer o grupo Tamanho')
-    expect(gruposNaTela()).toEqual(['Adicionais', 'Tamanho'])
-    expect(salvarOProduto()).toBeEnabled()
-    clicar('Tirar Tamanho deste produto')
-    // Só os que o produto não tem aparecem para escolher — o que acabou de sair volta à lista.
-    const seletor = opcoes.getByLabelText('Adicionar um grupo')
-    expect(
-      within(seletor)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual([
-      'Escolha um grupo',
-      'Retirar — Escolha até 2 · opcional',
-      'Tamanho — Escolha 1 · obrigatório',
-    ])
-    escrever(seletor, 'g-retirar')
-    clicar('Adicionar o grupo')
-    expect(gruposNaTela()).toEqual(['Adicionais', 'Retirar'])
-    expect(enviados).toEqual([])
-
-    fireEvent.click(salvarOProduto())
-
-    expect(await screen.findByText('Produto salvo.')).toHaveAttribute('role', 'status')
-    // Só as opções mudaram: os campos não são regravados.
-    expect(enviados.map((e) => `${e.metodo} ${e.caminho}`)).toEqual([
-      'PUT /products/p-xburger/option-groups',
-    ])
-    expect(enviados[0]?.corpo).toEqual({ groupIds: ['g-adicionais', 'g-retirar'] })
-    expect(salvarOProduto()).toBeDisabled()
-    expect(gruposNaTela()).toEqual(['Adicionais', 'Retirar'])
-  })
-
-  it('campos e opções vão no mesmo "Salvar": primeiro os campos, depois as opções', async () => {
-    const enviados = abrir('/produtos/p-xburger')
-    await (await opcoesDoProduto()).findByRole('link', { name: 'Tamanho' })
-
-    escrever(screen.getByLabelText('Preço (R$)'), '31,90')
-    clicar('Tirar Tamanho deste produto')
-    fireEvent.click(salvarOProduto())
-
-    expect(await screen.findByText('Produto salvo.')).toBeVisible()
-    expect(enviados.map((e) => `${e.metodo} ${e.caminho}`)).toEqual([
-      'PATCH /products/p-xburger',
-      'PUT /products/p-xburger/option-groups',
-    ])
-    expect(enviados[0]?.corpo).toMatchObject({ priceInCents: 3190 })
-    expect(enviados[1]?.corpo).toEqual({ groupIds: ['g-adicionais'] })
-  })
-
-  it('só os campos mudaram: as opções não são regravadas', async () => {
-    const enviados = abrir('/produtos/p-xburger')
-    await (await opcoesDoProduto()).findByRole('link', { name: 'Tamanho' })
-
-    escrever(screen.getByLabelText('Preço (R$)'), '31,90')
-    fireEvent.click(salvarOProduto())
-
-    expect(await screen.findByText('Produto salvo.')).toBeVisible()
-    expect(enviados.map((e) => `${e.metodo} ${e.caminho}`)).toEqual(['PATCH /products/p-xburger'])
-  })
-
-  it('desfazer a mudança na mão volta ao que está gravado, e não há o que salvar', async () => {
-    abrir('/produtos/p-xburger')
-    await (await opcoesDoProduto()).findByRole('link', { name: 'Tamanho' })
-
-    clicar('Descer o grupo Tamanho')
-    expect(salvarOProduto()).toBeEnabled()
-    clicar('Subir o grupo Tamanho')
-
-    expect(salvarOProduto()).toBeDisabled()
-  })
-
-  it('com alteração por salvar, criar um grupo novo espera o "Salvar"', async () => {
-    abrir('/produtos/p-xburger')
-    const opcoes = await opcoesDoProduto()
-    await opcoes.findByRole('link', { name: 'Tamanho' })
-    expect(
-      opcoes.getByRole('link', { name: 'Criar um grupo novo para este produto' }),
-    ).toBeVisible()
-
-    // Criar um grupo leva a outra página: o que não foi salvo aqui se perderia.
-    clicar('Tirar Tamanho deste produto')
-
-    expect(opcoes.queryByRole('link', { name: /Criar um grupo novo/ })).toBeNull()
-    expect(
-      opcoes.getByText('Para criar um grupo novo para este produto, salve antes as alterações.'),
-    ).toBeVisible()
-
-    fireEvent.click(salvarOProduto())
-
-    expect(
-      await opcoes.findByRole('link', { name: 'Criar um grupo novo para este produto' }),
-    ).toBeVisible()
-  })
-
-  it('um campo mudado também faz criar um grupo novo esperar', async () => {
-    abrir('/produtos/p-xburger')
-    const opcoes = await opcoesDoProduto()
-    await opcoes.findByRole('link', { name: 'Tamanho' })
-
-    escrever(screen.getByLabelText('Nome'), 'X-Burger duplo')
-
-    await waitFor(() => {
-      expect(opcoes.queryByRole('link', { name: /Criar um grupo novo/ })).toBeNull()
-    })
-  })
-
-  it('produto sem grupos explica que o cliente pede como está', async () => {
-    abrir('/produtos/p-refri')
-
-    expect(
-      await (
-        await opcoesDoProduto()
-      ).findByText('Este produto não tem opções: o cliente pede como ele está.'),
-    ).toBeVisible()
-  })
-
-  it('grupo obrigatório sem opção disponível avisa que o produto fica esgotado', async () => {
-    abrir('/produtos/p-xburger', {
-      grupos: GRUPOS.map((g) =>
-        g.id === 'g-tamanho'
-          ? { ...g, options: g.options.map((o) => ({ ...o, isAvailable: false })) }
-          : g,
-      ),
-    })
-
-    expect(
-      await (await opcoesDoProduto()).findByText(/o produto aparece esgotado no cardápio/),
-    ).toBeVisible()
-  })
-
-  it('falha ao gravar as opções avisa, e a mudança continua na tela para tentar de novo', async () => {
-    const enviados = abrir('/produtos/p-xburger', {
-      forcar: { 'PUT /products/p-xburger/option-groups': { status: 500, corpo: {} } },
-    })
-    const opcoes = await opcoesDoProduto()
-    await opcoes.findByRole('link', { name: 'Tamanho' })
-
-    clicar('Tirar Tamanho deste produto')
-    fireEvent.click(salvarOProduto())
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Não foi possível salvar agora. Tente de novo.',
-    )
-    expect(enviados).toHaveLength(1)
-    expect(opcoes.queryByRole('link', { name: 'Tamanho' })).toBeNull()
-    expect(salvarOProduto()).toBeEnabled()
-  })
-
-  it('campo inválido segura tudo: as opções não vão sem os campos', async () => {
-    const enviados = abrir('/produtos/p-xburger')
-    await (await opcoesDoProduto()).findByRole('link', { name: 'Tamanho' })
-
-    escrever(screen.getByLabelText('Nome'), '')
-    clicar('Tirar Tamanho deste produto')
-    fireEvent.click(salvarOProduto())
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('Nome')).toBeInvalid()
-    })
-    expect(enviados).toEqual([])
-  })
-
-  it('o produto novo ainda não tem opções: elas vêm depois de criar', async () => {
-    abrir('/produtos/novo?categoria=c-lanches')
-    await screen.findByLabelText('Nome')
-
-    expect(screen.queryByRole('region', { name: 'Opções' })).toBeNull()
-  })
-
-  it('o atendente vê as opções do produto, sem mexer', async () => {
-    abrir('/produtos/p-xburger', {}, ATENDENTE)
-    await (await opcoesDoProduto()).findByRole('link', { name: 'Tamanho' })
-
-    expect(screen.queryByRole('button', { name: /Tirar|Subir|Descer|Adicionar/ })).toBeNull()
-    expect(screen.queryByRole('link', { name: /Criar um grupo novo/ })).toBeNull()
-    expect(screen.queryByText(/salve antes as alterações/)).toBeNull()
-  })
-})
-
-// --- Combos -------------------------------------------------------------------------
-
-describe('combos', () => {
-  it('ao criar, escolhe-se combo; a página dele pede os itens', async () => {
-    const enviados = abrir('/produtos/novo?categoria=c-lanches')
-
-    fireEvent.click(await screen.findByRole('radio', { name: 'Combo' }))
-    escrever(screen.getByLabelText('Nome'), 'Combo da casa')
-    escrever(screen.getByLabelText('Preço (R$)'), '35')
-    clicar('Criar produto')
-
-    expect(
-      await screen.findByText('Combo criado. Agora escolha os itens dele e envie a foto.'),
-    ).toHaveAttribute('role', 'status')
-    expect(enviados[0]?.corpo).toMatchObject({ type: 'COMBO', name: 'Combo da casa' })
-    expect(await screen.findByText(/Sem itens, o combo aparece esgotado/)).toBeVisible()
-    // O tipo se escolhe uma vez: na edição, não aparece.
-    expect(screen.queryByRole('radio', { name: 'Combo' })).toBeNull()
-  })
-
-  it('o produto comum é o que vem marcado', async () => {
-    abrir('/produtos/novo')
-
-    expect(await screen.findByRole('radio', { name: 'Produto' })).toBeChecked()
-  })
-
-  it('mostra os itens, quanto custariam separados e o preço do combo', async () => {
-    abrir('/produtos/p-combo')
-    const itens = await secaoDe('Itens do combo')
-
-    expect(await itens.findByRole('group', { name: 'X-Burger' })).toBeVisible()
-    expect(itens.getByRole('group', { name: 'Refrigerante' })).toBeVisible()
-    expect(itens.getByText(/Separados, os itens custam/)).toHaveTextContent(
-      'Separados, os itens custam R$ 31,90. O combo sai por R$ 39,90: não sai mais barato que os itens separados.',
-    )
-  })
-
-  it('muda a quantidade, acrescenta e tira; salva a lista inteira, na ordem', async () => {
-    const enviados = abrir('/produtos/p-combo')
-    const itens = await secaoDe('Itens do combo')
-    await itens.findByRole('group', { name: 'X-Burger' })
-
-    expect(screen.getByRole('button', { name: 'Salvar itens do combo' })).toBeDisabled()
-    clicar('Aumentar X-Burger')
-    expect(itens.getByText(/o cliente economiza R\$ 17,90/)).toBeVisible()
-    // Só produtos simples, e não os que já estão no combo.
-    const seletor = itens.getByLabelText('Adicionar um produto')
-    expect(
-      within(seletor)
-        .getAllByRole('option')
-        // O preço vem com o espaço que não quebra linha, como toda moeda formatada.
-        .map((o) => o.textContent?.replace(/\s/g, ' ')),
-    ).toEqual(['Escolha um produto', 'X-Salada — R$ 27,90'])
-    escrever(seletor, 'p-xsalada')
-    clicar('Adicionar ao combo')
-    expect(screen.getByText(/X-Salada está esgotado/)).toBeVisible()
-    clicar('Tirar Refrigerante do combo')
-    clicar('Salvar itens do combo')
-
-    expect(await screen.findByText('Itens do combo salvos.')).toBeVisible()
-    expect(enviados).toEqual([
-      {
-        metodo: 'PUT',
-        caminho: '/products/p-combo/combo-items',
-        corpo: {
-          items: [
-            { productId: 'p-xburger', quantity: 2 },
-            { productId: 'p-xsalada', quantity: 1 },
-          ],
-        },
-      },
-    ])
-  })
-
-  it('sem nenhum item, não salva e diz por quê', async () => {
-    const enviados = abrir('/produtos/p-combo')
-    const itens = await secaoDe('Itens do combo')
-    await itens.findByRole('group', { name: 'X-Burger' })
-
-    clicar('Tirar X-Burger do combo')
-    clicar('Tirar Refrigerante do combo')
-
-    expect(itens.getByText('Escolha ao menos um produto para salvar.')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Salvar itens do combo' })).toBeDisabled()
-    expect(enviados).toEqual([])
-  })
-
-  it('o produto comum não tem itens de combo', async () => {
-    abrir('/produtos/p-xburger')
-    await (await opcoesDoProduto()).findByRole('link', { name: 'Tamanho' })
-
-    expect(screen.queryByRole('heading', { level: 2, name: 'Itens do combo' })).toBeNull()
-  })
-
-  it('o combo tem os itens e também as opções, como qualquer produto', async () => {
-    abrir('/produtos/p-combo', {
-      produtos: [...PRODUTOS, produto({ id: 'p-outro', name: 'Outro', categoryId: 'c-lanches' })],
-    })
-
-    expect(await screen.findByRole('heading', { level: 2, name: 'Itens do combo' })).toBeVisible()
-    expect(screen.getByRole('heading', { level: 3, name: 'Opções' })).toBeVisible()
-  })
-
-  it('o atendente vê os itens e as quantidades, sem mexer', async () => {
-    abrir('/produtos/p-combo', {}, ATENDENTE)
-    const itens = await secaoDe('Itens do combo')
-
-    expect(
-      within(await itens.findByRole('group', { name: 'X-Burger' })).getByText('1x'),
-    ).toBeVisible()
-    expect(screen.queryByRole('button', { name: /Aumentar|Tirar|Salvar itens/ })).toBeNull()
   })
 })

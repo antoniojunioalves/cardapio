@@ -1198,12 +1198,12 @@ Quatro regras da tela, todas com teste:
   conta como região ativa e não é enviada: quem clica em "Adicionar região" e desiste continua
   podendo salvar.
 
-**O Cardápio** (Fase 23) é uma lista e quatro páginas. A lista, em `/admin/cardapio`
+**O Cardápio** (Fase 23) é uma lista e o cadastro do produto. A lista, em `/admin/cardapio`
 (`pages/AdminMenuPage.tsx`), mostra as categorias na ordem do cardápio, cada uma com os seus
-produtos (`agruparPorCategoria`, em `features/admin/catalog.ts`, pura); as páginas criam e editam
-categoria e produto (`cardapio/categorias/nova`, `cardapio/categorias/:id`,
-`cardapio/produtos/novo?categoria=…`, `cardapio/produtos/:id`). O item do menu, sem `end`,
-continua marcado em todas elas.
+produtos (`agruparPorCategoria`, em `features/admin/catalog.ts`, pura). O produto se cadastra e
+se edita em passos (`cardapio/produtos/novo` e `cardapio/produtos/:id`, descritos adiante), e a
+categoria se edita numa janela, sobre a lista. O item do menu, sem `end`, continua marcado em
+todas as telas.
 
 - **As categorias são recolhíveis** e começam recolhidas: o cabeçalho é um botão com
   `aria-expanded`, e o conteúdo fica no documento com `hidden`. As abertas ficam no
@@ -1247,13 +1247,11 @@ continua marcado em todas elas.
 - Sem a permissão de alterar, a lista não mostra caixas nem botões de ordem, e as páginas abrem
   só para leitura.
 
-**Opções, adicionais e combos** (Fase 24). O Cardápio virou uma tela com abas (`CardapioTabs`,
-sobre a peça comum `TelaComAbas`, que serve também a Configurações): "Produtos", em
-`/admin/cardapio`, e "Opções e adicionais", em `/admin/cardapio/opcoes`. As páginas de criar e
-editar — de categoria, produto e grupo — ficam fora das abas, com o link de volta
-(`cardapio/opcoes/novo`, `cardapio/opcoes/:id`). O módulo é `features/admin/option-groups.ts`.
+**Opcionais e combos** (Fase 24). O Cardápio é uma tela com abas (`CardapioTabs`, sobre a peça
+comum `TelaComAbas`, que serve também a Configurações): "Produtos", em `/admin/cardapio`, e
+"Opcionais", em `/admin/cardapio/opcionais`. O módulo é `features/admin/option-groups.ts`.
 
-- **A página do grupo** tem o nome, como o cliente escolhe (mínimo e máximo, com a frase que o
+- **O grupo de opcionais** tem o nome, como o cliente escolhe (mínimo e máximo, com a frase que o
   cliente vai ver, montada por `descreverRegraDoGrupo`, a mesma do cardápio público) e as opções,
   com o acréscimo em reais, a disponibilidade e a ordem. O formulário usa as regras de
   `@repo/shared`, cada uma com o `when` dos campos de que depende — com o mínimo inválido, o erro
@@ -1261,25 +1259,61 @@ editar — de categoria, produto e grupo — ficam fora das abas, com o link de 
   limites (`reconferir`).
 - **Grupo usado por mais de um produto** ganha o aviso, em cima do formulário, de que a mudança
   vale para todos.
-- **Na página do produto, as Opções ficam dentro do quadro do produto e vão no mesmo "Salvar"**
-  dos campos. `ProductOptionsSection` é controlado pelo formulário: a lista escolhida e ainda não
-  salva mora no `ProductForm` (`null` enquanto valem os grupos gravados), e acrescentar, tirar e
-  ordenar só mexem nela. `useSalvarProdutoEOpcoes` é o envio da página: `PATCH` do produto se os
-  campos mudaram, depois `PUT` da lista inteira de grupos se as opções mudaram — cada rota só é
-  chamada se tiver o que gravar, e as duas aceitam repetição. A foto grava ao escolher o arquivo,
-  e os itens do combo têm o quadro e o "Salvar" deles.
-- **"Criar um grupo novo para este produto"** abre a página do grupo com `?produto=`; ao criar, o
-  grupo entra no fim da lista do produto (`useSalvarGrupo` lê a lista atual e a regrava com o
-  novo) e a página volta ao produto. Com alteração por salvar na página do produto, o atalho dá
-  lugar a um recado: sair dali perderia o que não foi salvo.
 - **Produto ou combo se escolhe ao criar**, e só ali: a edição não manda o tipo
   (`alteracaoDoProduto`), porque a API o recusa depois.
-- **A seção dos itens do combo** monta a lista e a grava num "Salvar" só; mostra o preço
-  separado (`precoAvulso`, pelos preços de agora) ao lado do preço do combo, e avisa quando o
-  combo aparece esgotado no cardápio — sem itens, ou com item esgotado.
 - **Botões vermelhos de texto** usam `botaoDeTextoPerigo`, e não `botaoDeTexto` com `text-danger`
   por cima: duas classes de cor no mesmo elemento ganham pela ordem do CSS gerado, e não pela do
   `className`.
+
+**O cadastro em passos** (Fase 24b). Um produto se cadastra e se edita na mesma tela
+(`pages/AdminProductPage.tsx`, que carrega os dados, e `components/ProductSteps.tsx`, a moldura),
+em passos: o produto, os itens (só no combo) e os opcionais.
+
+- **As regras dos passos não têm tela** (`features/admin/product-steps.ts`): `passosDe(tipo)`,
+  `passoDisponivel` — sem produto criado, só o passo dele abre —, `passoAberto`, que lê o `?passo=`
+  do endereço e cai no do produto se o passo não existe ou ainda não pode ser aberto, e
+  `passosAlcancaveis`, que o cabeçalho usa.
+- **Cada passo é um endereço** (`?passo=produto|itens|opcionais`). Num produto novo,
+  `?categoria=<id>` traz a categoria já escolhida no seletor — é o que "+ Novo produto" de uma
+  categoria manda. O "voltar" do navegador volta um passo.
+- **Cadastrando ou editando** se decide pelo que acompanha o endereço (`state` da navegação,
+  `ChegadaAoProduto`): sem produto, é cadastro; criado o produto, o endereço passa a ser o dele
+  (com `replace`), e o `state` leva `cadastrando` e `ate` — o passo mais adiante já alcançado. Sem
+  esse `state` — quem chega pela lista, ou recarrega em outra aba —, é edição: todos os passos
+  abertos pelo cabeçalho, e o "Excluir produto" embaixo. Os botões são os mesmos nos dois casos.
+- **Cada passo é um componente com o seu formulário e o seu envio** (`StepProduct`,
+  `StepComboItems`, `StepOptions`), e todos falam com a moldura do mesmo jeito: `aoAlterar` diz se
+  há alteração por salvar (`useAlteracaoDoPasso`), `aoAvancar` diz que o passo gravou — ou não
+  tinha o que gravar —, e `aoVoltar` pede o passo anterior.
+- **Os botões são de `RodapeDoPasso`** (`components/Passos.tsx`): "Salvar e continuar", sempre
+  ligado — grava se houver o que gravar, e segue —, e, no último passo, "Salvar". Do segundo passo
+  em diante há "Voltar". Ao gravar o último, a moldura volta à lista do cardápio, com o aviso e a
+  categoria do produto aberta.
+- **A moldura segura a saída** de um passo com alteração — pelo cabeçalho e pelo "Voltar":
+  `pedirPara` guarda o destino e mostra o aviso, com "Descartar e ir para…". Trocar de passo
+  desmonta o passo atual, então descartar é só ir: na volta, ele se monta com o que está gravado.
+- **A categoria é um campo do produto** (`categoryId`, um `<select>` no passo do produto), e não
+  um passo. Ela se cria e se edita em `CategorySheet`, aberta pela lista do cardápio.
+- **A foto antes de o produto existir** fica no navegador (`useImagemEscolhida`, em
+  `features/admin/image-choice.ts`): o arquivo e um endereço de prévia, liberado ao trocar, tirar e
+  sair. `useCriarProduto` cria o produto e envia a foto em seguida; se a foto for recusada,
+  devolve o produto e `fotoRecusada`, e o cadastro segue com o aviso. `ImageField` e
+  `ImagemAEnviar` desenham o mesmo quadro.
+- **O quadro da imagem tem dois desenhos** (`acoes`, em `ImageField.tsx`): com os botões de texto
+  abaixo do título — o logo e a capa, nas Configurações —, ou, na foto do produto, uma moldura em
+  volta da imagem com o lápis e a lixeira pequenos dentro dela, sem título. Só com ícones, o nome
+  de cada um vai para o leitor de tela: o lápis é o rótulo do campo do arquivo ("Trocar foto",
+  escondido da vista), a lixeira tem `aria-label`, e a moldura é um grupo chamado "Foto".
+- **As janelas** são `FormSheet` (`components/FormSheet.tsx`): o `Sheet` com um formulário dentro,
+  o botão de gravar no rodapé — fora do `<form>`, ligado a ele pelo atributo `form` — e a pergunta
+  antes de fechar com algo digitado. `OptionGroupSheet` cria e edita um grupo; `CategorySheet`,
+  uma categoria. As duas avisam quem as abriu (`aoSalvar`) e não navegam.
+- **A janela fica fora do formulário de quem a abre.** O `Sheet` é um portal: é desenhado no fim
+  da página, mas os eventos do React sobem pela árvore de componentes. Dentro do `<form>` do
+  passo, o "enviar" do formulário da janela chegaria ao do passo e o gravaria junto.
+- **O grupo criado na janela, no passo dos opcionais,** é gravado ali (`useSalvarGrupo`, que já o
+  põe na lista dos grupos em cache) e entra no fim da lista do produto como mudança por salvar; é
+  o botão do passo que grava a lista inteira (`useDefinirGruposDoProduto`).
 
 ### 9.7 Temas
 

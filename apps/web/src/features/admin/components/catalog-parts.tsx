@@ -7,7 +7,7 @@ import { ApiError } from '@/services/api'
 
 import { caminhoDoPainel } from '../menu'
 
-/** As peças que a lista do cardápio e as páginas de categoria e produto têm em comum. */
+/** As peças que a lista do cardápio, a dos opcionais e o cadastro do produto têm em comum. */
 
 /** Um link de volta, no topo das páginas de criar e editar. */
 export function Voltar({ para, rotulo, state }: { para: string; rotulo: string; state?: unknown }) {
@@ -201,8 +201,11 @@ export function Excluir({ excluir, impedimento, ...janela }: ExcluirProps) {
 interface EditarEExcluirProps {
   /** Quem, como o leitor de tela diz: "X-Burger", "a categoria Lanches". */
   quem: string
-  /** O endereço da página de edição. Sem ele, não há lápis. */
-  editar?: string | undefined
+  /**
+   * O que o lápis abre: o endereço de uma página, ou uma função que abre uma
+   * janela. Sem ele, não há lápis.
+   */
+  editar?: string | (() => void) | undefined
   /** Abre a confirmação. Sem ele, não há lixeira. */
   aoExcluir?: (() => void) | undefined
 }
@@ -215,16 +218,23 @@ interface EditarEExcluirProps {
 export function EditarEExcluir({ quem, editar, aoExcluir }: EditarEExcluirProps) {
   if (!editar && !aoExcluir) return null
   const classe = 'rounded-control p-1.5'
+  const lapis = 'text-info hover:bg-info/10'
   return (
     <span className="flex shrink-0">
-      {editar && (
-        <Link
-          to={editar}
-          aria-label={`Editar ${quem}`}
-          className={`${classe} text-info hover:bg-info/10`}
-        >
+      {typeof editar === 'string' && (
+        <Link to={editar} aria-label={`Editar ${quem}`} className={`${classe} ${lapis}`}>
           <IconeEditar className="size-4" />
         </Link>
+      )}
+      {typeof editar === 'function' && (
+        <button
+          type="button"
+          aria-label={`Editar ${quem}`}
+          onClick={editar}
+          className={`${classe} ${lapis}`}
+        >
+          <IconeEditar className="size-4" />
+        </button>
       )}
       {aoExcluir && (
         <button

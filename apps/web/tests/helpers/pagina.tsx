@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, type RenderResult } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { vi } from 'vitest'
+import { afterEach, vi } from 'vitest'
 
 import { AppRoutes } from '../../src/App'
 import type { CardapioPublico } from '../../src/features/menu/types'
@@ -72,10 +72,28 @@ export function mockarApiDoCheckout(
   return fetch
 }
 
-export function abrir(caminho: string): RenderResult {
+/** As consultas de cada página aberta num teste, para encerrá-las quando ele acaba. */
+const clientes: QueryClient[] = []
+
+function novoCliente(): QueryClient {
   // Sem espera entre tentativas: o teste de falha de rede passaria segundos
   // aguardando o backoff padrão.
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
+  clientes.push(client)
+  return client
+}
+
+// O que ainda estava a caminho quando o teste acabou é cancelado e esquecido:
+// uma releitura atrasada não chega a chamar a API simulada do teste seguinte.
+afterEach(async () => {
+  for (const cliente of clientes.splice(0)) {
+    await cliente.cancelQueries()
+    cliente.clear()
+  }
+})
+
+export function abrir(caminho: string): RenderResult {
+  const client = novoCliente()
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[caminho]}>
@@ -87,7 +105,7 @@ export function abrir(caminho: string): RenderResult {
 
 /** Como `abrir`, com um marcador do endereço atual — para conferir aonde a navegação levou. */
 export function abrirComLocal(caminho: string): RenderResult {
-  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
+  const client = novoCliente()
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[caminho]}>
@@ -100,6 +118,9 @@ export function abrirComLocal(caminho: string): RenderResult {
 
 /** O endereço em que a navegação está, na página aberta por `abrirComLocal`. */
 export const localAtual = () => screen.getByTestId('local').textContent
+
+/** O que vem depois do "?" no endereço atual: `?passo=opcionais`. */
+export const buscaAtual = () => screen.getByTestId('busca').textContent
 
 /** Abre a página do cardápio e espera ele carregar. `sufixo` vai depois do slug: `?produto=…`. */
 export async function abrirCardapio(

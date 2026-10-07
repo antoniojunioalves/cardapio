@@ -37,9 +37,6 @@ const nomesDasCategorias = () =>
   screen
     .getAllByRole('region')
     .map((r) => document.getElementById(r.getAttribute('aria-labelledby') ?? '')?.textContent)
-const escrever = (rotulo: string, valor: string) => {
-  fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } })
-}
 const clicar = (nome: string | RegExp) => {
   fireEvent.click(screen.getByRole('button', { name: nome }))
 }
@@ -265,11 +262,10 @@ describe('a tela do cardápio', () => {
 
   it('produto que mudou de categoria: voltar abre a categoria nova', async () => {
     abrir('/produtos/p-refri')
-    await screen.findByLabelText('Preço (R$)')
 
-    fireEvent.change(screen.getByLabelText('Categoria'), { target: { value: 'c-lanches' } })
-    clicar('Salvar alterações')
-    await screen.findByText('Produto salvo.')
+    fireEvent.change(await screen.findByLabelText('Categoria'), { target: { value: 'c-lanches' } })
+    clicar('Salvar e continuar')
+    await screen.findByRole('heading', { level: 2, name: 'Opcionais' })
     fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Cardápio' }))
 
     await screen.findByRole('region', { name: 'Lanches' })
@@ -403,7 +399,9 @@ describe('a tela do cardápio', () => {
     abrir('')
     await screen.findByRole('region', { name: 'Lanches' })
 
-    const lapis = within(secao('Lanches')).getByRole('link', { name: 'Editar a categoria Lanches' })
+    const lapis = within(secao('Lanches')).getByRole('button', {
+      name: 'Editar a categoria Lanches',
+    })
     expect(cabecalho('Lanches')).toHaveAttribute('aria-expanded', 'false')
     expect(
       Boolean(
@@ -414,8 +412,11 @@ describe('a tela do cardápio', () => {
     abrirCategoria('Lanches')
     expect(within(secao('Lanches')).queryByText('Editar categoria')).toBeNull()
 
+    // O lápis abre a janela da categoria, sobre a lista: a pessoa não sai dela.
     fireEvent.click(lapis)
-    expect(await screen.findByLabelText('Nome')).toHaveValue('Lanches')
+    const janela = within(await screen.findByRole('dialog', { name: 'Editar categoria' }))
+    expect(janela.getByLabelText('Nome da categoria')).toHaveValue('Lanches')
+    expect(localAtual()).toBe(`${ADMIN}/cardapio`)
   })
 
   it('clicar no nome da categoria continua só abrindo e recolhendo', async () => {
@@ -471,7 +472,7 @@ describe('a tela do cardápio', () => {
     await screen.findByRole('region', { name: 'Lanches' })
     abrirCategoria('Lanches')
 
-    expect(screen.getByRole('link', { name: 'Editar a categoria Lanches' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Editar a categoria Lanches' })).toBeVisible()
     expect(screen.getByRole('link', { name: 'Editar X-Burger' })).toBeVisible()
     expect(screen.queryByRole('button', { name: /^Excluir/ })).toBeNull()
   })
@@ -482,7 +483,7 @@ describe('a tela do cardápio', () => {
     abrirCategoria('Lanches')
 
     expect(screen.queryByRole('link', { name: /^Editar/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Excluir/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^(Editar|Excluir)/ })).toBeNull()
     fireEvent.click(screen.getByRole('link', { name: 'X-Burger' }))
     expect(await screen.findByLabelText('Preço (R$)')).toBeDisabled()
   })
@@ -491,10 +492,17 @@ describe('a tela do cardápio', () => {
     abrir('', { categorias: [], produtos: [] })
 
     expect(await screen.findByText('O cardápio ainda está vazio')).toBeVisible()
-    fireEvent.click(screen.getByRole('link', { name: 'Criar a primeira categoria' }))
-    await waitFor(() => {
-      expect(localAtual()).toBe(`${ADMIN}/cardapio/categorias/nova`)
-    })
+    // O cardápio começa por uma categoria, criada numa janela sobre a lista.
+    clicar('Criar a primeira categoria')
+    const janela = within(await screen.findByRole('dialog', { name: 'Nova categoria' }))
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), { target: { value: 'Lanches' } })
+    fireEvent.click(janela.getByRole('button', { name: 'Criar categoria' }))
+
+    // Ela chega aberta, com o botão de cadastrar o primeiro produto.
+    expect(await screen.findByText('Categoria “Lanches” criada.')).toBeVisible()
+    expect(cabecalho('Lanches')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('link', { name: 'Novo produto em Lanches' })).toBeVisible()
+    expect(localAtual()).toBe(`${ADMIN}/cardapio`)
   })
 
   it('marcar como esgotado grava na hora, só a disponibilidade', async () => {
@@ -621,7 +629,7 @@ describe('a tela do cardápio', () => {
       expect(botao).toBeDisabled()
     }
     expect(screen.queryByRole('link', { name: /Novo produto em/ })).toBeNull()
-    expect(screen.getByRole('link', { name: 'Nova categoria' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Nova categoria' })).toBeEnabled()
   })
 
   it('no limite de categorias, "Nova categoria" se desliga', async () => {
@@ -643,7 +651,8 @@ describe('a tela do cardápio', () => {
     expect(lanches.getByText('Esgotado')).toBeVisible()
     expect(screen.queryByRole('checkbox')).toBeNull()
     expect(screen.queryByRole('button', { name: /Subir|Descer/ })).toBeNull()
-    expect(screen.queryByRole('link', { name: /Nova categoria|Novo produto|Editar/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Novo produto|Editar/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Nova categoria|^Editar/ })).toBeNull()
   })
 
   it('falha ao carregar avisa, sem mostrar um cardápio vazio', async () => {
@@ -673,22 +682,38 @@ describe('a tela do cardápio', () => {
   })
 })
 
-// --- Categoria ---------------------------------------------------------------------
+// --- A janela da categoria ----------------------------------------------------------
 
-describe('categoria', () => {
-  it('cria pelo botão da lista e volta à lista com ela', async () => {
-    const enviados = abrir('')
-    fireEvent.click(await screen.findByRole('link', { name: 'Nova categoria' }))
+describe('a janela da categoria', () => {
+  const abrirJanela = async (api = {}) => {
+    const enviados = abrir('', api)
+    await screen.findByRole('region', { name: 'Lanches' })
+    clicar('Editar a categoria Lanches')
+    const janela = within(await screen.findByRole('dialog', { name: 'Editar categoria' }))
+    return { enviados, janela }
+  }
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Nova categoria' })).toBeVisible()
-    expect(screen.getByLabelText('Mostrar no cardápio')).toBeChecked()
-    escrever('Nome', '  Porções ')
-    clicar('Criar categoria')
+  const abrirNova = async (api = {}) => {
+    const enviados = abrir('', api)
+    await screen.findByRole('region', { name: 'Lanches' })
+    clicar('Nova categoria')
+    const janela = within(await screen.findByRole('dialog', { name: 'Nova categoria' }))
+    return { enviados, janela }
+  }
+
+  it('cria: a lista ganha a categoria, aberta e pronta para o primeiro produto, e avisa', async () => {
+    const { enviados, janela } = await abrirNova()
+
+    expect(janela.getByLabelText('Mostrar no cardápio')).toBeChecked()
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), {
+      target: { value: '  Porções ' },
+    })
+    fireEvent.click(janela.getByRole('button', { name: 'Criar categoria' }))
 
     expect(await screen.findByText('Categoria “Porções” criada.')).toHaveAttribute('role', 'status')
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(localAtual()).toBe(`${ADMIN}/cardapio`)
-    expect(screen.getByRole('region', { name: 'Porções' })).toBeVisible()
-    // Chega aberta, pronta para o primeiro produto; as outras continuam recolhidas.
+    // Chega aberta; as outras continuam como estavam, recolhidas.
     expect(cabecalho('Porções')).toHaveAttribute('aria-expanded', 'true')
     expect(
       within(secao('Porções')).getByRole('link', { name: 'Novo produto em Porções' }),
@@ -703,17 +728,17 @@ describe('categoria', () => {
     ])
   })
 
-  it('nome em branco não é enviado', async () => {
-    const enviados = abrir('/categorias/nova')
+  it('cria: nome em branco não é enviado', async () => {
+    const { enviados, janela } = await abrirNova()
 
-    await screen.findByRole('button', { name: 'Criar categoria' })
-    clicar('Criar categoria')
-    expect(await screen.findByText('Informe o nome da categoria.')).toBeVisible()
+    fireEvent.click(janela.getByRole('button', { name: 'Criar categoria' }))
+
+    expect(await janela.findByText('Informe o nome da categoria.')).toBeVisible()
     expect(enviados).toEqual([])
   })
 
-  it('nome repetido aparece no campo', async () => {
-    abrir('/categorias/nova', {
+  it('cria: nome repetido aparece no campo, e a janela continua aberta', async () => {
+    const { janela } = await abrirNova({
       forcar: {
         'POST /categories': conflito(
           'CATEGORY_NAME_TAKEN',
@@ -722,17 +747,16 @@ describe('categoria', () => {
       },
     })
 
-    await screen.findByLabelText('Nome')
-    escrever('Nome', 'bebidas')
-    clicar('Criar categoria')
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), { target: { value: 'bebidas' } })
+    fireEvent.click(janela.getByRole('button', { name: 'Criar categoria' }))
 
-    expect(await screen.findByText('Já existe uma categoria com esse nome.')).toBeVisible()
-    expect(screen.getByLabelText('Nome')).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByRole('alert')).toHaveTextContent('Confira os campos marcados')
+    expect(await janela.findByText('Já existe uma categoria com esse nome.')).toBeVisible()
+    expect(janela.getByLabelText('Nome da categoria')).toHaveAttribute('aria-invalid', 'true')
+    expect(janela.getByRole('alert')).toHaveTextContent('Confira os campos marcados')
   })
 
-  it('o limite do plano é explicado com a frase da API', async () => {
-    abrir('/categorias/nova', {
+  it('cria: o limite do plano é explicado com a frase da API', async () => {
+    const { janela } = await abrirNova({
       forcar: {
         'POST /categories': conflito(
           'PLAN_CATEGORY_LIMIT',
@@ -741,363 +765,94 @@ describe('categoria', () => {
       },
     })
 
-    await screen.findByLabelText('Nome')
-    escrever('Nome', 'Porções')
-    clicar('Criar categoria')
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), { target: { value: 'Porções' } })
+    fireEvent.click(janela.getByRole('button', { name: 'Criar categoria' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await janela.findByRole('alert')).toHaveTextContent(
       'O plano Grátis permite 10 categorias.',
     )
   })
 
-  it('edita: esconde do cardápio e salva', async () => {
-    const enviados = abrir('')
-    await screen.findByRole('region', { name: 'Lanches' })
-    abrirCategoria('Lanches')
-    fireEvent.click(screen.getByRole('link', { name: 'Editar a categoria Lanches' }))
+  it('edita o nome, a descrição e se aparece no cardápio; a lista avisa', async () => {
+    const { enviados, janela } = await abrirJanela()
 
-    expect(await screen.findByLabelText('Nome')).toHaveValue('Lanches')
-    expect(screen.getByLabelText('Descrição')).toHaveValue('Na chapa')
-    fireEvent.click(screen.getByLabelText('Mostrar no cardápio'))
-    clicar('Salvar alterações')
+    expect(janela.getByLabelText('Descrição da categoria')).toHaveValue('Na chapa')
+    expect(janela.getByRole('button', { name: 'Salvar alterações' })).toBeDisabled()
+    fireEvent.click(janela.getByLabelText('Mostrar no cardápio'))
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), {
+      target: { value: 'Lanches da casa' },
+    })
+    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
 
-    expect(await screen.findByText('Categoria salva.')).toBeVisible()
+    expect(await screen.findByText('Categoria “Lanches da casa” salva.')).toHaveAttribute(
+      'role',
+      'status',
+    )
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Lanches da casa' })).toBeVisible()
     expect(enviados).toEqual([
       {
         metodo: 'PATCH',
         caminho: '/categories/c-lanches',
-        corpo: { name: 'Lanches', description: 'Na chapa', isActive: false },
+        corpo: { name: 'Lanches da casa', description: 'Na chapa', isActive: false },
       },
     ])
   })
 
-  it('com produtos dentro, não se exclui, e a tela diz o que fazer', async () => {
-    abrir('/categorias/c-lanches')
+  it('nome em branco não é enviado', async () => {
+    const { enviados, janela } = await abrirJanela()
 
-    expect(await screen.findByRole('button', { name: 'Excluir categoria' })).toBeDisabled()
-    expect(screen.getByText(/A categoria tem 3 produtos/)).toBeVisible()
-  })
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), { target: { value: ' ' } })
+    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
 
-  it('vazia, exclui depois de confirmar, e volta à lista', async () => {
-    const enviados = abrir('/categorias/c-sobremesas')
-
-    await screen.findByRole('button', { name: 'Excluir categoria' })
-    clicar('Excluir categoria')
-    const janela = within(
-      await screen.findByRole('dialog', { name: 'Excluir a categoria “Sobremesas”?' }),
-    )
-    expect(enviados).toEqual([])
-    fireEvent.click(janela.getByRole('button', { name: 'Excluir categoria' }))
-
-    expect(await screen.findByText('Categoria “Sobremesas” excluída.')).toHaveAttribute(
-      'role',
-      'status',
-    )
-    expect(localAtual()).toBe(`${ADMIN}/cardapio`)
-    expect(screen.queryByRole('region', { name: 'Sobremesas' })).toBeNull()
-    expect(enviados).toEqual([
-      { metodo: 'DELETE', caminho: '/categories/c-sobremesas', corpo: undefined },
-    ])
-  })
-
-  it('endereço de uma categoria que não existe avisa', async () => {
-    abrir('/categorias/c-nao-existe')
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Esta categoria não existe mais.')
-  })
-})
-
-// --- Produto -----------------------------------------------------------------------
-
-describe('produto', () => {
-  it('cria a partir da categoria, e vai para a página dele, onde se envia a foto', async () => {
-    const enviados = abrir('')
-    await screen.findByRole('region', { name: 'Bebidas' })
-    abrirCategoria('Bebidas')
-    fireEvent.click(screen.getByRole('link', { name: 'Novo produto em Bebidas' }))
-
-    expect(await screen.findByLabelText('Categoria')).toHaveValue('c-bebidas')
-    // As categorias aparecem na ordem do cardápio; a oculta, marcada.
-    expect(
-      within(screen.getByLabelText('Categoria'))
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual(['Lanches', 'Bebidas', 'Sobremesas (oculta)'])
-    expect(screen.getByText('Você envia a foto logo depois de criar o produto.')).toBeVisible()
-    escrever('Nome', 'Suco de laranja')
-    escrever('Preço (R$)', '9,5')
-    clicar('Criar produto')
-
-    expect(
-      await screen.findByText(
-        'Produto criado. Agora você pode enviar a foto e escolher as opções.',
-      ),
-    ).toHaveAttribute('role', 'status')
-    expect(localAtual()).toBe(`${ADMIN}/cardapio/produtos/p-novo-1`)
-    expect(screen.getByRole('heading', { level: 1, name: 'Editar produto' })).toBeVisible()
-    expect(screen.getByLabelText('Enviar foto')).toBeInTheDocument()
-    expect(enviados).toEqual([
-      {
-        metodo: 'POST',
-        caminho: '/products',
-        corpo: {
-          type: 'SIMPLE',
-          categoryId: 'c-bebidas',
-          name: 'Suco de laranja',
-          description: null,
-          priceInCents: 950,
-          isAvailable: true,
-        },
-      },
-    ])
-  })
-
-  it('não envia sem nome ou com preço que não é valor', async () => {
-    const enviados = abrir('/produtos/novo')
-
-    await screen.findByLabelText('Preço (R$)')
-    escrever('Preço (R$)', 'dez')
-    clicar('Criar produto')
-
-    expect(await screen.findByText('Informe o nome do produto.')).toBeVisible()
-    expect(screen.getByText('Informe um valor em reais, como 25,90.')).toBeVisible()
+    expect(await janela.findByText('Informe o nome da categoria.')).toBeVisible()
     expect(enviados).toEqual([])
   })
 
-  it('o limite do plano: aviso na página, e a recusa da API explicada', async () => {
-    abrir('/produtos/novo', {
-      plano: plano([20, 20], [3, 10]),
+  it('nome repetido aparece no campo, e a janela continua aberta', async () => {
+    const { janela } = await abrirJanela({
       forcar: {
-        'POST /products': conflito(
-          'PLAN_PRODUCT_LIMIT',
-          'O plano Grátis permite 20 produtos. Exclua um produto para abrir vaga, ou mude de plano.',
+        'PATCH /categories/c-lanches': conflito(
+          'CATEGORY_NAME_TAKEN',
+          'Já existe uma categoria com esse nome.',
         ),
       },
     })
 
-    expect(await screen.findByText(/chegou ao limite de produtos do plano/)).toBeVisible()
-    escrever('Nome', 'Pastel')
-    escrever('Preço (R$)', '8')
-    clicar('Criar produto')
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), { target: { value: 'Bebidas' } })
+    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'O plano Grátis permite 20 produtos.',
-    )
+    expect(await janela.findByText('Já existe uma categoria com esse nome.')).toBeVisible()
+    expect(janela.getByLabelText('Nome da categoria')).toHaveAttribute('aria-invalid', 'true')
+    expect(janela.getByRole('alert')).toHaveTextContent('Confira os campos marcados')
   })
 
-  it('sem nenhuma categoria, a página manda criar uma antes', async () => {
-    abrir('/produtos/novo', { categorias: [], produtos: [] })
+  it('fechar sem ter mexido fecha na hora', async () => {
+    const { enviados, janela } = await abrirJanela()
 
-    expect(await screen.findByRole('link', { name: 'Crie a primeira categoria' })).toBeVisible()
-    expect(screen.queryByLabelText('Nome')).toBeNull()
+    fireEvent.click(janela.getByRole('button', { name: 'Fechar' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(enviados).toEqual([])
   })
 
-  it('edita preço e categoria, e salva só com o que mudou no formulário', async () => {
-    const enviados = abrir('')
-    await screen.findByRole('region', { name: 'Lanches' })
-    abrirCategoria('Lanches')
-    fireEvent.click(screen.getByRole('link', { name: 'X-Burger' }))
-
-    expect(await screen.findByLabelText('Preço (R$)')).toHaveValue('25,90')
-    expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeDisabled()
-    escrever('Preço (R$)', '27,90')
-    fireEvent.change(screen.getByLabelText('Categoria'), { target: { value: 'c-bebidas' } })
-    clicar('Salvar alterações')
-
-    expect(await screen.findByText('Produto salvo.')).toBeVisible()
-    expect(screen.getByLabelText('Preço (R$)')).toHaveValue('27,90')
-    expect(enviados).toEqual([
-      {
-        metodo: 'PATCH',
-        caminho: '/products/p-xburger',
-        corpo: {
-          categoryId: 'c-bebidas',
-          name: 'X-Burger',
-          description: null,
-          priceInCents: 2790,
-          isAvailable: true,
-        },
-      },
-    ])
-  })
-
-  it('a foto é a primeira coisa do quadro do produto, antes dos campos', async () => {
-    abrir('/produtos/p-xburger')
-    const foto = await screen.findByLabelText('Enviar foto')
-
-    const antes = (a: Element, b: Element) =>
-      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
-    const quadro = screen.getByRole('heading', { level: 2, name: 'Produto' })
-    expect(antes(quadro, foto)).toBe(true)
-    expect(antes(foto, screen.getByLabelText('Nome'))).toBe(true)
-    // Um quadro só: a foto não tem mais seção própria.
-    expect(screen.queryByRole('heading', { level: 2, name: 'Foto' })).toBeNull()
-  })
-
-  it('os campos vêm na ordem: nome, preço, disponível, categoria e descrição', async () => {
-    abrir('/produtos/p-xburger')
-    await screen.findByLabelText('Enviar foto')
-
-    const campos: [string, HTMLElement][] = [
-      ['Categoria', screen.getByLabelText('Categoria')],
-      ['Descrição', screen.getByLabelText('Descrição')],
-      ['Disponível', screen.getByRole('checkbox', { name: /^Disponível/ })],
-      ['Nome', screen.getByLabelText('Nome')],
-      ['Preço', screen.getByLabelText('Preço (R$)')],
-    ]
-    const naTela = campos
-      .sort(([, a], [, b]) =>
-        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
-      )
-      .map(([rotulo]) => rotulo)
-    expect(naTela).toEqual(['Nome', 'Preço', 'Disponível', 'Categoria', 'Descrição'])
-  })
-
-  it('a foto, o nome, o preço e o "Disponível" formam um bloco; categoria e descrição ficam fora', async () => {
-    abrir('/produtos/p-xburger')
-    const foto = await screen.findByLabelText('Enviar foto')
-
-    // O menor elemento que contém todos: em tela grande, o CSS põe o bloco em duas colunas.
-    const juntos = (...elementos: HTMLElement[]) => {
-      let no = elementos[0]?.parentElement
-      while (no && !elementos.every((elemento) => no?.contains(elemento))) no = no.parentElement
-      return no
-    }
-    const nome = screen.getByLabelText('Nome')
-    const preco = screen.getByLabelText('Preço (R$)')
-    const disponivel = screen.getByRole('checkbox', { name: /^Disponível/ })
-    const aoLado = juntos(nome, preco, disponivel)
-    const bloco = juntos(foto, nome, preco, disponivel)
-
-    // A foto fica de um lado e os três campos do outro.
-    expect(aoLado?.contains(foto)).toBe(false)
-    expect(aoLado?.parentElement).toBe(bloco)
-    for (const rotulo of ['Categoria', 'Descrição']) {
-      expect(bloco?.contains(screen.getByLabelText(rotulo))).toBe(false)
-    }
-  })
-
-  it('no produto novo, o lugar da foto também vem primeiro, explicando quando enviar', async () => {
-    abrir('/produtos/novo')
-    const aviso = await screen.findByText('Você envia a foto logo depois de criar o produto.')
-
-    expect(
-      Boolean(
-        aviso.compareDocumentPosition(screen.getByLabelText('Nome')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-      ),
-    ).toBe(true)
-    expect(screen.queryByLabelText('Enviar foto')).toBeNull()
-  })
-
-  it('enviar a foto não apaga o que foi digitado e ainda não foi salvo', async () => {
-    const enviados = abrir('/produtos/p-xburger')
-    const campo = await screen.findByLabelText('Enviar foto')
-
-    escrever('Preço (R$)', '29,90')
-    fireEvent.change(campo, {
-      target: { files: [new File(['png'], 'foto.png', { type: 'image/png' })] },
-    })
-    await screen.findByRole('img', { name: 'Foto atual' })
-
-    expect(screen.getByLabelText('Preço (R$)')).toHaveValue('29,90')
-    expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeEnabled()
-    // A foto foi pela rota dela; o preço só vai quando a pessoa salvar.
-    expect(enviados.map((e) => `${e.metodo} ${e.caminho}`)).toEqual([
-      'PUT /products/p-xburger/image',
-    ])
-    clicar('Salvar alterações')
-    await screen.findByText('Produto salvo.')
-    expect(enviados.at(-1)?.corpo).toMatchObject({ priceInCents: 2990 })
-  })
-
-  it('envia a foto na hora, como multipart', async () => {
-    const enviados = abrir('/produtos/p-xburger')
-    const campo = await screen.findByLabelText('Enviar foto')
-    expect(screen.getAllByText('Foto', { exact: true })).toHaveLength(1)
-
-    fireEvent.change(campo, {
-      target: { files: [new File(['png'], 'foto.png', { type: 'image/png' })] },
+  it('fechar com algo digitado pergunta antes: continuar editando ou descartar', async () => {
+    const { enviados, janela } = await abrirJanela()
+    fireEvent.change(janela.getByLabelText('Nome da categoria'), {
+      target: { value: 'Outro nome' },
     })
 
-    expect(await screen.findByRole('img', { name: 'Foto atual' })).toHaveAttribute(
-      'src',
-      'http://api/uploads/foto-nova.webp',
-    )
-    expect(enviados.map((e) => `${e.metodo} ${e.caminho}`)).toEqual([
-      'PUT /products/p-xburger/image',
-    ])
-  })
+    // No "Fechar", no Esc e no fundo escurecido: os três perguntam.
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(await janela.findByText('O que você digitou não foi salvo.')).toBeVisible()
+    fireEvent.click(janela.getByRole('button', { name: 'Continuar editando' }))
+    expect(janela.getByLabelText('Nome da categoria')).toHaveValue('Outro nome')
 
-  it('foto grande demais é recusada com a explicação', async () => {
-    abrir('/produtos/p-xburger', {
-      forcar: { 'PUT /products/p-xburger/image': { status: 413, corpo: {} } },
-    })
-    const campo = await screen.findByLabelText('Enviar foto')
+    fireEvent.click(janela.getByRole('button', { name: 'Fechar' }))
+    fireEvent.click(await janela.findByRole('button', { name: 'Descartar' }))
 
-    fireEvent.change(campo, {
-      target: { files: [new File(['x'], 'grande.jpg', { type: 'image/jpeg' })] },
-    })
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'A imagem é grande demais. Envie uma de até 15 MB.',
-    )
-  })
-
-  it('exclui depois de confirmar, e volta à lista', async () => {
-    const enviados = abrir('/produtos/p-refri')
-
-    await screen.findByRole('button', { name: 'Excluir produto' })
-    clicar('Excluir produto')
-    const janela = within(
-      await screen.findByRole('dialog', { name: 'Excluir o produto “Refrigerante”?' }),
-    )
-    expect(janela.getByText(/Os pedidos já feitos continuam/)).toBeVisible()
-    fireEvent.click(janela.getByRole('button', { name: 'Excluir produto' }))
-
-    expect(await screen.findByText('Produto “Refrigerante” excluído.')).toHaveAttribute(
-      'role',
-      'status',
-    )
-    expect(localAtual()).toBe(`${ADMIN}/cardapio`)
-    const bebidas = within(await screen.findByRole('region', { name: 'Bebidas' }))
-    expect(bebidas.getByText('Nenhum produto nesta categoria.')).toBeVisible()
-    expect(cabecalho('Bebidas')).toHaveAttribute('aria-expanded', 'true')
-    expect(enviados).toEqual([{ metodo: 'DELETE', caminho: '/products/p-refri', corpo: undefined }])
-  })
-
-  it('produto que está num combo não se exclui, e a janela diz em qual', async () => {
-    abrir('/produtos/p-xburger', {
-      forcar: {
-        'DELETE /products/p-xburger': conflito(
-          'PRODUCT_IN_COMBO',
-          'O produto faz parte de: Combo do Zé. Tire-o desses combos antes.',
-        ),
-      },
-    })
-
-    await screen.findByRole('button', { name: 'Excluir produto' })
-    clicar('Excluir produto')
-    const janela = within(await screen.findByRole('dialog'))
-    fireEvent.click(janela.getByRole('button', { name: 'Excluir produto' }))
-
-    expect(await janela.findByRole('alert')).toHaveTextContent(
-      'O produto faz parte de: Combo do Zé.',
-    )
-    expect(localAtual()).toBe(`${ADMIN}/cardapio/produtos/p-xburger`)
-  })
-
-  it('endereço de um produto que não existe avisa', async () => {
-    abrir('/produtos/p-nao-existe')
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Este produto não existe mais.')
-  })
-
-  it('o atendente abre o produto só para ver', async () => {
-    abrir('/produtos/p-xburger', {}, ATENDENTE)
-
-    expect(await screen.findByLabelText('Preço (R$)')).toBeDisabled()
-    expect(screen.queryByRole('button', { name: /Salvar|Excluir/ })).toBeNull()
-    expect(screen.queryByLabelText('Enviar foto')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Lanches' })).toBeVisible()
+    expect(enviados).toEqual([])
   })
 })

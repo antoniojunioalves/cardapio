@@ -1,7 +1,7 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { useId, type ComponentProps, type ReactNode } from 'react'
 
-import { ApiError } from '@/services/api'
+import { falhaAoSalvar } from '../form-fields'
 
 /**
  * As peças que os formulários do painel têm em comum: o cartão de uma seção,
@@ -42,7 +42,7 @@ export function AvisoDeAtencao({ children }: { children: ReactNode }) {
 interface MarcavelProps extends ComponentProps<'input'> {
   type: 'checkbox' | 'radio'
   titulo: string
-  descricao?: string
+  descricao?: string | undefined
 }
 
 /**
@@ -82,19 +82,21 @@ interface RodapeDeSalvarProps {
   /** O texto do botão. Sem ele, "Salvar alterações". */
   rotulo?: string
   /** Para uma recusa que a tela explica do seu jeito; sem resposta, vale a mensagem padrão. */
-  explicarFalha?: (erro: unknown) => string | null
+  explicarFalha?: ((erro: unknown) => string | null) | undefined
+  /**
+   * O `id` do formulário que o botão envia, quando o rodapé fica fora dele — o
+   * de uma janela, preso embaixo, fora da rolagem.
+   */
+  formulario?: string | undefined
 }
 
-/** A mensagem padrão de um envio recusado. */
-function falhaAoSalvar(erro: unknown): string {
-  if (erro instanceof ApiError) {
-    if (erro.status === 400) return 'Confira os campos marcados e tente de novo.'
-    // 409: um conflito que só a API vê — nome repetido, limite do plano. A
-    // mensagem dela já é escrita para quem usa o painel.
-    if (erro.status === 409) return erro.message
-  }
-  return 'Não foi possível salvar agora. Tente de novo.'
-}
+/** O botão que grava: o principal de um formulário, de um passo, de uma janela. */
+export const botaoPrincipal =
+  'text-body rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover disabled:opacity-50'
+
+/** O botão ao lado do principal, para o que não grava: voltar, descartar. */
+export const botaoSecundario =
+  'text-body rounded-control border border-border-strong px-4 py-3 font-semibold text-content hover:bg-surface-muted disabled:opacity-50'
 
 /** O "Salvar" de uma aba, com o resultado do último envio acima dele. */
 export function RodapeDeSalvar({
@@ -103,6 +105,7 @@ export function RodapeDeSalvar({
   sucesso,
   rotulo = 'Salvar alterações',
   explicarFalha,
+  formulario,
 }: RodapeDeSalvarProps) {
   return (
     <div className="flex flex-col gap-2">
@@ -118,8 +121,9 @@ export function RodapeDeSalvar({
       )}
       <button
         type="submit"
+        form={formulario}
         disabled={envio.isPending || !alterado}
-        className="text-body rounded-control bg-primary px-4 py-3 font-semibold text-primary-content hover:bg-primary-hover disabled:opacity-50"
+        className={botaoPrincipal}
       >
         {envio.isPending ? 'Salvando…' : rotulo}
       </button>

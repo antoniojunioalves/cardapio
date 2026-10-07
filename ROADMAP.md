@@ -149,7 +149,17 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - **Aviso de alterações não salvas no painel.** Cada aba das Configurações tem o seu "Salvar"
   (Fase 22); quem digita e troca de aba, ou sai pelo menu, perde o que digitou sem aviso. O aviso
   pede uma troca na forma como as rotas são montadas (o bloqueio de navegação do React Router só
-  existe no roteador de dados), e por isso não entrou junto das abas.
+  existe no roteador de dados), e por isso não entrou junto das abas. No cadastro do produto
+  (Fase 24b) a saída de um passo para outro já é segurada, e as janelas perguntam antes de fechar;
+  sair do cadastro pelo menu ou pelo "← Cardápio" continua sem aviso.
+- **Produto novo indisponível até concluir o cadastro.** O cadastro em passos grava a cada passo
+  (Fase 24b): o produto aparece no cardápio assim que o passo dele é salvo, antes de ganhar os
+  opcionais. Se isso incomodar — um lanche que exige o tamanho, pedido sem ele por um minuto —, o
+  produto pode nascer indisponível, e o "Salvar" do último passo ligá-lo.
+- **Duplicar um produto.** Cadastrar dez lanches com os mesmos opcionais é repetir o passo dos
+  opcionais dez vezes; "duplicar produto" resolveria.
+- **Criar uma categoria sem sair do cadastro do produto.** O seletor do passo do produto só mostra
+  as categorias que já existem; a nova se cria antes, pela lista.
 - Exceções ao horário de funcionamento: feriados e dias fechados fora da grade da semana. Hoje a
   saída é a pausa manual ("Recebendo pedidos"), que o dono precisa lembrar de desfazer.
 - Ordenar as formas de pagamento pela tela. A API já guarda a ordem por estabelecimento; a tela

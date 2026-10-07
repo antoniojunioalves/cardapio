@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router'
 
 import { IconeMais } from '@/components/icons'
 import { ConfirmarExclusao, EditarEExcluir } from '@/features/admin/components/catalog-parts'
 import { AvisoDeSomenteLeitura } from '@/features/admin/components/form-parts'
-import { caminhoDoPainel } from '@/features/admin/menu'
+import { OptionGroupSheet } from '@/features/admin/components/OptionGroupSheet'
 import {
   listaEmPalavras,
   opcoesEmPalavras,
@@ -16,34 +15,28 @@ import {
 } from '@/features/admin/option-groups'
 import { usePainel } from '@/features/admin/panel'
 
-/** O recado de quem chega à lista vindo da página de um grupo. */
-export interface ChegadaAsOpcoes {
-  aviso?: string
-}
-
 const botaoPrincipal =
   'text-body inline-flex shrink-0 items-center gap-1 rounded-control bg-primary px-4 py-2.5 font-semibold text-primary-content hover:bg-primary-hover'
 
 /**
- * Os grupos de opção do estabelecimento, em `/{tenantSlug}/admin/cardapio/opcoes`:
- * tamanho, adicionais, o que dá para tirar. Um grupo vale para vários produtos;
- * em quais ele aparece se escolhe na página de cada produto.
+ * Os grupos de opcionais do estabelecimento, em
+ * `/{tenantSlug}/admin/cardapio/opcionais`: tamanho, adicionais, o que dá para
+ * tirar. Um grupo vale para vários produtos; em quais ele aparece se escolhe no
+ * passo Opcionais de cada produto. Criar e editar um grupo abrem a janela dele
+ * por cima da lista — a mesma do passo do produto.
  */
 export function AdminOptionGroupsPage() {
   const { slug, permissoes } = usePainel()
   const grupos = useGrupos(slug)
-  const chegada = useLocation().state as ChegadaAsOpcoes | null
   const excluir = useExcluirGrupo(slug)
   const [excluindo, setExcluindo] = useState<GrupoDeOpcoes | null>(null)
-  const [aviso, setAviso] = useState(chegada?.aviso)
+  // A janela do grupo: `{}` cria um novo; com `grupo`, edita.
+  const [janela, setJanela] = useState<{ grupo?: GrupoDeOpcoes } | null>(null)
+  const [aviso, setAviso] = useState<string>()
   const podeAlterar = permissoes.includes('products:update')
-
-  const novoGrupo = (
-    <Link to={caminhoDoPainel(slug, 'cardapio/opcoes/novo')} className={botaoPrincipal}>
-      <IconeMais className="size-5" />
-      Novo grupo
-    </Link>
-  )
+  const abrirNovo = () => {
+    setJanela({})
+  }
 
   return (
     // O título e as abas são da moldura (`CardapioTabs`).
@@ -51,9 +44,14 @@ export function AdminOptionGroupsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-caption min-w-0 flex-1 text-content-muted">
           Tamanho, adicionais, o que dá para tirar do lanche. Um grupo vale para vários produtos: em
-          quais ele aparece, você escolhe na página de cada produto.
+          quais ele aparece, você escolhe no passo Opcionais de cada produto.
         </p>
-        {podeAlterar && grupos.data && grupos.data.length > 0 && novoGrupo}
+        {podeAlterar && grupos.data && grupos.data.length > 0 && (
+          <button type="button" onClick={abrirNovo} className={botaoPrincipal}>
+            <IconeMais className="size-5" />
+            Novo grupo
+          </button>
+        )}
       </div>
 
       {aviso && (
@@ -66,23 +64,23 @@ export function AdminOptionGroupsPage() {
       )}
 
       {grupos.isPending ? (
-        <p className="text-body text-content-muted">Carregando as opções…</p>
+        <p className="text-body text-content-muted">Carregando os opcionais…</p>
       ) : grupos.isError ? (
         <p role="alert" className="text-body text-content-muted">
-          Não foi possível carregar as opções. Recarregue a página para tentar de novo.
+          Não foi possível carregar os opcionais. Recarregue a página para tentar de novo.
         </p>
       ) : grupos.data.length === 0 ? (
         <section className="flex flex-col items-start gap-stack rounded-card bg-surface p-card shadow-card">
-          <h2 className="text-body font-semibold text-content">Nenhum grupo de opções ainda</h2>
+          <h2 className="text-body font-semibold text-content">Nenhum grupo de opcionais ainda</h2>
           <p className="text-body text-content-muted">
             Exemplos: <strong>Tamanho</strong> (pequeno, médio, grande), <strong>Adicionais</strong>{' '}
             (bacon, ovo, cheddar) ou <strong>Retirar</strong> (cebola, tomate). Sem grupos, o
             cliente pede cada produto como ele está.
           </p>
           {podeAlterar && (
-            <Link to={caminhoDoPainel(slug, 'cardapio/opcoes/novo')} className={botaoPrincipal}>
+            <button type="button" onClick={abrirNovo} className={botaoPrincipal}>
               Criar o primeiro grupo
-            </Link>
+            </button>
           )}
         </section>
       ) : (
@@ -93,18 +91,17 @@ export function AdminOptionGroupsPage() {
               className="flex flex-col gap-1 rounded-card bg-surface p-card shadow-card"
             >
               <div className="flex items-start gap-1">
-                <h2 className="min-w-0">
-                  <Link
-                    to={caminhoDoPainel(slug, `cardapio/opcoes/${grupo.id}`)}
-                    className="text-body font-semibold break-words text-content hover:text-primary hover:underline"
-                  >
-                    {grupo.name}
-                  </Link>
+                <h2 className="text-body min-w-0 font-semibold break-words text-content">
+                  {grupo.name}
                 </h2>
                 <EditarEExcluir
                   quem={`o grupo ${grupo.name}`}
                   editar={
-                    podeAlterar ? caminhoDoPainel(slug, `cardapio/opcoes/${grupo.id}`) : undefined
+                    podeAlterar
+                      ? () => {
+                          setJanela({ grupo })
+                        }
+                      : undefined
                   }
                   aoExcluir={
                     podeAlterar
@@ -128,6 +125,19 @@ export function AdminOptionGroupsPage() {
         </ul>
       )}
 
+      {janela && (
+        <OptionGroupSheet
+          slug={slug}
+          grupo={janela.grupo}
+          aoFechar={() => {
+            setJanela(null)
+          }}
+          aoSalvar={(salvo) => {
+            setAviso(`Grupo “${salvo.name}” ${janela.grupo ? 'salvo' : 'criado'}.`)
+            setJanela(null)
+          }}
+        />
+      )}
       {excluindo && (
         <ConfirmarExclusao
           oQue="o grupo"

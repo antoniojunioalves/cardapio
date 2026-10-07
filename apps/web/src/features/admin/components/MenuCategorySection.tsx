@@ -35,6 +35,8 @@ interface MenuCategorySectionProps {
   aoAlternar: () => void
   aoMoverCategoria: (direcao: 'subir' | 'descer') => void
   aoMoverProduto: (indice: number, direcao: 'subir' | 'descer') => void
+  /** O lápis da categoria: quem chama abre a janela de editar. */
+  aoEditarCategoria: () => void
   /** A lixeira: quem chama abre a confirmação. */
   aoExcluirCategoria: () => void
   aoExcluirProduto: (produto: Produto) => void
@@ -58,6 +60,7 @@ export function MenuCategorySection({
   aoAlternar,
   aoMoverCategoria,
   aoMoverProduto,
+  aoEditarCategoria,
   aoExcluirCategoria,
   aoExcluirProduto,
 }: MenuCategorySectionProps) {
@@ -120,11 +123,7 @@ export function MenuCategorySection({
         <div className="col-start-2 row-start-1">
           <EditarEExcluir
             quem={`a categoria ${categoria.name}`}
-            editar={
-              pode.alterarCategoria
-                ? caminhoDoPainel(slug, `cardapio/categorias/${categoria.id}`)
-                : undefined
-            }
+            editar={pode.alterarCategoria ? aoEditarCategoria : undefined}
             aoExcluir={pode.excluirCategoria ? aoExcluirCategoria : undefined}
           />
         </div>
@@ -213,7 +212,7 @@ interface LinhaDoProdutoProps {
 
 /**
  * Um produto na lista: foto, nome, preço e — o que se mexe todo dia — se está
- * disponível. A caixa grava na hora; o resto se edita na página do produto.
+ * disponível. A caixa grava na hora; o resto se edita nos passos do produto.
  */
 function LinhaDoProduto({
   slug,

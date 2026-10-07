@@ -1,7 +1,7 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-04
-**Fase atual:** 24 — concluída, aguardando validação
+**Atualizado em:** 2026-10-06
+**Fase atual:** 24b — concluída, aguardando validação
 **Próxima:** 25 — usuários, senha e permissões por pessoa. As fases 25 a 28 fecham o MVP (ver "O
 que falta para o MVP")
 
@@ -93,15 +93,20 @@ novo nasce com a entrega e a retirada desligadas, e o cardápio só recebe pedid
 escolhe como entrega e como recebe.
 
 **O cardápio também (Fase 23).** A tela Cardápio mostra as categorias na ordem em que o cliente
-as vê, cada uma com os seus produtos. Dali se marca o que esgotou, se muda a ordem e se chega às
-páginas de criar e editar categorias e produtos, com a foto do produto. O uso do plano gratuito
-(produtos e categorias) aparece no topo.
+as vê, cada uma com os seus produtos. Dali se marca o que esgotou, se muda a ordem, se edita uma
+categoria e se chega ao cadastro de um produto. O uso do plano gratuito (produtos e categorias)
+aparece no topo.
 
-**Opções, adicionais e combos também (Fase 24).** O Cardápio ganhou a aba "Opções e adicionais":
-os grupos — tamanho, adicionais, o que dá para tirar —, cada um com a regra de escolha e as opções
-com o acréscimo de preço, e a lista dos produtos que o usam. Na página do produto, dentro do quadro
-dele, as Opções ligam e ordenam os grupos, e são gravadas pelo mesmo "Salvar" dos campos; ao criar,
-escolhe-se produto ou combo, e o combo tem a seção dos itens, com quanto custariam separados.
+**Opcionais e combos também (Fase 24).** O Cardápio tem a aba "Opcionais": os grupos — tamanho,
+adicionais, o que dá para tirar —, cada um com a regra de escolha e as opções com o acréscimo de
+preço, e a lista dos produtos que o usam.
+
+**O produto se cadastra em passos (Fase 24b).** Primeiro o produto — com a foto e a categoria,
+escolhida num seletor —, depois os opcionais; o combo tem um passo no meio, para os itens. Cada
+passo grava ao avançar ("Salvar e continuar"), o último grava e volta à lista, e a edição usa os
+mesmos passos. Criar ou editar um grupo de opcionais abre uma janela por cima, sem sair do
+cadastro — a mesma janela da aba Opcionais; a categoria também se cria e se edita numa janela,
+sobre a lista.
 
 **Ainda não existe:** as telas de usuários e de clientes — isso ainda é configurado pela API. As
 fases 25 a 28 fecham o MVP; ver "O que falta para o MVP".
@@ -151,6 +156,155 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 24b — concluída
+
+O cadastro do cardápio em passos, a pedido do Junio depois de validar a Fase 24: "primeiro cria a
+categoria, depois passa para outro step e informa os dados do produto, vincula os opcionais
+existentes; caso queira criar um novo, abrir uma modal na frente". Só o `apps/web` mudou; a API e a
+coleção do Postman ficaram como estavam.
+
+### Microtasks
+
+| #   | Tarefa                                                                                                     | Status |
+| --- | ---------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Regras dos passos, sem tela (`product-steps.ts`): quais existem, a quais se pode ir, o seguinte            | ✅     |
+| 2   | O cabeçalho dos passos e a moldura que os junta, com um endereço por passo (`?passo=`)                     | ✅     |
+| 3   | Passo do produto: campos, foto escolhida antes de criar, cadastrar e editar                                | ✅     |
+| 4   | A categoria como seletor no passo do produto; criar e editar categoria numa janela, sobre a lista          | ✅     |
+| 5   | Passo dos itens do combo                                                                                   | ✅     |
+| 6   | Passo dos opcionais, o último: a lista, "Salvar" e "Voltar"                                                | ✅     |
+| 7   | A janela do grupo de opcionais, no passo: criar e editar sem sair do cadastro                              | ✅     |
+| 8   | A aba Opcionais com a mesma janela; saem as páginas do grupo e o `?produto=`                               | ✅     |
+| 9   | "Nova categoria" e o lápis da categoria abrem a janela dela; sai a página da categoria                     | ✅     |
+| 10  | Um passo com alteração por salvar segura a saída, e as janelas perguntam antes de fechar com algo digitado | ✅     |
+| 11  | A API simulada dos testes passou a devolver cópias, como a de verdade                                      | ✅     |
+| 12  | A foto do produto numa moldura, com o lápis e a lixeira pequenos abaixo, sem o título (pedidos do Junio)   | ✅     |
+| 13  | Os testes deixaram de usar a rede de verdade: a causa da falha que aparecia de vez em quando               | ✅     |
+| 14  | Dois passos em vez de três, e os botões "Salvar e continuar" e "Salvar" + "Voltar" (pedidos do Junio)      | ✅     |
+
+### O que foi decidido
+
+**As três decisões do Junio (2026-10-05):** cada passo grava ao avançar; a edição usa os mesmos
+passos; a aba dos opcionais continua, com a janela.
+
+**Os passos são dois: Produto e Opcionais** (pedido do Junio na validação: a categoria, que era o
+primeiro passo, virou um seletor dentro do passo do produto). O combo tem "Itens do combo" entre
+os dois. O cabeçalho mostra os números e, em tela maior, os nomes; no celular, a linha "Passo 1 de
+2 · Produto". Cadastrando, os passos vão em ordem: dá para voltar a um já feito, e não para pular
+um que ainda não foi salvo. Editando, qualquer um pode ser aberto pelo cabeçalho, e a tela abre no
+do produto.
+
+**O botão de cada passo dá a ideia de seguir adiante** (pedido do Junio): "Salvar e continuar"
+grava o passo e leva ao seguinte, no cadastro e na edição. No último passo — os opcionais — o
+botão é "Salvar", com "Voltar" ao lado: grava e volta à lista do cardápio, com a categoria do
+produto aberta e o aviso ("Produto cadastrado", ou "Produto salvo" na edição). O botão fica sempre
+ligado: sem nada a gravar, só segue, sem chamar a API. Os passos do meio também têm "Voltar".
+
+**Cada passo grava por conta própria**, pelas rotas que já existiam. Depois do passo do produto o
+endereço passa a ser o do produto criado (`/produtos/:id?passo=…`), no lugar do de criar: recarregar
+não perde nada, e o "voltar" do navegador não leva a um formulário em branco.
+
+**A categoria é um seletor no passo do produto**, depois do "Disponível" e antes da descrição, com
+as categorias na ordem do cardápio e a oculta marcada. "+ Novo produto" de uma categoria abre o
+passo com ela escolhida; na edição, trocar o seletor muda o produto de categoria ao salvar.
+
+**A categoria se cria e se edita numa janela** (`CategorySheet`), sobre a lista: "Nova categoria" —
+e "Criar a primeira categoria", no cardápio vazio — abrem a janela em criar, e a categoria criada
+chega aberta, com o "+ Novo produto" à mão; o lápis abre a mesma janela para editar. A página da
+categoria deixou de existir; excluir continua na lixeira da lista.
+
+**A foto se escolhe já no cadastro**, com a prévia na hora, e é enviada logo depois de o produto
+ser criado. Tipo e tamanho são conferidos antes, com as frases da API. Se a API recusar a foto, o
+produto continua criado: o cadastro segue, com o aviso, e ela se envia de novo no passo do produto
+— onde, com o produto criado, a foto grava ao escolher o arquivo, como antes.
+
+**A foto do produto fica numa moldura, com o lápis e a lixeira pequenos logo abaixo**, e sem a
+palavra "Foto" em cima (pedidos do Junio na validação, com uma imagem de referência). O lápis
+escolhe ou troca a foto — azul —, e a lixeira a remove — vermelha, e só aparece com foto. A imagem
+continua do mesmo tamanho. O logo e a capa, nas Configurações, continuam com os botões de texto.
+
+**A janela do grupo de opcionais** (`OptionGroupSheet`, sobre o `Sheet` que já confirmava
+exclusões) tem o formulário do grupo e o botão de gravar preso no rodapé. No passo dos opcionais,
+o grupo criado é gravado ali e entra no fim da lista do produto, como mudança por salvar; o lápis
+de um grupo abre a mesma janela para editar. Na aba Opcionais, "Novo grupo" e o lápis fazem o
+mesmo. As páginas do grupo deixaram de existir, e com elas o `?produto=` e o grupo que se ligava
+sozinho ao produto. Fechar a janela com algo digitado — no "Fechar", no Esc ou num toque fora —
+pergunta antes.
+
+**Um passo com alteração por salvar segura a saída** — pelo cabeçalho e pelo "Voltar" — e oferece
+descartar. É o aviso de alterações não salvas, que continua faltando no resto do painel.
+
+**O nome "Opcionais"**, que é como o Junio fala, na aba (`/admin/cardapio/opcionais`) e no passo.
+Cada conjunto continua sendo um "grupo", com as "opções" dentro.
+
+**Substituído, do que a Fase 24 tinha:** a página única do produto, com os opcionais dentro do
+quadro e o "Salvar" que gravava campos e opcionais juntos. A ordem dos campos e a foto ao lado, em
+tela grande, continuam, no passo do produto.
+
+**Achado nos testes, corrigido: a API simulada devolvia as próprias listas.** "Criar" uma categoria
+mudava por dentro a lista que a tela já tinha guardado, e a tela não se redesenhava — parecia um
+defeito da tela, e era do teste. Agora cada resposta é uma cópia, como a que chega
+pela rede.
+
+**Achado ao escrever, corrigido antes de existir: a janela dentro do formulário do passo.** A
+janela é desenhada em outro lugar da página, mas para o React continua dentro de quem a abriu; o
+"enviar" do formulário dela subiria até o do passo e gravaria os opcionais junto. Ela fica fora do
+formulário, e há teste.
+
+**Contrapartida de gravar a cada passo:** o produto novo aparece no cardápio assim que o passo do
+produto é salvo, antes de ganhar os opcionais. Está anotado no ROADMAP o produto nascer
+indisponível até o fim do cadastro.
+
+### Verificação executada
+
+| Verificação                                                                                     | Resultado                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm verify`                                                                                   | **1059 testes** (591 API + 418 web + 50 shared); formatação, typecheck, lint e build                                                             |
+| Clone limpo, `--frozen-lockfile`                                                                | os mesmos 1059 testes                                                                                                                            |
+| Passo aberto sem o produto criado, ou pulado no cadastro                                        | falham os testes das regras sem tela e "antes de criar o produto, os opcionais não abrem"                                                        |
+| Botões trocados: "Salvar" no primeiro passo, ou "Salvar e continuar" no último, ou sem "Voltar" | falham o cadastro do zero e "é o último passo: 'Salvar' e 'Voltar'"                                                                              |
+| Último passo sem voltar à lista; aviso errado no fim                                            | falham "vão no 'Salvar', a lista inteira" e "sem mexer, 'Salvar' só encerra"                                                                     |
+| Passo regravado sem mudança, ou gravado sem seguir adiante                                      | falham "sem mudança, 'Salvar e continuar' só segue" e "grava os campos… e segue"                                                                 |
+| Seletor da categoria sem a de onde se veio, ou sem a oculta                                     | falham "abre o passo do produto com ela no seletor" e "a categoria é um seletor"                                                                 |
+| Saída de um passo sem segurar, pelo cabeçalho ou pelo "Voltar"                                  | falham os dois testes da saída segurada                                                                                                          |
+| Edição com os passos travados; "Excluir" no meio do cadastro                                    | falham "os dois passos podem ser clicados" e "não há 'Excluir'"                                                                                  |
+| Produto criado sem a foto; foto recusada derrubando tudo                                        | falham o cadastro do zero e "foto recusada pela API: o produto fica criado"                                                                      |
+| Foto de qualquer tipo ou tamanho; prévia sem liberar                                            | falham os dois testes da foto escolhida                                                                                                          |
+| Foto do produto fora da moldura, com texto, ou de outro tamanho                                 | falham "a foto fica numa moldura…" e "a lixeira da foto a remove na hora"                                                                        |
+| Grupo criado na janela fora da lista; janela dentro do formulário do passo                      | falha "criar um grupo na janela: ele é gravado ali…"                                                                                             |
+| Janela fechando com o digitado, ou sem enviar o formulário                                      | falham os testes de fechar e o de criar pela aba                                                                                                 |
+| Categoria nova chegando recolhida, ou com o aviso errado                                        | falha "cria: a lista ganha a categoria, aberta e pronta para o primeiro produto"                                                                 |
+| Testes falando com a rede de verdade                                                            | falham os três de `tests/sem-rede.test.ts`                                                                                                       |
+| Ao todo                                                                                         | 35 quebras propositais no desenho que ficou (26 nos passos e nas janelas, 9 na foto e na rede), todas pegas; antes, 34 no desenho de três passos |
+| Navegador de verdade, em 390, 768 e 1280 px                                                     | cadastro do zero, combo, edição e janelas; 22 conferências pela API                                                                              |
+| Validação do Junio                                                                              | a fazer                                                                                                                                          |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
+
+**Visto num navegador de verdade**, num estabelecimento descartável criado do zero e apagado no
+fim: a primeira categoria criada na janela, sobre o cardápio vazio; o produto com a foto escolhida
+antes de criar e a categoria no seletor; "Salvar e continuar" levando aos opcionais; um grupo
+criado na janela e gravado só no "Salvar" do último passo, que volta à lista; um segundo produto
+trocando a categoria no seletor, com o "Voltar" do último passo; um combo com os três passos; na
+edição, "Salvar e continuar" sem mudança só seguindo, o preço e a categoria gravados ao continuar,
+a saída segurada pelo "Voltar", e o último "Salvar" voltando à lista com a categoria aberta; e a
+categoria renomeada na janela. A cada gravação, o que ficou na API foi lido de volta e conferido.
+Sem erro no console e sem rolagem lateral.
+
+**A falha que aparecia de vez em quando, explicada e corrigida.** Na Fase 24, um `pnpm verify`
+falhou uma vez porque a API simulada de um teste registrou três envios que ele não fez; aqui
+aconteceu de novo, em outro teste, e desta vez a saída foi guardada: eram três
+`POST /auth/refresh`. Quando um teste acabava e tirava a sua API simulada, sobrava o `fetch` de
+verdade; uma chamada atrasada do painel ia para a API de quem estivesse com o `pnpm dev` de pé,
+recebia 401 — o token do teste não vale nada —, e o painel tentava renovar a sessão; a renovação
+caía na API simulada do teste seguinte. Reproduzido isolado: sem simulação, `GET /admin/plan`
+respondia 401 e vinha o `POST /auth/refresh`. Agora nenhum teste fala com a rede: entre um teste e
+outro o `fetch` recusa (`tests/setup.ts`), as consultas que sobram são canceladas
+(`tests/helpers/pagina.tsx`), e `tests/sem-rede.test.ts` confere as três coisas. Os testes também
+deixaram de bater, sem querer, no servidor de desenvolvimento.
 
 ---
 
@@ -276,11 +430,13 @@ descrição — importe de novo.
 
 O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
 
-**Em aberto: uma falha que apareceu uma vez.** Num `pnpm verify`, "cria a partir da categoria, e
+**Uma falha que apareceu uma vez — explicada na Fase 24b.** Num `pnpm verify`, "cria a partir da categoria, e
 vai para a página dele" (`AdminMenu.test.tsx`) falhou porque a API simulada registrou três envios
 além do `POST` da criação. Não se repetiu em nove execuções seguintes (o arquivo sozinho, a suíte
-do web, as três suítes juntas, o `pnpm verify` e o clone limpo), e a causa não foi achada — não se
-sabe quais eram os três envios. Se voltar a aparecer, guardar a saída inteira do teste.
+do web, as três suítes juntas, o `pnpm verify` e o clone limpo), e a causa não foi achada naquela
+fase. Voltou a aparecer na Fase 24b, com a saída guardada: eram renovações de sessão vindas de
+chamadas que escapavam para a API de desenvolvimento. Ver "A falha que aparecia de vez em quando",
+acima.
 
 ---
 
@@ -1121,8 +1277,11 @@ vazio**, como faria alguém que nunca viu o sistema.
   Configurações. O estabelecimento novo passou a nascer com a entrega e a retirada desligadas.
 - **23 (concluída):** categorias e produtos, com a foto do produto, numa tela Cardápio. A
   reordenação de produtos em lote (`PUT /products/order`) entrou: a tela precisou.
-- **24 (concluída):** grupos de opção, adicionais e combos — uma aba "Opções e adicionais" no
-  Cardápio, a seção Opções na página do produto, e a escolha de produto ou combo ao criar.
+- **24 (concluída):** grupos de opção, adicionais e combos — uma aba no Cardápio para os grupos, os
+  grupos de cada produto, e a escolha de produto ou combo ao criar.
+- **24b (concluída):** o cadastro em passos — o produto, com a categoria num seletor, os itens do
+  combo e os opcionais —, com a categoria e o grupo de opcionais criados e editados em janelas. A
+  aba passou a se chamar "Opcionais".
 - Todas sobre rotas que já existem: `admin-settings.ts`, `admin-catalog.ts` e
   `admin-customization.ts`.
 
