@@ -3,12 +3,15 @@ import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
 import { AdminLayout } from '@/features/admin/components/AdminLayout'
+import { CardapioTabs } from '@/features/admin/components/CardapioTabs'
 import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
 import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminCategoryPage } from '@/pages/AdminCategoryPage'
 import { AdminHoursPage } from '@/pages/AdminHoursPage'
 import { AdminMenuPage } from '@/pages/AdminMenuPage'
+import { AdminOptionGroupPage } from '@/pages/AdminOptionGroupPage'
+import { AdminOptionGroupsPage } from '@/pages/AdminOptionGroupsPage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
 import { AdminPaymentPage } from '@/pages/AdminPaymentPage'
 import { AdminProductPage } from '@/pages/AdminProductPage'
@@ -42,9 +45,11 @@ import { SignupPage } from '@/pages/SignupPage'
  * — o Início no índice, os pedidos em `/admin/pedidos`. Tela nova do painel:
  * uma rota filha aqui e uma entrada em `features/admin/menu.ts`.
  *
- * O cardápio é uma lista, em `/admin/cardapio`, e cada categoria e cada
- * produto se cria e se edita numa página própria: `cardapio/produtos/novo`,
- * `cardapio/produtos/:id`, e o mesmo para `categorias`.
+ * O cardápio tem duas abas (`CardapioTabs`): os produtos, em `/admin/cardapio`,
+ * e as opções e adicionais, em `/admin/cardapio/opcoes`. Cada categoria,
+ * produto e grupo de opções se cria e se edita numa página própria, fora das
+ * abas: `cardapio/produtos/novo`, `cardapio/produtos/:id`, e o mesmo para
+ * `categorias` e `opcoes`.
  *
  * As configurações têm abas, e cada aba é uma rota filha de
  * `/admin/configuracoes` (`SettingsTabs`): a do estabelecimento no índice, e
@@ -68,7 +73,12 @@ export function AppRoutes() {
       <Route path="/:tenantSlug/admin" element={<AdminLayout />}>
         <Route index element={<AdminHomePage />} />
         <Route path="pedidos" element={<AdminOrdersPage />} />
-        <Route path="cardapio" element={<AdminMenuPage />} />
+        <Route path="cardapio" element={<CardapioTabs />}>
+          <Route index element={<AdminMenuPage />} />
+          <Route path="opcoes" element={<AdminOptionGroupsPage />} />
+        </Route>
+        <Route path="cardapio/opcoes/novo" element={<AdminOptionGroupPage />} />
+        <Route path="cardapio/opcoes/:grupoId" element={<AdminOptionGroupPage />} />
         <Route path="cardapio/categorias/nova" element={<AdminCategoryPage />} />
         <Route path="cardapio/categorias/:categoriaId" element={<AdminCategoryPage />} />
         <Route path="cardapio/produtos/novo" element={<AdminProductPage />} />

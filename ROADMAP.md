@@ -196,6 +196,9 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   API guarda a imagem da categoria desde a Fase 6, mas o cardápio não a mostra e a tela não
   oferece o envio. Fica aqui como registro, se um dia a ideia voltar: onde ela apareceria (faixa
   no topo da categoria, ícone na barra de categorias) e o peso a mais na página.
+- **Marcar uma opção como esgotada pela lista do cardápio** — o bacon acabou. Hoje é na página do
+  grupo (Fase 24), que vale para todos os produtos que o usam.
+- **Reordenar os itens de um combo** na tela. Hoje ficam na ordem em que foram acrescentados.
 - **Busca e filtro na lista do cardápio do painel** — "só os esgotados", por nome. Com o limite de
   20 produtos do plano gratuito, a lista inteira ainda cabe na tela; com o plano pago, deixa de
   caber.

@@ -535,7 +535,14 @@ as regras puras da lista. Algumas escolhas que valem para as próximas:
   `try`/`catch`: numa janela anônima ou com o armazenamento bloqueado, a tela tem de funcionar
   igual, só sem lembrar;
 - um botão cujo texto é feito de vários blocos (nome e resumo) recebe o nome acessível pronto, em
-  `aria-label`: o navegador junta os blocos de jeitos diferentes, e o jsdom de outro.
+  `aria-label`: o navegador junta os blocos de jeitos diferentes, e o jsdom de outro;
+- dois botões com o mesmo texto na mesma página ("Adicionar" nos itens do combo e nas opções)
+  ganham nomes acessíveis distintos ("Adicionar ao combo", "Adicionar o grupo");
+- botão de texto vermelho é `botaoDeTextoPerigo` — nunca `botaoDeTexto` com `text-danger` por cima;
+- uma tela com abas usa `TelaComAbas` (`components/TelaComAbas.tsx`), como Configurações e
+  Cardápio: uma lista de abas em `menu.ts`, uma rota de moldura e uma rota filha por aba;
+- regra que a API também aplica vai para `@repo/shared`, com as frases para quem usa a tela (como
+  `business-hours.ts` e `option-groups.ts`), e o formulário a usa num `refine` com `when`.
 
 **Uma aba nova em Configurações** não é item do menu: é uma entrada em `ABAS_DAS_CONFIGURACOES`
 (`menu.ts`) e uma rota filha de `configuracoes` em `App.tsx`. A página da aba não tem `<h1>` nem
@@ -566,9 +573,13 @@ testa pelo `aria-expanded` do botão "Menu", não por estar ou não visível.
 
 A moldura já tem um `role="status"` — o indicador "Conectando… / Ao vivo". Um aviso da tela
 ("Produto salvo.") se acha pelo texto, e não por `findByRole('status')`, que pega o indicador.
-Para uma tela de cadastro, `tests/AdminMenu.test.tsx` tem uma API simulada que guarda estado
-(`simularApi`): criar, alterar, reordenar e excluir mudam o que as leituras seguintes devolvem,
-e o teste percorre o fluxo inteiro, da lista à página e de volta.
+Para uma tela do cardápio, `tests/helpers/cardapio-admin.ts` tem uma API simulada que guarda
+estado (`simularApi`, e `abrirNoCardapio` para abrir uma página com ela): categorias, produtos,
+grupos de opção, os grupos de cada produto e os itens dos combos. Criar, alterar, reordenar e
+excluir mudam o que as leituras seguintes devolvem — inclusive quem usa cada grupo, calculado como
+a API de verdade —, e o teste percorre o fluxo inteiro, da lista à página e de volta. Ela serve a
+`AdminMenu.test.tsx` e `AdminOptions.test.tsx`; acrescente as rotas novas nela, e não um mock
+avulso no teste.
 
 ### Testando uma página
 

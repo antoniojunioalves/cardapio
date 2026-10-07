@@ -118,6 +118,8 @@ export function categoriaParaFormulario(categoria: Categoria): ValoresDaCategori
 
 /** O produto: o preço é digitado em reais e vai em centavos. */
 export const formularioDeProdutoSchema = z.object({
+  /** Escolhido na criação; depois, a API não aceita mais o campo (`alteracaoDoProduto`). */
+  type: z.enum(['SIMPLE', 'COMBO']),
   categoryId: z.string().min(1, 'Escolha a categoria.'),
   name: textoObrigatorio(120, 'Informe o nome do produto.'),
   description: textoOpcional(2000),
@@ -129,11 +131,29 @@ export type ValoresDoProduto = z.input<typeof formularioDeProdutoSchema>
 export type DadosDoProduto = z.output<typeof formularioDeProdutoSchema>
 
 export function produtoNovo(categoryId: string): ValoresDoProduto {
-  return { categoryId, name: '', description: '', priceInCents: '', isAvailable: true }
+  return {
+    type: 'SIMPLE',
+    categoryId,
+    name: '',
+    description: '',
+    priceInCents: '',
+    isAvailable: true,
+  }
+}
+
+/**
+ * O corpo do `PATCH` de um produto: tudo, menos o tipo. Um combo não vira
+ * produto simples nem o contrário — a API recusa o campo depois de criado.
+ */
+export function alteracaoDoProduto(dados: DadosDoProduto): Omit<DadosDoProduto, 'type'> {
+  const alteracao: Partial<DadosDoProduto> = { ...dados }
+  delete alteracao.type
+  return alteracao as Omit<DadosDoProduto, 'type'>
 }
 
 export function produtoParaFormulario(produto: Produto): ValoresDoProduto {
   return {
+    type: produto.type,
     categoryId: produto.categoryId,
     name: produto.name,
     description: produto.description ?? '',
@@ -144,7 +164,7 @@ export function produtoParaFormulario(produto: Produto): ValoresDoProduto {
 
 // --- API -------------------------------------------------------------------------
 
-const chaveDoCatalogo = (slug: string) => ['painel', 'catalogo', slug] as const
+export const chaveDoCatalogo = (slug: string) => ['painel', 'catalogo', slug] as const
 export const chaveDasCategorias = (slug: string) =>
   [...chaveDoCatalogo(slug), 'categorias'] as const
 export const chaveDosProdutos = (slug: string) => [...chaveDoCatalogo(slug), 'produtos'] as const

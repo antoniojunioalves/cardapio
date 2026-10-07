@@ -24,7 +24,7 @@ import {
 import { MenuCategorySection } from '@/features/admin/components/MenuCategorySection'
 import { caminhoDoPainel } from '@/features/admin/menu'
 import { useCategoriasAbertas } from '@/features/admin/open-categories'
-import { usePainel, useTituloDoPainel } from '@/features/admin/panel'
+import { usePainel } from '@/features/admin/panel'
 import { cardapioNoPlano, usePlano } from '@/features/admin/plan'
 
 /** O recado de quem chega à lista vindo de uma página de categoria ou de produto. */
@@ -64,8 +64,6 @@ export function AdminMenuPage() {
   // O recado de quem chegou de outra página, ou de uma exclusão feita aqui mesmo.
   const [aviso, setAviso] = useState(chegada?.aviso)
 
-  useTituloDoPainel('Cardápio')
-
   const pode = {
     criarCategoria: permissoes.includes('categories:create'),
     alterarCategoria: permissoes.includes('categories:update'),
@@ -82,12 +80,10 @@ export function AdminMenuPage() {
   const falhaAoOrdenar = reordenarCategorias.isError || reordenarProdutos.isError
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-section-y">
+    // O título e as abas são da moldura (`CardapioTabs`).
+    <div className="flex flex-col gap-section-y">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-heading text-content">Cardápio</h1>
-          {plano && <p className="text-caption text-content-muted">{plano.texto}</p>}
-        </div>
+        <p className="text-caption min-w-0 text-content-muted">{plano?.texto}</p>
         {pode.criarCategoria &&
           categorias.data &&
           categorias.data.length > 0 &&

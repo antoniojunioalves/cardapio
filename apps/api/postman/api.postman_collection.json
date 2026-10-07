@@ -1474,7 +1474,7 @@
                 "option-groups"
               ]
             },
-            "description": ""
+            "description": "Cada grupo traz também os produtos que o usam (`products`)."
           }
         },
         {

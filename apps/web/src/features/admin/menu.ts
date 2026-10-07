@@ -51,6 +51,16 @@ export const ABAS_DAS_CONFIGURACOES: readonly { rotulo: string; caminho: string 
   { rotulo: 'Pagamento', caminho: 'configuracoes/pagamento' },
 ]
 
+/**
+ * As abas do Cardápio. Os grupos de opção — tamanho, adicionais, o que dá para
+ * tirar — valem para vários produtos, e por isso têm a lista deles, ao lado da
+ * dos produtos, e não um item próprio no menu.
+ */
+export const ABAS_DO_CARDAPIO: readonly { rotulo: string; caminho: string }[] = [
+  { rotulo: 'Produtos', caminho: 'cardapio' },
+  { rotulo: 'Opções e adicionais', caminho: 'cardapio/opcoes' },
+]
+
 /** Os itens que as permissões da pessoa alcançam, na ordem do menu. */
 export function itensDoMenu(permissoes: readonly string[]): ItemDoMenu[] {
   return MENU.filter((item) => !item.permissao || permissoes.includes(item.permissao))

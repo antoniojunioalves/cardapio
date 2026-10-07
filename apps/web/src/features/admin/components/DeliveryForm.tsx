@@ -18,6 +18,7 @@ import {
   AvisoDeAtencao,
   AvisoDeSomenteLeitura,
   botaoDeTexto,
+  botaoDeTextoPerigo,
   Marcavel,
   RodapeDeSalvar,
   Secao,
@@ -193,7 +194,7 @@ export function DeliveryForm({ slug, entrega, podeEditar }: DeliveryFormProps) {
                             onClick={() => {
                               regioes.remove(indice)
                             }}
-                            className={`${botaoDeTexto} justify-self-end text-danger hover:bg-danger/10 sm:mt-9`}
+                            className={`${botaoDeTextoPerigo} justify-self-end sm:mt-9`}
                           >
                             Remover
                           </button>

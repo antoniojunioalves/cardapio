@@ -150,5 +150,14 @@ export function Carregado<T>({ consulta, oQue, children }: CarregadoProps<T>) {
 }
 
 /** Botão discreto, de texto: adicionar, remover, repetir. */
-export const botaoDeTexto =
-  'text-caption rounded-control px-2 py-1.5 font-semibold text-primary hover:bg-primary/10 disabled:opacity-50'
+const baseDoBotaoDeTexto =
+  'text-caption rounded-control px-2 py-1.5 font-semibold disabled:opacity-50'
+
+export const botaoDeTexto = `${baseDoBotaoDeTexto} text-primary hover:bg-primary/10`
+
+/**
+ * O mesmo, em vermelho: remover, tirar. Uma variante própria, e não
+ * `botaoDeTexto` com `text-danger` por cima — quando duas classes de cor se
+ * chocam, quem ganha é a ordem do CSS gerado, e não a do `className`.
+ */
+export const botaoDeTextoPerigo = `${baseDoBotaoDeTexto} text-danger hover:bg-danger/10`

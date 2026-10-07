@@ -17,7 +17,8 @@ function mensagemDaFalha(erro: unknown): string {
 interface ImageFieldProps {
   /** "Logo", "Capa", "Foto": vira "Enviar foto", "Trocar foto" e "Foto atual". */
   rotulo: string
-  dica: string
+  /** O que a pessoa precisa saber da imagem. Sem ela, a prévia e os botões bastam. */
+  dica?: string | undefined
   url: string | null
   podeEditar: boolean
   /** A proporção da moldura da prévia: o logo é quadrado, a capa é larga. */
@@ -68,7 +69,7 @@ export function ImageField({
         )}
       </div>
 
-      <p className="text-caption text-content-muted">{dica}</p>
+      {dica && <p className="text-caption text-content-muted">{dica}</p>}
 
       {podeEditar && (
         <div className="flex flex-wrap items-center gap-2">

@@ -92,7 +92,9 @@ export function nomesDasOpcoes(produto: ProdutoPublico, selecao: Selecao): strin
 }
 
 /** A regra do grupo em palavras: "Escolha 1", "Escolha até 3", "Escolha de 1 a 2". */
-export function descreverRegraDoGrupo(grupo: GrupoPublico): string {
+export function descreverRegraDoGrupo(
+  grupo: Pick<GrupoPublico, 'minSelections' | 'maxSelections'>,
+): string {
   const { minSelections: min, maxSelections: max } = grupo
   if (min === max) return `Escolha ${String(max)}`
   if (min === 0) return max === 1 ? 'Escolha até 1' : `Escolha até ${String(max)}`

@@ -1,9 +1,9 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-03
-**Fase atual:** 23 — concluída, aguardando validação
-**Próxima:** 24 — grupos de opção, adicionais e combos. As fases 24 a 28 fecham o MVP (ver "O que
-falta para o MVP")
+**Atualizado em:** 2026-10-04
+**Fase atual:** 24 — concluída, aguardando validação
+**Próxima:** 25 — usuários, senha e permissões por pessoa. As fases 25 a 28 fecham o MVP (ver "O
+que falta para o MVP")
 
 ---
 
@@ -97,8 +97,14 @@ as vê, cada uma com os seus produtos. Dali se marca o que esgotou, se muda a or
 páginas de criar e editar categorias e produtos, com a foto do produto. O uso do plano gratuito
 (produtos e categorias) aparece no topo.
 
-**Ainda não existe:** as telas de opções, adicionais e combos, de usuários e de clientes — isso
-ainda é configurado pela API. As fases 24 a 28 fecham o MVP; ver "O que falta para o MVP".
+**Opções, adicionais e combos também (Fase 24).** O Cardápio ganhou a aba "Opções e adicionais":
+os grupos — tamanho, adicionais, o que dá para tirar —, cada um com a regra de escolha e as opções
+com o acréscimo de preço, e a lista dos produtos que o usam. Na página do produto, dentro do quadro
+dele, as Opções ligam e ordenam os grupos, e são gravadas pelo mesmo "Salvar" dos campos; ao criar,
+escolhe-se produto ou combo, e o combo tem a seção dos itens, com quanto custariam separados.
+
+**Ainda não existe:** as telas de usuários e de clientes — isso ainda é configurado pela API. As
+fases 25 a 28 fecham o MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -135,8 +141,8 @@ ainda é configurado pela API. As fases 24 a 28 fecham o MVP; ver "O que falta p
 | 21  | Configuração do estabelecimento e a lista "o que falta para receber pedidos"                                        | ✅ Concluída |
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ✅ Concluída |
 | 23  | Categorias e produtos                                                                                               | ✅ Concluída |
-| 24  | Grupos de opção, adicionais e combos                                                                                | ⬜ Próxima   |
-| 25  | Usuários e senha                                                                                                    | ⬜           |
+| 24  | Grupos de opção, adicionais e combos                                                                                | ✅ Concluída |
+| 25  | Usuários e senha                                                                                                    | ⬜ Próxima   |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
 | 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
 | 28  | Colocar no ar — religa antes o CI guardado na Fase 16                                                               | ⬜           |
@@ -145,6 +151,136 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 24 — concluída
+
+As opções, os adicionais e os combos pela tela — o que faltava do passo 3 do critério de pronto.
+
+### Microtasks
+
+| #   | Tarefa                                                                                                    | Status |
+| --- | --------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Regras do grupo de opções em `@repo/shared`, as mesmas na tela e na API, com mensagens para quem cadastra | ✅     |
+| 2   | API: o grupo diz em quais produtos é usado (`products`, na lista e no detalhe)                            | ✅     |
+| 3   | Cardápio com abas: Produtos e "Opções e adicionais" (a faixa de abas virou peça comum, `TelaComAbas`)     | ✅     |
+| 4   | Lista dos grupos: a regra em palavras, as opções com o acréscimo, onde cada um é usado; lápis e lixeira   | ✅     |
+| 5   | Página do grupo: nome, como o cliente escolhe (mínimo e máximo, com a frase que o cliente vê), as opções  | ✅     |
+| 6   | Na página do produto, as Opções: acrescentar, tirar e ordenar os grupos; criar um grupo já ligado         | ✅     |
+| 7   | Combos: escolher produto ou combo ao criar; a seção dos itens, com quantidades e o preço separado         | ✅     |
+| 8   | Botões vermelhos de texto (remover, tirar) com variante própria — o "Remover" da Fase 22 saía verde       | ✅     |
+| 9   | Testes: regras compartilhadas, API, as duas abas, o grupo, as opções do produto e os combos               | ✅     |
+
+### Decisões e achados desta fase
+
+**Abas no Cardápio, e não um item novo no menu**, como em Configurações: "Produtos" (a lista da
+Fase 23) e "Opções e adicionais". Os grupos valem para vários produtos — "Adicionais" se cria uma
+vez e entra em vários lanches —, e por isso têm a lista deles; mas são parte do cardápio. As
+páginas de criar e editar ficam fora das abas, com o link de volta. A faixa de abas de
+Configurações virou uma peça comum (`TelaComAbas`). **Decisão minha, para o Junio validar.**
+
+**"Opções e adicionais", e não "grupos de opção".** É o nome que o dono reconhece. A lista mostra
+cada grupo com a regra nas palavras que o cliente vê ("Escolha 1 · obrigatório", "Escolha até 3 ·
+opcional"), as opções com o acréscimo ("Bacon (+R$ 5,00)") e onde ele é usado ("Em X-Burger e
+X-Salada").
+
+**Como o cliente escolhe: mínimo e máximo, com a frase que o cliente vai ver** logo embaixo ("O
+cliente vê: Escolha até 2 · opcional"). Pensei em botões prontos (escolha uma, escolha até N), mas
+os dois números com a frase cobrem todos os casos e mostram o efeito na hora.
+
+**As regras do grupo foram para `@repo/shared`**, como as do horário na Fase 22: sem opções;
+mínimo maior que o máximo; mínimo maior que o número de opções (o produto ficaria impossível de
+pedir); máximo maior que o número de opções; nomes repetidos. A tela põe cada erro no campo dele;
+a API recusa com as mesmas frases. Cada regra roda com os campos dela válidos, mesmo que outro
+esteja errado — e a checagem por mutação confirmou.
+
+**A API passou a dizer em quais produtos o grupo é usado** (`products`, em ordem alfabética). É o
+que permite avisar, antes de salvar, que mudar o grupo muda todos eles ("Este grupo está em
+X-Burger e X-Salada. O que você mudar aqui vale para todos eles."), e explicar por que um grupo em
+uso não se exclui. Uma consulta a mais por leitura, para todos os grupos de uma vez.
+
+**Na página do produto, as Opções ficam dentro do quadro do produto e vão no mesmo "Salvar"**
+(pedido do Junio na validação: a seção à parte, que gravava na hora, "não estava boa").
+Acrescentar, tirar e mudar a ordem só mexem na tela; o "Salvar alterações" liga, e é ele que manda
+a lista inteira, como a rota pede. Cada parte só vai se mudou: salvar as opções não regrava os
+campos (`PUT` dos grupos, sem `PATCH`), e o contrário também; mudando as duas, vão os campos e
+depois as opções. As duas rotas aceitam repetição: se a segunda falhar, a mudança continua na tela
+e salvar de novo resolve. Desfazer a mudança na mão volta ao que está gravado, e o botão desliga.
+
+"Criar um grupo novo para este produto" abre a página do grupo, e ao criar ele já entra no fim da
+lista do produto, e a página volta para lá. Como isso leva a outra página, com alteração por
+salvar o atalho dá lugar ao recado "salve antes as alterações" — o que não foi salvo se perderia.
+Um grupo obrigatório sem opção disponível ganha o aviso de que o produto aparece esgotado no
+cardápio — é a regra que o cardápio público já aplicava. A foto continua gravando ao escolher o
+arquivo, e os itens do combo continuam no quadro e no "Salvar" deles.
+
+**Produto ou combo se escolhe uma vez, ao criar.** A API não deixa mudar depois — um combo que
+virasse produto simples deixaria itens órfãos. A edição não manda o tipo (`alteracaoDoProduto`).
+
+**Os itens do combo se montam e vão num "Salvar" só**: quantidades com os botões de mais e menos,
+acrescentar só produtos simples (combo dentro de combo a API recusa), tirar. Ao lado, quanto os
+itens custariam separados e o preço do combo — "o cliente economiza R$ 2,00", ou o aviso de que
+não sai mais barato. Sem itens, ou com item esgotado, a seção avisa que o combo aparece esgotado no
+cardápio. O combo também tem as Opções no quadro dele, como qualquer produto.
+
+**Dois botões "Adicionar" na mesma página**, no combo (o dos itens e o das opções), tinham o mesmo
+nome para o leitor de tela. Ganharam nomes distintos — "Adicionar ao combo" e "Adicionar o grupo"
+—, com "Adicionar" visível. Foram os testes que acusaram, ao achar dois botões iguais.
+
+**Achado, corrigido: os botões vermelhos de texto saíam verdes.** "Remover", "Tirar" eram o botão
+de texto comum com `text-danger` por cima; quando duas classes de cor se chocam, quem ganha é a
+ordem do CSS gerado, e não a do `className`. Afetava também o "Remover" da região de entrega, da
+Fase 22. Agora há uma variante própria (`botaoDeTextoPerigo`), com teste da classe e conferida no
+navegador.
+
+**A API simulada dos testes do cardápio virou um ajudante** (`tests/helpers/cardapio-admin.ts`),
+agora com grupos, grupos dos produtos e combos — calculando quem usa cada grupo como a API de
+verdade.
+
+**Visto num navegador de verdade**, em 390 e 1280 px, num estabelecimento descartável criado do
+zero: a aba vazia, um grupo criado pela aba, outro criado a partir do produto, os dois ligados e
+ordenados no X-Burger, um combo do zero com dois itens. O cardápio público passou a mostrar o
+X-Burger com Tamanho e Adicionais e o combo com os itens. Sem erro no console.
+
+**Os campos do produto mudaram de ordem e de lugar** (pedidos do Junio na validação): depois da
+foto vêm nome, preço, "Disponível", categoria e descrição. Em tela grande (`lg`, a mesma largura em
+que o menu fica fixo), o nome, o preço e o "Disponível" ficam ao lado da foto; abaixo disso, tudo
+empilhado, como no celular. O texto de ajuda da foto do produto saiu, e a dica do `ImageField`
+passou a ser opcional. Conferido no navegador em 390, 768, 1024 e 1280 px, na edição e no produto
+novo.
+
+Nenhuma rota nova; a resposta dos grupos ganhou `products`. A coleção do Postman mudou numa
+descrição — importe de novo.
+
+### Verificação executada
+
+| Verificação                                      | Resultado                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm verify`                                    | **1029 testes** (591 API + 388 web + 50 shared); formatação, typecheck, lint e build |
+| Clone limpo, `--frozen-lockfile`                 | os mesmos 1029 testes                                                                |
+| API sem dizer quem usa o grupo, ou fora de ordem | falha "diz em quais produtos o grupo é usado"                                        |
+| API sem as regras do grupo                       | falham "recusa um grupo impossível" e "a recusa diz o problema em palavras"          |
+| Regra do grupo dependendo de todos os campos     | falha "uma regra roda com os campos dela válidos"                                    |
+| Grupo criado do produto sem entrar nele          | falha "criado a partir de um produto, já entra nele"                                 |
+| Grupo em uso podendo ser excluído                | falham o teste da frase e o da lixeira                                               |
+| Opções gravando fora do "Salvar", ou sem ligá-lo | falha "tirar, mudar a ordem e acrescentar não gravam nada: vão no 'Salvar'"          |
+| Campos regravados ao salvar só as opções         | falha o mesmo teste; o contrário, "só os campos mudaram"                             |
+| Voltar ao gravado contando como mudança          | falha "desfazer a mudança na mão volta ao que está gravado"                          |
+| Criar grupo novo com alteração por salvar        | falham "criar um grupo novo espera o 'Salvar'" e "um campo mudado também"            |
+| Categoria no bloco da foto, ou a foto fora dele  | falha "a foto, o nome, o preço e o 'Disponível' formam um bloco"                     |
+| Combo aceitando combo, ou salvando vazio         | falham os testes dos itens do combo                                                  |
+| Edição mandando o tipo, ou tipo editável         | falham "edita preço e categoria" e "ao criar, escolhe-se combo"                      |
+| Navegador de verdade, em 390 e 1280 px           | do cadastro novo ao cardápio público com as opções e o combo; sem erro no console    |
+| Validação do Junio                               | a fazer                                                                              |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
+
+**Em aberto: uma falha que apareceu uma vez.** Num `pnpm verify`, "cria a partir da categoria, e
+vai para a página dele" (`AdminMenu.test.tsx`) falhou porque a API simulada registrou três envios
+além do `POST` da criação. Não se repetiu em nove execuções seguintes (o arquivo sozinho, a suíte
+do web, as três suítes juntas, o `pnpm verify` e o clone limpo), e a causa não foi achada — não se
+sabe quais eram os três envios. Se voltar a aparecer, guardar a saída inteira do teste.
 
 ---
 
@@ -947,10 +1083,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 23 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
-(MVP.md, "Como saber que acabou"). Os passos 1 e 2 e os passos 4 a 7 funcionam de ponta a ponta;
-do passo 3, categorias e produtos já se cadastram pela tela, e opções, adicionais e combos ainda
-só **pela API**. E o sistema ainda não está no ar. As fases 24 a 28 fecham essa distância.
+As fases 1 a 24 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+(MVP.md, "Como saber que acabou"). Os passos 1 a 7 já funcionam de ponta a ponta pela tela; falta
+o sistema estar no ar, e as telas de usuários e de clientes. As fases 25 a 28 fecham essa
+distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -985,12 +1121,10 @@ vazio**, como faria alguém que nunca viu o sistema.
   Configurações. O estabelecimento novo passou a nascer com a entrega e a retirada desligadas.
 - **23 (concluída):** categorias e produtos, com a foto do produto, numa tela Cardápio. A
   reordenação de produtos em lote (`PUT /products/order`) entrou: a tela precisou.
-- **24:** grupos de opção, adicionais e combos.
+- **24 (concluída):** grupos de opção, adicionais e combos — uma aba "Opções e adicionais" no
+  Cardápio, a seção Opções na página do produto, e a escolha de produto ou combo ao criar.
 - Todas sobre rotas que já existem: `admin-settings.ts`, `admin-catalog.ts` e
   `admin-customization.ts`.
-- A tela de combos (Fase 24) começa da página de produto da Fase 23, que hoje só avisa que os
-  itens do combo "ainda não são editados pelo painel". Criar um combo também é dela: a página de
-  produto novo cria só produto simples.
 
 ### Fase 25 — Usuários e senha
 
