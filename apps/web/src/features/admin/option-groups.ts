@@ -10,13 +10,7 @@ import { z } from 'zod'
 
 import { descreverRegraDoGrupo } from '@/features/cart/selection'
 
-import {
-  chaveDoCatalogo,
-  chaveDoProduto,
-  useSalvarProduto,
-  type DadosDoProduto,
-  type Produto,
-} from './catalog'
+import { chaveDoCatalogo, chaveDoProduto, type Produto } from './catalog'
 import { chaveDoChecklist } from './checklist'
 import { comCamposValidos, reais, reaisSemSimbolo, textoOpcional } from './form-fields'
 import { comSessao } from './session'
@@ -244,8 +238,6 @@ export function regraDigitada(minimo: string, maximo: string): string | null {
 // --- API -------------------------------------------------------------------------
 
 export const chaveDosGrupos = (slug: string) => [...chaveDoCatalogo(slug), 'grupos'] as const
-export const chaveDoGrupo = (slug: string, id: string) =>
-  [...chaveDoCatalogo(slug), 'grupo', id] as const
 export const chaveDosGruposDoProduto = (slug: string, produtoId: string) =>
   [...chaveDoProduto(slug, produtoId), 'grupos'] as const
 export const chaveDaComposicao = (slug: string, comboId: string) =>
@@ -255,13 +247,6 @@ export function useGrupos(slug: string) {
   return useQuery({
     queryKey: chaveDosGrupos(slug),
     queryFn: () => comSessao<GrupoDeOpcoes[]>('/api/v1/admin/option-groups'),
-  })
-}
-
-export function useGrupo(slug: string, id: string) {
-  return useQuery({
-    queryKey: chaveDoGrupo(slug, id),
-    queryFn: () => comSessao<GrupoDeOpcoes>(`/api/v1/admin/option-groups/${id}`),
   })
 }
 
@@ -286,55 +271,40 @@ export function useComposicao(slug: string, comboId: string) {
  * obrigatória toda esgotada tira o produto de venda).
  */
 function marcarGrupos(queryClient: QueryClient, slug: string) {
-  void queryClient.invalidateQueries({ queryKey: chaveDosGrupos(slug) })
+  // A lista dos grupos e a de cada produto: as duas chaves terminam em "grupos".
   void queryClient.invalidateQueries({
     predicate: ({ queryKey }) =>
       queryKey[0] === 'painel' &&
       queryKey[1] === 'catalogo' &&
       queryKey[2] === slug &&
-      (queryKey[3] === 'grupo' || queryKey.at(-1) === 'grupos'),
+      queryKey.at(-1) === 'grupos',
   })
   void queryClient.invalidateQueries({ queryKey: chaveDoChecklist(slug) })
 }
 
 /**
- * Cria (sem `id`) ou altera um grupo. Criando a partir de um produto
- * (`ligarAoProduto`), o grupo já entra no fim da lista dele.
+ * Cria (sem `id`) ou altera um grupo. O grupo salvo entra na lista na hora, sem
+ * esperar a releitura: quem o criou a partir de um produto já o vê para ligar.
  */
 export function useSalvarGrupo(slug: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({
-      id,
-      dados,
-      ligarAoProduto,
-    }: {
-      id?: string | undefined
-      dados: DadosDoGrupo
-      ligarAoProduto?: string | undefined
-    }) => {
-      const salvo = id
-        ? await comSessao<GrupoDeOpcoes>(`/api/v1/admin/option-groups/${id}`, {
+    mutationFn: ({ id, dados }: { id?: string | undefined; dados: DadosDoGrupo }) =>
+      id
+        ? comSessao<GrupoDeOpcoes>(`/api/v1/admin/option-groups/${id}`, {
             method: 'PUT',
             body: dados,
           })
-        : await comSessao<GrupoDeOpcoes>('/api/v1/admin/option-groups', {
+        : comSessao<GrupoDeOpcoes>('/api/v1/admin/option-groups', {
             method: 'POST',
             body: dados,
-          })
-      if (!id && ligarAoProduto) {
-        const doProduto = await comSessao<GrupoDeOpcoes[]>(
-          `/api/v1/admin/products/${ligarAoProduto}/option-groups`,
-        )
-        await comSessao<GrupoDeOpcoes[]>(`/api/v1/admin/products/${ligarAoProduto}/option-groups`, {
-          method: 'PUT',
-          body: { groupIds: [...doProduto.map((g) => g.id), salvo.id] },
-        })
-      }
-      return salvo
-    },
+          }),
     onSuccess: (salvo) => {
-      queryClient.setQueryData(chaveDoGrupo(slug, salvo.id), salvo)
+      queryClient.setQueryData<GrupoDeOpcoes[]>(chaveDosGrupos(slug), (atuais) =>
+        atuais?.some((g) => g.id === salvo.id)
+          ? atuais.map((g) => (g.id === salvo.id ? salvo : g))
+          : [...(atuais ?? []), salvo],
+      )
       marcarGrupos(queryClient, slug)
     },
   })
@@ -349,43 +319,23 @@ export function useExcluirGrupo(slug: string) {
       queryClient.setQueryData<GrupoDeOpcoes[]>(chaveDosGrupos(slug), (atuais) =>
         atuais?.filter((g) => g.id !== id),
       )
-      queryClient.removeQueries({ queryKey: chaveDoGrupo(slug, id) })
       marcarGrupos(queryClient, slug)
     },
   })
 }
 
-/**
- * O "Salvar" da página de um produto: os campos e os grupos de opção dele —
- * quais, e em que ordem. São duas rotas, uma depois da outra, e cada uma só é
- * chamada se tiver o que gravar. As duas aceitam repetição: se a segunda
- * falhar, salvar de novo não estraga o que a primeira gravou.
- */
-export function useSalvarProdutoEOpcoes(slug: string) {
+/** Os grupos do produto, na ordem em que o cliente os vê: a lista inteira. */
+export function useDefinirGruposDoProduto(slug: string, produtoId: string) {
   const queryClient = useQueryClient()
-  const salvarCampos = useSalvarProduto(slug)
   return useMutation({
-    mutationFn: async ({
-      produto,
-      dados,
-      grupos,
-    }: {
-      produto: Produto
-      /** Os campos, se a pessoa mexeu neles. */
-      dados?: Partial<DadosDoProduto> | undefined
-      /** Os grupos, na ordem em que o cliente os vê — a lista inteira —, se mudaram. */
-      grupos?: readonly string[] | undefined
-    }) => {
-      const salvo = dados ? await salvarCampos.mutateAsync({ id: produto.id, dados }) : produto
-      if (grupos) {
-        const gravados = await comSessao<GrupoDeOpcoes[]>(
-          `/api/v1/admin/products/${produto.id}/option-groups`,
-          { method: 'PUT', body: { groupIds: grupos } },
-        )
-        queryClient.setQueryData(chaveDosGruposDoProduto(slug, produto.id), gravados)
-        marcarGrupos(queryClient, slug)
-      }
-      return salvo
+    mutationFn: (groupIds: readonly string[]) =>
+      comSessao<GrupoDeOpcoes[]>(`/api/v1/admin/products/${produtoId}/option-groups`, {
+        method: 'PUT',
+        body: { groupIds },
+      }),
+    onSuccess: (grupos) => {
+      queryClient.setQueryData(chaveDosGruposDoProduto(slug, produtoId), grupos)
+      marcarGrupos(queryClient, slug)
     },
   })
 }

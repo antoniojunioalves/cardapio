@@ -519,12 +519,19 @@ Para uma tela nova:
    `PASSOS` (`features/admin/checklist.ts`) — o caminho e o que o link diz: o passo ganha um link
    no Início.
 
-**Uma tela de cadastro** — lista e páginas de criar e editar — segue o Cardápio (Fase 23): a
-lista em `pages/AdminMenuPage.tsx`, as páginas em `AdminProductPage.tsx` e
-`AdminCategoryPage.tsx`, e o módulo `features/admin/catalog.ts`, com as consultas, as gravações e
-as regras puras da lista. Algumas escolhas que valem para as próximas:
+**Uma tela de cadastro** segue o Cardápio (Fases 23 a 24b): a lista em
+`pages/AdminMenuPage.tsx`, o cadastro em passos em `AdminProductPage.tsx` e
+`components/ProductSteps.tsx`, e o módulo `features/admin/catalog.ts`, com as consultas, as
+gravações e as regras puras da lista. Algumas escolhas que valem para as próximas:
 
-- criar leva à página do item (ou de volta à lista, com o aviso no `state` da navegação);
+- um cadastro com mais de uma parte vai em passos, cada um com o seu endereço (`?passo=`), o seu
+  formulário e o seu envio; as regras de quais passos existem e a quais se pode ir ficam num
+  módulo sem tela (`product-steps.ts`), testadas sem abrir página;
+- um item pequeno — a categoria, o grupo de opcionais — se cria e se edita numa janela
+  (`FormSheet`), que avisa quem a abriu (`aoSalvar`) em vez de navegar;
+- a janela fica **fora** do `<form>` de quem a abre: o `Sheet` é um portal, e para o React o
+  "enviar" do formulário dela subiria até o de fora;
+- terminar um cadastro leva de volta à lista, com o aviso no `state` da navegação;
 - o botão "Criar" fica sempre ligado — clicar mostra o que falta; o "Salvar" de uma edição, só com
   alteração (`RodapeDeSalvar`, com `rotulo` e `explicarFalha`);
 - excluir usa `Excluir` (`catalog-parts.tsx`), que confirma numa janela e mostra a recusa da API;
@@ -542,7 +549,17 @@ as regras puras da lista. Algumas escolhas que valem para as próximas:
 - uma tela com abas usa `TelaComAbas` (`components/TelaComAbas.tsx`), como Configurações e
   Cardápio: uma lista de abas em `menu.ts`, uma rota de moldura e uma rota filha por aba;
 - regra que a API também aplica vai para `@repo/shared`, com as frases para quem usa a tela (como
-  `business-hours.ts` e `option-groups.ts`), e o formulário a usa num `refine` com `when`.
+  `business-hours.ts` e `option-groups.ts`), e o formulário a usa num `refine` com `when`;
+- nos testes, a API simulada devolve **cópias** do que guarda (`simularApi`, em
+  `tests/helpers/cardapio-admin.ts`), como a de verdade: devolvendo as próprias listas, "criar"
+  muda por dentro o que a tela já guardou em cache, e a tela não se redesenha — parece defeito da
+  tela, e é do teste;
+- **nenhum teste usa a rede de verdade.** Fora da API simulada de um teste, o `fetch` recusa
+  (`tests/setup.ts`), e as consultas que sobram quando o teste acaba são canceladas
+  (`tests/helpers/pagina.tsx`). Antes, uma chamada atrasada do painel ia para o `pnpm dev` de quem
+  rodava os testes, voltava com 401 e disparava uma renovação de sessão que caía no teste
+  seguinte — uma falha que só aparecia de vez em quando. Um teste que precise de uma resposta a
+  simula; um que falhe com "Os testes não usam a rede" esqueceu de simular.
 
 **Uma aba nova em Configurações** não é item do menu: é uma entrada em `ABAS_DAS_CONFIGURACOES`
 (`menu.ts`) e uma rota filha de `configuracoes` em `App.tsx`. A página da aba não tem `<h1>` nem

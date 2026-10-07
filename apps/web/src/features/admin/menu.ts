@@ -58,7 +58,7 @@ export const ABAS_DAS_CONFIGURACOES: readonly { rotulo: string; caminho: string 
  */
 export const ABAS_DO_CARDAPIO: readonly { rotulo: string; caminho: string }[] = [
   { rotulo: 'Produtos', caminho: 'cardapio' },
-  { rotulo: 'Opções e adicionais', caminho: 'cardapio/opcoes' },
+  { rotulo: 'Opcionais', caminho: 'cardapio/opcionais' },
 ]
 
 /** Os itens que as permissões da pessoa alcançam, na ordem do menu. */

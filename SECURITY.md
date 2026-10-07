@@ -420,6 +420,13 @@ nova. A resposta dos grupos passou a trazer os produtos que usam cada um — só
 estabelecimento, porque a consulta roda no contexto dele, sob RLS. As regras de um grupo são as
 mesmas na tela e na API (`@repo/shared`); quem recusa de verdade continua sendo a API.
 
+**O cadastro em passos** (Fase 24b) não trouxe rota nem permissão nova: cada passo grava pela rota
+que já existia, com a permissão dela — `products:create` para o produto novo, `products:update`
+para os campos de um que existe, os itens do combo e os opcionais; a categoria se cria e se edita
+na janela dela, com `categories:create` e `categories:update`. Quem só pode ver percorre os passos sem botões de gravar. A foto escolhida
+antes de o produto existir é conferida na tela (tipo e tamanho) só para avisar cedo; o envio
+passa pelas mesmas conferências da API — tamanho, formato real, reprocessamento sem metadados.
+
 Os pedidos só aparecem no painel do próprio estabelecimento (`orders:read`), e mudar o status
 exige `orders:update` e vai para a auditoria (`order.status_changed`), com o motivo quando é
 cancelamento.

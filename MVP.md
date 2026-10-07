@@ -147,8 +147,9 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 24:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
-> cadastro ao pedido chegando ao painel, com o cardápio inteiro (categorias, produtos, opções,
-> adicionais e combos) montado pelo painel —, e os testes provam o isolamento. Falta o sistema estar
-> no ar, além das telas de usuários e de clientes. As fases 25 a 28 fecham o MVP — ver
-> PROJECT_PLAN.md, "O que falta para o MVP".
+> **Situação ao fim da Fase 24b:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
+> cadastro ao pedido chegando ao painel, com o cardápio inteiro (categorias, produtos, opcionais e
+> combos) montado pelo painel, num cadastro guiado: o produto e os opcionais, um passo de cada
+> vez —, e os testes provam o isolamento. Falta o sistema estar no ar, além das telas de
+> usuários e de clientes. As fases 25 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o
+> MVP".

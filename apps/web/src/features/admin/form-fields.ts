@@ -1,6 +1,7 @@
 import { get } from 'react-hook-form'
 import { z } from 'zod'
 
+import { ApiError } from '@/services/api'
 import { formatarPreco, lerReais } from '@/utils/money'
 
 /**
@@ -109,3 +110,14 @@ export function reconferir<Campo extends string>(
 
 export const minutosValidos = (valor: unknown) => valor === null || typeof valor === 'number'
 export const booleano = (valor: unknown) => typeof valor === 'boolean'
+
+/** A mensagem padrão de um envio recusado. */
+export function falhaAoSalvar(erro: unknown): string {
+  if (erro instanceof ApiError) {
+    if (erro.status === 400) return 'Confira os campos marcados e tente de novo.'
+    // 409: um conflito que só a API vê — nome repetido, limite do plano. A
+    // mensagem dela já é escrita para quem usa o painel.
+    if (erro.status === 409) return erro.message
+  }
+  return 'Não foi possível salvar agora. Tente de novo.'
+}

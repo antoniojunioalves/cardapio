@@ -7,10 +7,8 @@ import { CardapioTabs } from '@/features/admin/components/CardapioTabs'
 import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
 import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
-import { AdminCategoryPage } from '@/pages/AdminCategoryPage'
 import { AdminHoursPage } from '@/pages/AdminHoursPage'
 import { AdminMenuPage } from '@/pages/AdminMenuPage'
-import { AdminOptionGroupPage } from '@/pages/AdminOptionGroupPage'
 import { AdminOptionGroupsPage } from '@/pages/AdminOptionGroupsPage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
 import { AdminPaymentPage } from '@/pages/AdminPaymentPage'
@@ -46,10 +44,10 @@ import { SignupPage } from '@/pages/SignupPage'
  * uma rota filha aqui e uma entrada em `features/admin/menu.ts`.
  *
  * O cardápio tem duas abas (`CardapioTabs`): os produtos, em `/admin/cardapio`,
- * e as opções e adicionais, em `/admin/cardapio/opcoes`. Cada categoria,
- * produto e grupo de opções se cria e se edita numa página própria, fora das
- * abas: `cardapio/produtos/novo`, `cardapio/produtos/:id`, e o mesmo para
- * `categorias` e `opcoes`.
+ * e os opcionais, em `/admin/cardapio/opcionais`. O produto se cadastra e se
+ * edita em passos, fora das abas (`cardapio/produtos/novo` e
+ * `cardapio/produtos/:id`, com `?passo=`); a categoria e os grupos de
+ * opcionais se criam e se editam em janelas, sobre as listas.
  *
  * As configurações têm abas, e cada aba é uma rota filha de
  * `/admin/configuracoes` (`SettingsTabs`): a do estabelecimento no índice, e
@@ -75,12 +73,8 @@ export function AppRoutes() {
         <Route path="pedidos" element={<AdminOrdersPage />} />
         <Route path="cardapio" element={<CardapioTabs />}>
           <Route index element={<AdminMenuPage />} />
-          <Route path="opcoes" element={<AdminOptionGroupsPage />} />
+          <Route path="opcionais" element={<AdminOptionGroupsPage />} />
         </Route>
-        <Route path="cardapio/opcoes/novo" element={<AdminOptionGroupPage />} />
-        <Route path="cardapio/opcoes/:grupoId" element={<AdminOptionGroupPage />} />
-        <Route path="cardapio/categorias/nova" element={<AdminCategoryPage />} />
-        <Route path="cardapio/categorias/:categoriaId" element={<AdminCategoryPage />} />
         <Route path="cardapio/produtos/novo" element={<AdminProductPage />} />
         <Route path="cardapio/produtos/:produtoId" element={<AdminProductPage />} />
         <Route path="configuracoes" element={<SettingsTabs />}>

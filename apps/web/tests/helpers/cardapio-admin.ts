@@ -235,7 +235,7 @@ export function simularApi(api: Api = {}) {
       sortOrder: i * 10,
     }))
 
-  mockarRotas((url, metodo, corpo) => {
+  const responder = (url: string, metodo: string, corpo: unknown): Resposta => {
     const caminho = /\/api\/v1\/admin(\/.*)$/.exec(url)?.[1] ?? url
     if (metodo !== 'GET') enviados.push({ metodo, caminho, corpo })
     const forcada = api.forcar?.[`${metodo} ${caminho}`]
@@ -374,6 +374,16 @@ export function simularApi(api: Api = {}) {
       }
     }
     return ok({})
+  }
+
+  // Cada resposta é uma cópia, como a que chega pela rede. Devolvendo as
+  // listas daqui mesmo, "criar" mudaria por dentro o que a tela já guardou —
+  // e ela não saberia que tem de se redesenhar.
+  mockarRotas((url, metodo, corpo) => {
+    const resposta = responder(url, metodo, corpo)
+    return resposta === 'falha-de-rede'
+      ? resposta
+      : { status: resposta.status, corpo: structuredClone(resposta.corpo) }
   })
   return enviados
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
 
 import {
   AO_EXCLUIR,
@@ -16,18 +16,18 @@ import {
   type Produto,
 } from '@/features/admin/catalog'
 import { ConfirmarExclusao } from '@/features/admin/components/catalog-parts'
+import { CategorySheet } from '@/features/admin/components/CategorySheet'
 import {
   AvisoDeAtencao,
   AvisoDeSomenteLeitura,
   botaoDeTexto,
 } from '@/features/admin/components/form-parts'
 import { MenuCategorySection } from '@/features/admin/components/MenuCategorySection'
-import { caminhoDoPainel } from '@/features/admin/menu'
 import { useCategoriasAbertas } from '@/features/admin/open-categories'
 import { usePainel } from '@/features/admin/panel'
 import { cardapioNoPlano, usePlano } from '@/features/admin/plan'
 
-/** O recado de quem chega à lista vindo de uma página de categoria ou de produto. */
+/** O recado de quem chega à lista vindo do cadastro de um produto. */
 export interface ChegadaAoCardapio {
   /** "Produto excluído." */
   aviso?: string
@@ -46,8 +46,8 @@ const botaoPrincipal =
 /**
  * O cardápio do estabelecimento, em `/{tenantSlug}/admin/cardapio`: as
  * categorias na ordem em que o cliente as vê, cada uma com os seus produtos.
- * Daqui se marca o que esgotou, se muda a ordem e se chega às páginas de
- * criar e editar.
+ * Daqui se marca o que esgotou, se muda a ordem, se cria e se edita uma
+ * categoria — numa janela — e se chega ao cadastro de um produto, em passos.
  */
 export function AdminMenuPage() {
   const { slug, permissoes } = usePainel()
@@ -61,6 +61,11 @@ export function AdminMenuPage() {
   const excluirProduto = useExcluirProduto(slug)
   const excluirCategoria = useExcluirCategoria(slug)
   const [exclusao, setExclusao] = useState<Exclusao | null>(null)
+  // A janela da categoria: `{}` cria uma nova; com `categoria`, edita.
+  const [janela, setJanela] = useState<{ categoria?: Categoria } | null>(null)
+  const abrirNova = () => {
+    setJanela({})
+  }
   // O recado de quem chegou de outra página, ou de uma exclusão feita aqui mesmo.
   const [aviso, setAviso] = useState(chegada?.aviso)
 
@@ -92,9 +97,9 @@ export function AdminMenuPage() {
               Nova categoria
             </button>
           ) : (
-            <Link to={caminhoDoPainel(slug, 'cardapio/categorias/nova')} className={botaoPrincipal}>
+            <button type="button" onClick={abrirNova} className={botaoPrincipal}>
               Nova categoria
-            </Link>
+            </button>
           ))}
       </div>
 
@@ -138,9 +143,9 @@ export function AdminMenuPage() {
             dela.
           </p>
           {pode.criarCategoria && (
-            <Link to={caminhoDoPainel(slug, 'cardapio/categorias/nova')} className={botaoPrincipal}>
+            <button type="button" onClick={abrirNova} className={botaoPrincipal}>
               Criar a primeira categoria
-            </Link>
+            </button>
           )}
         </section>
       ) : (
@@ -184,6 +189,9 @@ export function AdminMenuPage() {
                 reordenarProdutos.reset()
                 reordenarCategorias.mutate(moverNaLista(idsDasCategorias, indice, direcao))
               }}
+              aoEditarCategoria={() => {
+                setJanela({ categoria })
+              }}
               aoExcluirCategoria={() => {
                 excluirCategoria.reset()
                 setExclusao({ tipo: 'categoria', categoria, produtos: daCategoria.length })
@@ -208,6 +216,21 @@ export function AdminMenuPage() {
         </div>
       )}
 
+      {janela && (
+        <CategorySheet
+          slug={slug}
+          categoria={janela.categoria}
+          aoFechar={() => {
+            setJanela(null)
+          }}
+          aoSalvar={(salva) => {
+            setAviso(`Categoria “${salva.name}” ${janela.categoria ? 'salva' : 'criada'}.`)
+            // A nova chega aberta, pronta para o primeiro produto.
+            if (!janela.categoria) abertas.abrir(salva.id)
+            setJanela(null)
+          }}
+        />
+      )}
       {exclusao?.tipo === 'produto' && (
         <ConfirmarExclusao
           oQue="o produto"
