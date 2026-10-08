@@ -19,6 +19,7 @@ import {
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
+  comTudo,
   criarTenantComUsuario,
   removerTenantDeTeste,
   SENHA_PADRAO,
@@ -112,19 +113,17 @@ beforeAll(async () => {
   await app.ready()
 
   lanchonete = await criarTenantComUsuario({
-    permissoes: ['orders:read', 'orders:update'],
-    permissoesReais: true,
+    permissoes: ['orders:read', 'orders:update', 'orders:cancel'],
   })
-  pizzaria = await criarTenantComUsuario({ permissoes: ['orders:read'], permissoesReais: true })
+  pizzaria = await criarTenantComUsuario({ permissoes: ['orders:read'] })
   semPermissao = await criarTenantComUsuario({
     permissoes: ['products:read'],
-    permissoesReais: true,
   })
 
   const ctx = tenantContextFromUser(lanchonete.tenantId)
   const ator = lanchonete.userId
   ids.pix = (await db.select().from(paymentMethods)).find((f) => f.code === 'PIX')?.id ?? ''
-  await atualizarConfiguracoes(ctx, ator, { minimumOrderInCents: 0 })
+  await atualizarConfiguracoes(ctx, comTudo(ator), { minimumOrderInCents: 0 })
   await substituirHorarios(
     ctx,
     ator,

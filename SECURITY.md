@@ -1,8 +1,9 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 18b**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 25a**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
-cookie `httpOnly`, RBAC por permissão, auditoria append-only, headers de segurança, CORS
+cookie `httpOnly`, autorização por permissão — com perfis montados por cada estabelecimento —,
+auditoria append-only, headers de segurança, CORS
 restrito, limites de requisição, validação de ambiente e o cadastro aberto de estabelecimento,
 com confirmação de e-mail. O CI está pronto, mas desligado até a Fase 28 (seção 12). Cada seção
 abaixo diz o que já vale e o que ainda não.
@@ -72,7 +73,8 @@ Rodam contra PostgreSQL real e provam, para a primeira tabela tenant-scoped:
 | Contextos em sequência e **concorrentes**                  | não se misturam           |
 | Contexto após rollback                                     | limpo                     |
 | Tenant A cria um produto dentro de uma categoria de B      | recusado pela FK composta |
-| Tenant A atribui papel a um usuário de B                   | recusado pela FK composta |
+| Tenant A dá a um usuário seu um perfil de B                | recusado pela FK composta |
+| Tenant A cria ou altera um perfil dentro de B              | recusado / nenhuma linha  |
 
 O caso do "id exato" é o que fecha o IDOR: conhecer o identificador não ajuda, porque quem nega
 é o banco e não a obscuridade do id.
@@ -146,18 +148,49 @@ Não há conta de cliente no MVP: o cliente pede sem cadastro e é reconhecido p
 
 ---
 
-## 4. Autorização (RBAC) — **em vigor**
+## 4. Autorização — **em vigor**
 
-Papéis `OWNER`, `ADMIN` e `STAFF` sobre um catálogo de permissões granulares no formato
-`recurso:acao`. Papel novo ou permissão avulsa é um INSERT, não uma migração de estrutura.
+Um catálogo de permissões granulares no formato `recurso:acao`, o mesmo para todos, e **perfis
+montados por cada estabelecimento**: conjuntos de permissões com nome. Cada pessoa tem um perfil;
+o proprietário — quem criou o estabelecimento — tem sempre todas as permissões e não tem perfil
+(ARCHITECTURE.md, 6.4). Até a Fase 24 eram três papéis globais (`OWNER`, `ADMIN` e `STAFF`).
 
 A autorização é sempre verificada **depois** do `TenantContext`: a pergunta é "este usuário pode
 fazer isto **neste tenant**", nunca só "este usuário pode fazer isto". Isso não depende de
-disciplina — `requireAuth('permissao')` devolve a cadeia pronta, na ordem certa, e é a única
-forma exportada de proteger uma rota.
+disciplina — `requireAuth('permissao')` devolve a cadeia pronta, na ordem certa.
 
-O usuário é **recarregado do banco a cada requisição**, então desativar alguém tem efeito
-imediato em vez de esperar o token expirar.
+O usuário **e as permissões dele** são recarregados do banco a cada requisição: desativar alguém,
+trocar o perfil dele ou mudar as permissões do perfil tem efeito imediato, em vez de esperar o
+token expirar. As permissões não vão no token.
+
+**Escalada de privilégio pelos perfis — o que a fecha:**
+
+- **Ninguém dá o que não tem.** Quem tem `profiles:manage` e não é o proprietário só cria e altera
+  perfis com permissões que ele mesmo tem, e só mexe num perfil que não tenha mais do que ele —
+  nem para tirar permissões. Sem isso, criar um perfil seria o jeito de dar a si mesmo, ou a um
+  colega, o que o dono não deu. A recusa é 403 `PROFILE_OUT_OF_REACH`.
+- **Ninguém atribui o que não alcança.** Dar um perfil a uma pessoa, ou alterar quem já tem um,
+  pede que o perfil esteja dentro das permissões de quem altera.
+- **Ninguém muda o que ele mesmo tem:** nem o perfil em que está, nem qual perfil tem (409
+  `CANNOT_CHANGE_OWN_PROFILE`). Vale para subir e para se trancar para fora.
+- **O proprietário não se cria nem se tira pela API.** `is_owner` não é campo de rota nenhuma; o
+  banco garante um por estabelecimento. Só ele altera a própria conta, e ela não se desativa.
+- **Código de permissão desconhecido é recusado** (400), e uma permissão gravada que tenha saído
+  do catálogo não vale: a leitura filtra pelo catálogo do código.
+- **O perfil de outro estabelecimento não se atribui:** a FK é composta com o `tenant_id`, e as
+  tabelas têm RLS forçado (seção 2).
+
+**A permissão é a do que muda.** Onde uma gravação cobre coisas de permissões diferentes — o
+produto (preço, o que esgotou, o resto), o grupo de opcionais, o status do pedido (cancelar é à
+parte), as configurações (pausar o recebimento é à parte) —, a rota deixa entrar quem tem alguma
+delas (`requireAnyOf`) e o **serviço** exige a de cada coisa que o pedido muda, comparando com o
+que está gravado, dentro da transação. Esconder o campo na tela não é a defesa: quem manda o
+preço pela API sem `products:price` recebe 403, com teste para cada combinação.
+
+Risco conhecido deste desenho: uma rota com `requireAnyOf` cujo serviço **esqueça** de conferir
+deixaria passar quem tem qualquer uma das permissões. Hoje são quatro rotas, cada uma com testes
+de recusa por permissão (`tests/granular-permissions.test.ts`), e a checagem por mutação "gravado
+sem conferir nada" é pega em todas.
 
 **O mesmo vale para o estabelecimento suspenso** (Fase 19): o status vem na mesma consulta, e
 usuário de estabelecimento suspenso não é carregado. A suspensão tira o cardápio do ar, impede o
@@ -224,7 +257,7 @@ Armazenamos nome, telefone, endereço, e-mail opcional e histórico de pedidos.
 | ------------------ | ----------------------------------------------------------------------- |
 | Minimização        | Só o necessário para entregar o pedido. E-mail é opcional.              |
 | Finalidade         | Dados de cliente servem ao tenant que os coletou, e a mais ninguém.     |
-| Controle de acesso | RBAC + isolamento entre tenants                                         |
+| Controle de acesso | Permissões por perfil + isolamento entre tenants                        |
 | Rastreabilidade    | `audit_logs` registra acesso e alteração de dado pessoal                |
 | Eliminação         | Anonimização em vez de exclusão física, preservando histórico do pedido |
 
@@ -329,8 +362,7 @@ estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por i
   reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
 - **Senha forte no cadastro:** pelo menos 8 caracteres, com letra maiúscula, minúscula e caractere
   especial (`REGRAS_DA_SENHA`, a mesma lista na API e na tela). Guardada com argon2id, como
-  sempre. A criação de usuários do painel ainda pede só os 8 caracteres — a mesma regra chega lá
-  na Fase 25.
+  sempre. A senha inicial de uma pessoa da equipe segue a mesma regra desde a Fase 25a.
 - **O aceite dos termos vai para a auditoria**, com a versão aceita e o IP. Versão diferente da
   atual é recusada: ninguém aceita um texto que não viu.
 - **Tudo numa transação**, e os e-mails só depois do commit. Sem o plano gratuito no banco, o
@@ -352,23 +384,35 @@ comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
   do token — há teste com duas lojas conectadas ao mesmo tempo.
 - O token vai na primeira mensagem, nunca na URL. Exige `orders:read`; usuário desativado não
   entra, porque o usuário é recarregado do banco como no `requireAuth`. A conexão fecha quando o
-  token expira — e **na hora** quando o usuário é desativado ou tem o papel alterado.
+  token expira — e **na hora** quando o usuário é desativado, muda de perfil ou tem as permissões
+  do perfil alteradas.
 - A origem é conferida no handshake: o navegador não aplica CORS a WebSocket.
 - O aviso leva só ids; os dados vêm da API REST, com permissão e RLS.
 
-### Gestão de usuários — **em vigor**
+### Equipe e perfis — **em vigor**
 
-- Listar, criar, alterar, desativar e reativar pela API (`/api/v1/admin/users`), com
+- Pessoas: listar, criar, alterar, desativar e reativar (`/api/v1/admin/users`), com
   `users:read`, `users:create`, `users:update` e `users:delete`. Desativar e reativar pedem
-  `users:delete`, que o ADMIN não tem.
-- O papel `OWNER` não é dado nem tirado pela API; ninguém muda o próprio papel nem se desativa;
-  só o dono altera a conta do dono.
+  `users:delete`, que o perfil pronto "Administrador" não tem.
+- Perfis: listar com `users:read`; criar, alterar e excluir com `profiles:manage`
+  (`/api/v1/admin/profiles`), dentro das regras de alcance da seção 4.
+- Ninguém troca o próprio perfil nem se desativa; só o proprietário altera a conta do
+  proprietário, que não tem perfil e não se desativa.
 - **Desativar encerra o acesso na hora**: o token de acesso para de valer na próxima requisição
   (o usuário é recarregado a cada uma), todas as sessões abertas dele são apagadas e a conexão
-  ao vivo dele fecha na hora.
-- Senha inicial definida pelo dono (mínimo de 8 caracteres), com argon2id; a resposta nunca traz
-  o hash. E-mail já em uso — neste estabelecimento ou em outro — é recusado, sem dizer onde.
-- Usuário de outro estabelecimento responde 404.
+  ao vivo dele fecha na hora. Quem tenta entrar lê que a conta está desativada — dito só depois de
+  a senha conferir.
+- **Senha inicial definida por quem cadastra**, com as regras do cadastro (`REGRAS_DA_SENHA`) e
+  argon2id; a resposta nunca traz o hash. A tela mostra a senha enquanto ela é digitada, porque
+  quem cadastra precisa passá-la adiante. **Enquanto a Fase 25b não chega, a pessoa não consegue
+  trocá-la**: quem cadastrou conhece a senha dela. É a principal pendência desta área.
+- E-mail já em uso — neste estabelecimento ou em outro — é recusado, sem dizer onde.
+- Pessoa ou perfil de outro estabelecimento responde 404.
+- Perfil com alguém dentro não se exclui: ninguém fica sem acesso por tabela.
+- **Na auditoria:** criação, alteração e exclusão de perfil — a alteração com as permissões dadas
+  e as tiradas —, além de criação, alteração, desativação e reativação de pessoa.
+- **Uma pessoa sem perfil entra e não alcança nada.** Só acontece com quem não tinha papel antes
+  da Fase 25a; a tela a mostra como "Sem perfil", para o dono resolver.
 
 ### Sessão do painel no navegador — **em vigor**
 

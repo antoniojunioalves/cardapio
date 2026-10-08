@@ -14,6 +14,12 @@ import {
   type GrupoDeOpcoes,
 } from '@/features/admin/option-groups'
 import { usePainel } from '@/features/admin/panel'
+import {
+  limiteNoProduto,
+  podeAlgoNoProduto,
+  podeNoProduto,
+  SO_VE_O_CARDAPIO,
+} from '@/features/admin/permissions'
 
 const botaoPrincipal =
   'text-body inline-flex shrink-0 items-center gap-1 rounded-control bg-primary px-4 py-2.5 font-semibold text-primary-content hover:bg-primary-hover'
@@ -33,7 +39,11 @@ export function AdminOptionGroupsPage() {
   // A janela do grupo: `{}` cria um novo; com `grupo`, edita.
   const [janela, setJanela] = useState<{ grupo?: GrupoDeOpcoes } | null>(null)
   const [aviso, setAviso] = useState<string>()
-  const podeAlterar = permissoes.includes('products:update')
+  // Criar e excluir um grupo é de quem altera os opcionais. A janela de um
+  // grupo abre também para quem só mexe em preço ou no que esgotou.
+  const pode = podeNoProduto(permissoes)
+  const podeAlterar = pode.resto
+  const limite = limiteNoProduto(pode)
   const abrirNovo = () => {
     setJanela({})
   }
@@ -59,9 +69,8 @@ export function AdminOptionGroupsPage() {
           {aviso}
         </p>
       )}
-      {!podeAlterar && (
-        <AvisoDeSomenteLeitura texto="Você pode ver o cardápio, mas só quem administra o estabelecimento o altera." />
-      )}
+      {!podeAlgoNoProduto(pode) && <AvisoDeSomenteLeitura texto={SO_VE_O_CARDAPIO} />}
+      {limite && <AvisoDeSomenteLeitura texto={limite} />}
 
       {grupos.isPending ? (
         <p className="text-body text-content-muted">Carregando os opcionais…</p>
@@ -97,7 +106,7 @@ export function AdminOptionGroupsPage() {
                 <EditarEExcluir
                   quem={`o grupo ${grupo.name}`}
                   editar={
-                    podeAlterar
+                    podeAlgoNoProduto(pode)
                       ? () => {
                           setJanela({ grupo })
                         }
@@ -129,6 +138,7 @@ export function AdminOptionGroupsPage() {
         <OptionGroupSheet
           slug={slug}
           grupo={janela.grupo}
+          pode={pode}
           aoFechar={() => {
             setJanela(null)
           }}

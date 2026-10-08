@@ -1,9 +1,10 @@
+import { senhaSchema } from '@repo/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { currentUser, requireAuth, tenantContextOf } from '../auth/middleware.js'
-import type { UsuarioComPapel } from '../users/repository.js'
+import type { UsuarioDoPainel } from '../users/repository.js'
 import {
   alterarUsuario,
   criarUsuario,
@@ -15,31 +16,35 @@ import {
 const seguranca = [{ bearerAuth: [] }]
 const tag = ['Usuários']
 const params = z.object({ id: z.uuid() })
-/** OWNER não é atribuído pela API: o dono é quem criou o estabelecimento. */
-const papel = z.enum(['ADMIN', 'STAFF'])
 
 const usuarioSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   email: z.string(),
-  role: z.object({ code: z.string(), name: z.string() }).nullable(),
+  isOwner: z.boolean().describe('O proprietário: tem todas as permissões e não tem perfil.'),
+  profile: z.object({ id: z.uuid(), name: z.string() }).nullable(),
   isActive: z.boolean(),
   lastLoginAt: z.date().nullable(),
   createdAt: z.date(),
 })
 
 /** Sem o hash da senha, campo a campo. */
-function apresentar(u: UsuarioComPapel): z.infer<typeof usuarioSchema> {
+function apresentar(u: UsuarioDoPainel): z.infer<typeof usuarioSchema> {
   return {
     id: u.id,
     name: u.name,
     email: u.email,
-    role: u.papel && { code: u.papel.codigo, name: u.papel.nome },
+    isOwner: u.isOwner,
+    profile: u.perfil && { id: u.perfil.id, name: u.perfil.nome },
     isActive: u.isActive,
     lastLoginAt: u.lastLoginAt,
     createdAt: u.createdAt,
   }
 }
+
+const REGRA_DO_ALCANCE =
+  'Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem ' +
+  '(403 `PROFILE_OUT_OF_REACH`).'
 
 export function adminUserRoutes(instance: FastifyInstance): void {
   const typed = instance.withTypeProvider<ZodTypeProvider>()
@@ -50,6 +55,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
       schema: {
         tags: tag,
         summary: 'Usuários do estabelecimento',
+        description: 'O proprietário primeiro; os demais, por nome, cada um com o perfil.',
         response: { 200: z.array(usuarioSchema) },
         security: seguranca,
       },
@@ -65,13 +71,15 @@ export function adminUserRoutes(instance: FastifyInstance): void {
         tags: tag,
         summary: 'Cria um usuário',
         description:
-          'Com senha inicial, que o dono repassa à pessoa — ainda não há envio de convite por ' +
-          'e-mail. Respeita o limite de usuários ativos do plano (409 `PLAN_USER_LIMIT`).',
+          'Com o perfil dele e uma senha inicial, que quem cadastra repassa à pessoa — ainda não ' +
+          'há envio de convite por e-mail. Respeita o limite de usuários ativos do plano (409 ' +
+          `\`PLAN_USER_LIMIT\`). ${REGRA_DO_ALCANCE}`,
         body: z.object({
           name: z.string().trim().min(2).max(120),
           email: z.email().max(254),
-          password: z.string().min(8, 'a senha precisa de ao menos 8 caracteres').max(256),
-          role: papel,
+          // As mesmas regras da senha de quem cadastra o estabelecimento.
+          password: senhaSchema,
+          profileId: z.uuid(),
         }),
         response: { 201: usuarioSchema },
         security: seguranca,
@@ -81,7 +89,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
     async (request, reply) => {
       const criado = await criarUsuario(
         tenantContextOf(request),
-        currentUser(request).id,
+        currentUser(request),
         request.body,
       )
       return reply.status(201).send(apresentar(criado))
@@ -93,12 +101,18 @@ export function adminUserRoutes(instance: FastifyInstance): void {
     {
       schema: {
         tags: tag,
-        summary: 'Altera nome ou papel de um usuário',
+        summary: 'Altera o nome ou o perfil de um usuário',
+        description:
+          'Ninguém muda o próprio perfil (409 `CANNOT_CHANGE_OWN_PROFILE`), e o proprietário não ' +
+          `tem perfil (409 \`OWNER_HAS_NO_PROFILE\`). ${REGRA_DO_ALCANCE}`,
         params,
         body: z
-          .object({ name: z.string().trim().min(2).max(120).optional(), role: papel.optional() })
-          .refine((v) => v.name !== undefined || v.role !== undefined, {
-            message: 'informe o nome ou o papel',
+          .object({
+            name: z.string().trim().min(2).max(120).optional(),
+            profileId: z.uuid().optional(),
+          })
+          .refine((v) => v.name !== undefined || v.profileId !== undefined, {
+            message: 'informe o nome ou o perfil',
           }),
         response: { 200: usuarioSchema },
         security: seguranca,
@@ -109,21 +123,22 @@ export function adminUserRoutes(instance: FastifyInstance): void {
       apresentar(
         await alterarUsuario(
           tenantContextOf(request),
-          currentUser(request).id,
+          currentUser(request),
           request.params.id,
           request.body,
         ),
       ),
   )
 
-  // Desativar e reativar tiram e devolvem acesso — decisão de dono, por isso
-  // `users:delete`, que o ADMIN não tem.
+  // Desativar e reativar tiram e devolvem acesso: têm permissão própria,
+  // `users:delete`, que o perfil pronto de administrador não traz.
   typed.post(
     '/users/:id/deactivate',
     {
       schema: {
         tags: tag,
         summary: 'Desativa um usuário e encerra as sessões dele',
+        description: REGRA_DO_ALCANCE,
         params,
         response: { 200: usuarioSchema },
         security: seguranca,
@@ -132,11 +147,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
     },
     async (request) =>
       apresentar(
-        await desativarUsuario(
-          tenantContextOf(request),
-          currentUser(request).id,
-          request.params.id,
-        ),
+        await desativarUsuario(tenantContextOf(request), currentUser(request), request.params.id),
       ),
   )
 
@@ -146,6 +157,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
       schema: {
         tags: tag,
         summary: 'Reativa um usuário, se o plano tiver vaga',
+        description: REGRA_DO_ALCANCE,
         params,
         response: { 200: usuarioSchema },
         security: seguranca,
@@ -154,7 +166,7 @@ export function adminUserRoutes(instance: FastifyInstance): void {
     },
     async (request) =>
       apresentar(
-        await reativarUsuario(tenantContextOf(request), currentUser(request).id, request.params.id),
+        await reativarUsuario(tenantContextOf(request), currentUser(request), request.params.id),
       ),
   )
 }

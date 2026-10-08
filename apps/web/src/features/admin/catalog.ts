@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { chaveDoChecklist } from './checklist'
 import { preco, reaisSemSimbolo, textoOpcional } from './form-fields'
+import type { PodeNoProduto } from './permissions'
 import { chaveDoPlano } from './plan'
 import { comSessao } from './session'
 
@@ -149,6 +150,23 @@ export function alteracaoDoProduto(dados: DadosDoProduto): Omit<DadosDoProduto, 
   const alteracao: Partial<DadosDoProduto> = { ...dados }
   delete alteracao.type
   return alteracao as Omit<DadosDoProduto, 'type'>
+}
+
+/**
+ * Da alteração, só o que o perfil da pessoa alcança. Um campo desligado na tela
+ * não vai no pedido: a API recusaria a alteração inteira se ele chegasse
+ * diferente do que está gravado.
+ */
+export function alteracaoAoAlcance(
+  alteracao: Omit<DadosDoProduto, 'type'>,
+  pode: PodeNoProduto,
+): Partial<Omit<DadosDoProduto, 'type'>> {
+  const { priceInCents, isAvailable, ...resto } = alteracao
+  return {
+    ...(pode.resto && resto),
+    ...(pode.preco && { priceInCents }),
+    ...(pode.disponibilidade && { isAvailable }),
+  }
 }
 
 export function produtoParaFormulario(produto: Produto): ValoresDoProduto {

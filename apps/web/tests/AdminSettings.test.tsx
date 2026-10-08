@@ -302,11 +302,53 @@ describe('tela de configurações', () => {
   it('quem só pode ver não altera: campos desligados, sem salvar nem enviar imagem', async () => {
     await abrirConfiguracoes({}, SO_LEITURA)
 
-    expect(screen.getByRole('note')).toHaveTextContent('só quem administra')
+    expect(screen.getByRole('note')).toHaveTextContent('o seu perfil não permite alterá-las')
     expect(screen.getByLabelText('Nome')).toBeDisabled()
     expect(screen.getByLabelText('Fuso horário')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Salvar alterações' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Enviar logo')).not.toBeInTheDocument()
+  })
+
+  it('quem só pausa: só o "Recebendo pedidos" está ligado, e só ele é enviado', async () => {
+    const fetch = await abrirConfiguracoes({}, sessao(['settings:read', 'orders:pause']))
+
+    expect(screen.getByRole('note')).toHaveTextContent(
+      'O seu perfil permite só pausar e retomar o recebimento de pedidos.',
+    )
+    expect(screen.getByLabelText('Nome')).toBeDisabled()
+    expect(screen.getByLabelText('Pedido mínimo (R$)')).toBeDisabled()
+    expect(screen.queryByLabelText('Enviar logo')).not.toBeInTheDocument()
+    const recebendo = screen.getByLabelText('Recebendo pedidos')
+    expect(recebendo).toBeEnabled()
+    expect(recebendo).toBeChecked()
+
+    fireEvent.click(recebendo)
+    salvar()
+
+    expect(await screen.findByText('Configurações salvas.')).toBeVisible()
+    expect(enviados(fetch, 'PATCH')).toHaveLength(1)
+    expect(JSON.parse(enviados(fetch, 'PATCH')[0]?.[1]?.body as string)).toEqual({
+      isAcceptingOrders: false,
+    })
+    expect(screen.getByLabelText('Recebendo pedidos')).not.toBeChecked()
+  })
+
+  it('quem altera as configurações também pausa, e envia o formulário inteiro', async () => {
+    const fetch = await abrirConfiguracoes()
+
+    expect(screen.queryByRole('note')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Recebendo pedidos'))
+    salvar()
+
+    await screen.findByText('Configurações salvas.')
+    const corpo = JSON.parse(enviados(fetch, 'PATCH')[0]?.[1]?.body as string) as object
+    expect(corpo).toMatchObject({ isAcceptingOrders: false, name: CONFIGURACOES.name })
+  })
+
+  it('quem só vê as configurações não pausa', async () => {
+    await abrirConfiguracoes({}, SO_LEITURA)
+
+    expect(screen.getByLabelText('Recebendo pedidos')).toBeDisabled()
   })
 
   it('falha ao carregar avisa, sem mostrar um formulário vazio', async () => {

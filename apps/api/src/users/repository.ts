@@ -1,21 +1,23 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 
-import { refreshTokens, roles, userRoles, users } from '../db/schema/index.js'
+import { profiles, refreshTokens, users } from '../db/schema/index.js'
 import type { TenantTransaction } from '../tenant/with-tenant.js'
 
 /**
  * Usuários do painel. Recebem a transação no contexto do tenant — o filtro por
- * estabelecimento é do RLS; `roles` é catálogo global.
+ * estabelecimento é do RLS.
  */
 
-export interface UsuarioComPapel {
+export interface UsuarioDoPainel {
   id: string
   name: string
   email: string
   isActive: boolean
+  /** O proprietário: tem todas as permissões e não tem perfil. */
+  isOwner: boolean
   lastLoginAt: Date | null
   createdAt: Date
-  papel: { codigo: string; nome: string } | null
+  perfil: { id: string; nome: string } | null
 }
 
 const colunas = {
@@ -23,82 +25,78 @@ const colunas = {
   name: users.name,
   email: users.email,
   isActive: users.isActive,
+  isOwner: users.isOwner,
   lastLoginAt: users.lastLoginAt,
   createdAt: users.createdAt,
-  papelCodigo: roles.code,
-  papelNome: roles.name,
+  perfilId: profiles.id,
+  perfilNome: profiles.name,
 }
 
 type Linha = {
   [K in keyof typeof colunas]: (typeof colunas)[K]['_']['data'] | null
 }
 
-function montar(linha: Linha): UsuarioComPapel {
+function montar(linha: Linha): UsuarioDoPainel {
   return {
     id: linha.id ?? '',
     name: linha.name ?? '',
     email: linha.email ?? '',
     isActive: linha.isActive ?? false,
+    isOwner: linha.isOwner ?? false,
     lastLoginAt: linha.lastLoginAt,
     createdAt: linha.createdAt ?? new Date(0),
-    papel: linha.papelCodigo ? { codigo: linha.papelCodigo, nome: linha.papelNome ?? '' } : null,
+    perfil: linha.perfilId ? { id: linha.perfilId, nome: linha.perfilNome ?? '' } : null,
   }
 }
 
-export async function listarUsuarios(tx: TenantTransaction): Promise<UsuarioComPapel[]> {
+/** O proprietário primeiro; depois, por nome. */
+export async function listarUsuarios(tx: TenantTransaction): Promise<UsuarioDoPainel[]> {
   const linhas = await tx
     .select(colunas)
     .from(users)
-    .leftJoin(userRoles, eq(userRoles.userId, users.id))
-    .leftJoin(roles, eq(roles.id, userRoles.roleId))
-    .orderBy(asc(roles.sortOrder), asc(users.name))
+    .leftJoin(profiles, eq(profiles.id, users.profileId))
+    .orderBy(desc(users.isOwner), asc(sql`lower(${users.name})`))
   return linhas.map(montar)
 }
 
 export async function buscarUsuario(
   tx: TenantTransaction,
   id: string,
-): Promise<UsuarioComPapel | null> {
+): Promise<UsuarioDoPainel | null> {
   const [linha] = await tx
     .select(colunas)
     .from(users)
-    .leftJoin(userRoles, eq(userRoles.userId, users.id))
-    .leftJoin(roles, eq(roles.id, userRoles.roleId))
+    .leftJoin(profiles, eq(profiles.id, users.profileId))
     .where(eq(users.id, id))
     .limit(1)
   return linha ? montar(linha) : null
 }
 
-export async function buscarPapel(
-  tx: TenantTransaction,
-  codigo: string,
-): Promise<{ id: string } | null> {
-  const [papel] = await tx
-    .select({ id: roles.id })
-    .from(roles)
-    .where(eq(roles.code, codigo))
-    .limit(1)
-  return papel ?? null
-}
-
 export async function inserirUsuario(
   tx: TenantTransaction,
-  dados: { tenantId: string; name: string; email: string; passwordHash: string },
+  dados: {
+    tenantId: string
+    name: string
+    email: string
+    passwordHash: string
+    profileId: string
+  },
 ): Promise<string> {
   const [criado] = await tx.insert(users).values(dados).returning({ id: users.id })
   if (!criado) throw new Error('usuário não foi criado')
   return criado.id
 }
 
-/** Um papel por usuário: o novo substitui o anterior. */
-export async function definirPapel(
+/** Um perfil por pessoa: o novo substitui o anterior. */
+export async function definirPerfil(
   tx: TenantTransaction,
-  tenantId: string,
-  userId: string,
-  roleId: string,
+  id: string,
+  profileId: string,
 ): Promise<void> {
-  await tx.delete(userRoles).where(eq(userRoles.userId, userId))
-  await tx.insert(userRoles).values({ tenantId, userId, roleId })
+  await tx
+    .update(users)
+    .set({ profileId, updatedAt: sql`now()` })
+    .where(eq(users.id, id))
 }
 
 export async function alterarNome(tx: TenantTransaction, id: string, nome: string): Promise<void> {

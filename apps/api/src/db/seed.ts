@@ -26,7 +26,6 @@ import {
 } from './schema/index.js'
 import { seedPaymentMethods } from './seed-payment-methods.js'
 import { seedPlans } from './seed-plans.js'
-import { seedRbac } from './seed-rbac.js'
 
 /**
  * Dados de demonstração para desenvolvimento.
@@ -670,7 +669,6 @@ async function semearEstabelecimentos(): Promise<void> {
 }
 
 try {
-  await seedRbac()
   await seedPaymentMethods()
   await seedPlans()
   await semearEstabelecimentos()

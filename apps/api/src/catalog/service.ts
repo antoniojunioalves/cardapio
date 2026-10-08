@@ -1,4 +1,5 @@
 import { recordAudit } from '../audit/record.js'
+import { exigirPermissao, type Ator } from '../auth/permissions.js'
 import type { Category, Product } from '../db/schema/index.js'
 import { violacaoDoBanco, UNICIDADE } from '../lib/db-errors.js'
 import { diferencas } from '../lib/diff.js'
@@ -308,12 +309,33 @@ export async function criarProduto(
  * consulta por `product.price_changed`, em vez de uma garimpagem em JSON — e
  * são justamente os dois eventos que o lojista mais vai querer rastrear.
  */
+/**
+ * As permissões que a alteração usa, pelo que ela **muda**: o preço, o
+ * "disponível" e o resto são três permissões. Um campo enviado com o valor que
+ * já tinha não muda nada, e não pede permissão — a tela envia o formulário
+ * inteiro, e quem só marca o que esgotou não altera o nome por tê-lo enviado.
+ */
+function permissoesDaAlteracao(anterior: Product, patch: ProdutoPatch): string[] {
+  const muda = (campo: keyof ProdutoPatch & keyof Product) =>
+    patch[campo] !== undefined && patch[campo] !== anterior[campo]
+
+  return [
+    ...(muda('priceInCents') ? ['products:price'] : []),
+    ...(muda('isAvailable') ? ['products:availability'] : []),
+    ...(muda('name') || muda('description') || muda('categoryId') || muda('sortOrder')
+      ? ['products:update']
+      : []),
+  ]
+}
+
 export async function atualizarProduto(
   context: TenantContext,
-  actorUserId: string,
+  ator: Ator,
   id: string,
   patch: ProdutoPatch,
 ): Promise<Product> {
+  const actorUserId = ator.id
+
   return withTenant(context, async (tx) => {
     const anterior = await findProduct(tx, id)
     if (!anterior) throw produtoNaoEncontrado()
@@ -327,6 +349,8 @@ export async function atualizarProduto(
         'PRODUCT_TYPE_IMMUTABLE',
       )
     }
+
+    exigirPermissao(ator, ...permissoesDaAlteracao(anterior, patch))
 
     // Mudou de categoria sem dizer a posição: vai para o fim da nova. A posição
     // que tinha na antiga não quer dizer nada na outra, e o deixaria

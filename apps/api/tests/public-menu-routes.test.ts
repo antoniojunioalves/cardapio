@@ -19,6 +19,7 @@ import { storage } from '../src/storage/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
+  comTudo,
   criarTenantComUsuario,
   removerTenantDeTeste,
   SENHA_PADRAO,
@@ -70,7 +71,7 @@ async function montarLanchonete(fixture: TenantDeTeste): Promise<void> {
   const ctx = tenantContextFromUser(fixture.tenantId)
   const ator = fixture.userId
 
-  await atualizarConfiguracoes(ctx, ator, {
+  await atualizarConfiguracoes(ctx, comTudo(ator), {
     description: 'Os melhores lanches do bairro',
     whatsappPhone: '5511999990000',
     contactEmail: 'segredo-interno@exemplo.com',
@@ -141,7 +142,7 @@ async function montarLanchonete(fixture: TenantDeTeste): Promise<void> {
   })
   ids.produtoDaCategoriaInativa = secreto.id
 
-  const adicionais = await criarGrupo(ctx, ator, {
+  const adicionais = await criarGrupo(ctx, comTudo(ator), {
     name: 'Adicionais',
     minSelections: 0,
     maxSelections: 2,
@@ -150,7 +151,7 @@ async function montarLanchonete(fixture: TenantDeTeste): Promise<void> {
       { name: 'Cheddar', priceDeltaInCents: 400, isAvailable: false },
     ],
   })
-  const tamanho = await criarGrupo(ctx, ator, {
+  const tamanho = await criarGrupo(ctx, comTudo(ator), {
     name: 'Tamanho',
     minSelections: 1,
     maxSelections: 1,
@@ -195,7 +196,7 @@ beforeAll(async () => {
   expect(ids.pixId && ids.dinheiroId).toBeTruthy()
 
   lanchonete = await criarTenantComUsuario()
-  pizzaria = await criarTenantComUsuario({ permissoes: ['products:read'], permissoesReais: true })
+  pizzaria = await criarTenantComUsuario({ permissoes: ['products:read'] })
   suspenso = await criarTenantComUsuario()
 
   await montarLanchonete(lanchonete)
@@ -215,7 +216,7 @@ beforeAll(async () => {
   await definirFormasDePagamento(ctxPizzaria, pizzaria.userId, [
     { paymentMethodId: ids.pixId, isEnabled: true, sortOrder: 0 },
   ])
-  await atualizarConfiguracoes(ctxPizzaria, pizzaria.userId, { isAcceptingOrders: false })
+  await atualizarConfiguracoes(ctxPizzaria, comTudo(pizzaria.userId), { isAcceptingOrders: false })
 
   const ctxSuspenso = tenantContextFromUser(suspenso.tenantId)
   const cat = await criarCategoria(ctxSuspenso, suspenso.userId, { name: 'Itens' })

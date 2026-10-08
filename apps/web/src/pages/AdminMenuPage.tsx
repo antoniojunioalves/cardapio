@@ -25,6 +25,7 @@ import {
 import { MenuCategorySection } from '@/features/admin/components/MenuCategorySection'
 import { useCategoriasAbertas } from '@/features/admin/open-categories'
 import { usePainel } from '@/features/admin/panel'
+import { podeAlgoNoProduto, podeNoProduto, SO_VE_O_CARDAPIO } from '@/features/admin/permissions'
 import { cardapioNoPlano, usePlano } from '@/features/admin/plan'
 
 /** O recado de quem chega à lista vindo do cadastro de um produto. */
@@ -74,10 +75,11 @@ export function AdminMenuPage() {
     alterarCategoria: permissoes.includes('categories:update'),
     excluirCategoria: permissoes.includes('categories:delete'),
     criarProduto: permissoes.includes('products:create'),
-    alterarProduto: permissoes.includes('products:update'),
+    produto: podeNoProduto(permissoes),
     excluirProduto: permissoes.includes('products:delete'),
   }
-  const somenteLeitura = !Object.values(pode).some(Boolean)
+  const { produto: noProduto, ...noResto } = pode
+  const somenteLeitura = !podeAlgoNoProduto(noProduto) && !Object.values(noResto).some(Boolean)
   const ordenando = reordenarCategorias.isPending || reordenarProdutos.isPending
   const grupos =
     categorias.data && produtos.data ? agruparPorCategoria(categorias.data, produtos.data) : []
@@ -108,9 +110,7 @@ export function AdminMenuPage() {
           {aviso}
         </p>
       )}
-      {somenteLeitura && (
-        <AvisoDeSomenteLeitura texto="Você pode ver o cardápio, mas só quem administra o estabelecimento o altera." />
-      )}
+      {somenteLeitura && <AvisoDeSomenteLeitura texto={SO_VE_O_CARDAPIO} />}
       {pode.criarProduto && plano?.produtosNoLimite && (
         <AvisoDeAtencao>
           O cardápio chegou ao limite de produtos do plano. Para cadastrar outro, exclua um produto

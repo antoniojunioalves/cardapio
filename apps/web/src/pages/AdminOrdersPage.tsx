@@ -30,7 +30,9 @@ export function AdminOrdersPage() {
   useTituloDoPainel('Pedidos')
 
   const pedidos = consulta.data ?? []
+  // Mudar o status e cancelar são permissões separadas: uma não inclui a outra.
   const podeAtualizar = permissoes.includes('orders:update')
+  const permiteCancelar = permissoes.includes('orders:cancel')
   const visiveis = pedidos.filter((p) => (aba === 'andamento' ? emAndamento(p) : !emAndamento(p)))
 
   function mudar(pedido: PedidoDoPainel, status: StatusDoPedido, motivo?: string) {
@@ -110,6 +112,7 @@ export function AdminOrdersPage() {
             key={pedido.id}
             pedido={pedido}
             podeAtualizar={podeAtualizar}
+            permiteCancelar={permiteCancelar}
             atualizando={mudarStatus.isPending}
             aoMudarStatus={(status) => {
               mudar(pedido, status)

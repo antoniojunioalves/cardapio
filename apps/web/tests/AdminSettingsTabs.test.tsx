@@ -435,7 +435,7 @@ describe('aba de horários', () => {
     expect(screen.queryByRole('button', { name: /Adicionar horário/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Remover/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Salvar alterações' })).toBeNull()
-    expect(screen.getByText(/só quem administra o estabelecimento/)).toBeVisible()
+    expect(screen.getByText(/o seu perfil não permite alterá-las/)).toBeVisible()
   })
 })
 

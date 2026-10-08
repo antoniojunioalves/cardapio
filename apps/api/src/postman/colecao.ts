@@ -106,6 +106,7 @@ const VARIAVEL_DO_RECURSO: Record<string, string> = {
   'option-groups': 'optionGroupId',
   orders: 'orderId',
   users: 'userId',
+  profiles: 'profileId',
 }
 
 const DESCRICAO_DA_COLECAO = [

@@ -15,6 +15,7 @@ import {
 } from '../src/settings/service.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import {
+  comTudo,
   criarTenantComUsuario,
   removerTenantDeTeste,
   SENHA_PADRAO,
@@ -114,11 +115,10 @@ describe('GET /api/v1/admin/setup-checklist', () => {
   beforeAll(async () => {
     app = await buildApp({ rateLimit: false })
     await app.ready()
-    novo = await criarTenantComUsuario({ permissoes: ['settings:read'], permissoesReais: true })
+    novo = await criarTenantComUsuario({ permissoes: ['settings:read'] })
     outro = await criarTenantComUsuario()
     semPermissao = await criarTenantComUsuario({
       permissoes: ['orders:read'],
-      permissoesReais: true,
     })
     token = await entrar(novo)
   })
@@ -172,7 +172,7 @@ describe('GET /api/v1/admin/setup-checklist', () => {
   it('cada configuração feita sai da lista, até ficar pronto', async () => {
     const ctx = tenantContextFromUser(novo.tenantId)
 
-    await atualizarConfiguracoes(ctx, novo.userId, { whatsappPhone: '5511999990000' })
+    await atualizarConfiguracoes(ctx, comTudo(novo.userId), { whatsappPhone: '5511999990000' })
     expect(await faltando()).toEqual(['businessHours', 'fulfillment', 'paymentMethods', 'products'])
 
     await substituirEntrega(ctx, novo.userId, {
@@ -202,7 +202,7 @@ describe('GET /api/v1/admin/setup-checklist', () => {
     })
     expect(await faltando()).toEqual(['products'])
 
-    await atualizarProduto(ctx, novo.userId, produto.id, { isAvailable: true })
+    await atualizarProduto(ctx, comTudo(novo.userId), produto.id, { isAvailable: true })
     expect(await faltando()).toEqual([])
     expect((await lista()).json<{ ready: boolean }>().ready).toBe(true)
   })

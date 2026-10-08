@@ -9,11 +9,11 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 24b concluída** — o estabelecimento se cadastra pela página inicial
+**Status atual: Fase 25a concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
 publicado quando o dono confirma o e-mail. Pelo painel ele já configura o estabelecimento, os
 horários, a entrega e as formas de pagamento, e monta o cardápio inteiro: as categorias e, num
-cadastro em dois passos, o produto com foto e os opcionais dele — e combos. As fases 25 a 28 fecham o MVP — as telas de usuários e de
+cadastro em dois passos, o produto com foto e os opcionais dele — e combos. E monta a equipe: cadastra as pessoas e diz o que cada uma pode fazer, com perfis de permissões (Administrador, Gerente do cardápio, Atendente e Cozinha vêm prontos). As fases 25b a 28 fecham o MVP — as senhas (trocar, redefinir e recuperar), a tela de
 clientes, e o sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra
@@ -24,11 +24,12 @@ entre em [localhost:5173/entrar](http://localhost:5173/entrar) só com e-mail e 
 acha o estabelecimento pelo e-mail e leva ao painel dele. O painel abre no Início, com o resumo
 dos pedidos de hoje e a lista do que falta configurar, e tem um menu lateral (gaveta no celular)
 que leva aos Pedidos, ao Cardápio — com as abas Produtos (categorias e produtos, o que esgotou
-marcado na própria lista) e Opcionais — e às Configurações, com as abas Estabelecimento, Horários, Entrega e Pagamento; ele também avisa quando o plano se aproxima do limite de pedidos do mês. Um
+marcado na própria lista) e Opcionais —, às Configurações, com as abas Estabelecimento, Horários, Entrega e Pagamento, e à Equipe, com as abas Pessoas e Perfis; ele também avisa quando o plano se aproxima do limite de pedidos do mês. Um
 estabelecimento recém-cadastrado só recebe pedidos depois de ligar a entrega ou a retirada e de
 escolher ao menos uma forma de pagamento. Acompanhe em [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
-Depois de `pnpm db:seed`, dá para entrar com:
+Depois de `pnpm db:seed`, dá para entrar com o proprietário de cada estabelecimento — as outras
+pessoas se cadastram pela tela Equipe:
 
 | Estabelecimento       | E-mail            | Senha         |
 | --------------------- | ----------------- | ------------- |

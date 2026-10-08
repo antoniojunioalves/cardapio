@@ -30,6 +30,8 @@ import {
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
+  comTudo,
+  criarColega,
   criarTenantComUsuario,
   removerTenantDeTeste,
   SENHA_PADRAO,
@@ -136,7 +138,7 @@ async function montarLanchonete(): Promise<void> {
   const ctx = tenantContextFromUser(lanchonete.tenantId)
   const ator = lanchonete.userId
 
-  await atualizarConfiguracoes(ctx, ator, {
+  await atualizarConfiguracoes(ctx, comTudo(ator), {
     minimumOrderInCents: 2000,
     whatsappPhone: '5511999990000',
   })
@@ -172,7 +174,7 @@ async function montarLanchonete(): Promise<void> {
     priceInCents: 900,
     isAvailable: false,
   })
-  const adicionais = await criarGrupo(ctx, ator, {
+  const adicionais = await criarGrupo(ctx, comTudo(ator), {
     name: 'Adicionais',
     minSelections: 0,
     maxSelections: 2,
@@ -200,10 +202,9 @@ beforeAll(async () => {
   ids.dinheiro = formas.find((f) => f.code === 'CASH')?.id ?? ''
 
   lanchonete = await criarTenantComUsuario({
-    permissoes: ['orders:read', 'orders:update'],
-    permissoesReais: true,
+    permissoes: ['orders:read', 'orders:update', 'orders:cancel'],
   })
-  pizzaria = await criarTenantComUsuario({ permissoes: ['orders:read'], permissoesReais: true })
+  pizzaria = await criarTenantComUsuario({ permissoes: ['orders:read'] })
   fechada = await criarTenantComUsuario()
   await montarLanchonete()
 
@@ -329,13 +330,15 @@ describe('criar pedido', () => {
 
   it('sem WhatsApp cadastrado, a mensagem vem sem link', async () => {
     const ctx = tenantContextFromUser(lanchonete.tenantId)
-    await atualizarConfiguracoes(ctx, lanchonete.userId, { whatsappPhone: null })
+    await atualizarConfiguracoes(ctx, comTudo(lanchonete.userId), { whatsappPhone: null })
     try {
       const criado = await criar()
       expect(criado.whatsapp.url).toBeNull()
       expect(criado.whatsapp.message).toContain('*Pedido #')
     } finally {
-      await atualizarConfiguracoes(ctx, lanchonete.userId, { whatsappPhone: '5511999990000' })
+      await atualizarConfiguracoes(ctx, comTudo(lanchonete.userId), {
+        whatsappPhone: '5511999990000',
+      })
     }
   })
 
@@ -550,7 +553,7 @@ describe('painel do estabelecimento', () => {
 
     await atualizarProduto(
       tenantContextFromUser(lanchonete.tenantId),
-      lanchonete.userId,
+      comTudo(lanchonete.userId),
       ids.refri,
       {
         name: 'Refrigerante 2L',
@@ -570,7 +573,7 @@ describe('painel do estabelecimento', () => {
 
     await atualizarProduto(
       tenantContextFromUser(lanchonete.tenantId),
-      lanchonete.userId,
+      comTudo(lanchonete.userId),
       ids.refri,
       {
         name: 'Refrigerante',
@@ -622,6 +625,57 @@ describe('painel do estabelecimento', () => {
       { number: criado.number, de: 'PREPARING', para: 'CANCELLED', motivo: 'Cliente desistiu' },
     ])
     expect(registros.every((r) => r.actorUserId === lanchonete.userId)).toBe(true)
+  })
+
+  it('cancelar é uma permissão à parte: quem só muda o status não cancela, e vice-versa', async () => {
+    const cozinha = await entrar(await criarColega(lanchonete, ['orders:read', 'orders:update']))
+    const gerente = await entrar(await criarColega(lanchonete, ['orders:read', 'orders:cancel']))
+    const criado = await criar(
+      pedido({ fulfillment: 'PICKUP', address: null, expectedTotalInCents: 6880 }),
+    )
+    const [gravado] = await naLanchonete((tx) =>
+      tx.select().from(orders).where(eq(orders.number, criado.number)),
+    )
+    const url = `/orders/${gravado?.id ?? ''}/status`
+    const cancelar = { status: 'CANCELLED', reason: 'Cliente desistiu' }
+
+    const cozinhaCancela = await admin('PATCH', url, cancelar, cozinha)
+    expect(cozinhaCancela.statusCode).toBe(403)
+    expect(cozinhaCancela.json()).toMatchObject({
+      error: { code: 'FORBIDDEN', details: { missing: ['orders:cancel'] } },
+    })
+
+    const gerenteAceita = await admin('PATCH', url, { status: 'ACCEPTED' }, gerente)
+    expect(gerenteAceita.statusCode).toBe(403)
+    expect(gerenteAceita.json()).toMatchObject({
+      error: { details: { missing: ['orders:update'] } },
+    })
+    // Nenhuma das recusas mexeu no pedido.
+    expect((await admin('GET', `/orders/${gravado?.id ?? ''}`)).json()).toMatchObject({
+      status: 'RECEIVED',
+    })
+
+    expect((await admin('PATCH', url, { status: 'ACCEPTED' }, cozinha)).statusCode).toBe(200)
+    expect((await admin('PATCH', url, cancelar, gerente)).json()).toMatchObject({
+      status: 'CANCELLED',
+    })
+  })
+
+  it('quem só vê os pedidos não muda o status nem cancela', async () => {
+    const soVe = await entrar(await criarColega(lanchonete, ['orders:read']))
+    const criado = await criar()
+    const [gravado] = await naLanchonete((tx) =>
+      tx.select().from(orders).where(eq(orders.number, criado.number)),
+    )
+    const url = `/orders/${gravado?.id ?? ''}/status`
+
+    for (const corpo of [{ status: 'ACCEPTED' }, { status: 'CANCELLED', reason: 'Desistiu' }]) {
+      const resposta = await admin('PATCH', url, corpo, soVe)
+      expect(resposta.statusCode).toBe(403)
+      expect(resposta.json()).toMatchObject({
+        error: { details: { anyOf: ['orders:update', 'orders:cancel'] } },
+      })
+    }
   })
 
   it('pedido de outro estabelecimento responde 404', async () => {

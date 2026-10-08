@@ -1,4 +1,4 @@
-import { VERSAO_DOS_TERMOS } from '@repo/shared'
+import { PERFIS_PRONTOS, TODAS_AS_PERMISSOES, VERSAO_DOS_TERMOS } from '@repo/shared'
 import { and, eq, like, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -9,15 +9,13 @@ import {
   auditLogs,
   emailVerificationTokens,
   plans,
-  roles,
   subscriptions,
   tenants,
-  userRoles,
   users,
 } from '../src/db/schema/index.js'
 import { seedPlans } from '../src/db/seed-plans.js'
-import { seedRbac } from '../src/db/seed-rbac.js'
 import { email, MemoryEmailProvider } from '../src/email/index.js'
+import { listarPerfis } from '../src/profiles/repository.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 
@@ -86,7 +84,6 @@ async function auditoria(tenantId: string) {
 }
 
 beforeAll(async () => {
-  await seedRbac()
   await seedPlans()
   app = await buildApp({ rateLimit: false })
   await app.ready()
@@ -110,8 +107,8 @@ describe('cadastro pela página', () => {
     expect(dados.establishment).toMatchObject({ slug: corpo.slug, status: 'PENDING' })
     expect(dados.confirmationEmailSent).toBe(true)
     expect(dados.accessToken).toEqual(expect.any(String))
-    // Dono: todas as permissões, inclusive a que só o OWNER tem.
-    expect(dados.user.permissions).toContain('users:delete')
+    // Proprietário: todas as permissões do catálogo.
+    expect(dados.user.permissions).toEqual([...TODAS_AS_PERMISSOES])
     expect(dados.user.email).toBe(corpo.email.toLowerCase())
 
     const cookie = resposta.cookies.find((c) => c.name === 'refresh_token')
@@ -127,13 +124,21 @@ describe('cadastro pela página', () => {
         .select({ code: plans.code })
         .from(subscriptions)
         .innerJoin(plans, eq(plans.id, subscriptions.planId)),
-      papel: await tx
-        .select({ code: roles.code })
-        .from(userRoles)
-        .innerJoin(roles, eq(roles.id, userRoles.roleId)),
+      dono: await tx.select({ isOwner: users.isOwner, profileId: users.profileId }).from(users),
+      perfis: await listarPerfis(tx),
     }))
     expect(detalhes.plano).toEqual([{ code: 'FREE' }])
-    expect(detalhes.papel).toEqual([{ code: 'OWNER' }])
+    // O proprietário não tem perfil: tem tudo, e isso não se edita.
+    expect(detalhes.dono).toEqual([{ isOwner: true, profileId: null }])
+    // O estabelecimento nasce com os perfis prontos, para dar à primeira pessoa da equipe.
+    expect(detalhes.perfis.map((p) => p.name).sort()).toEqual(
+      PERFIS_PRONTOS.map((p) => p.nome).sort(),
+    )
+    for (const pronto of PERFIS_PRONTOS) {
+      expect(detalhes.perfis.find((p) => p.name === pronto.nome)?.permissions).toEqual([
+        ...pronto.permissoes,
+      ])
+    }
 
     const registros = await auditoria(tenantId)
     expect(registros.map((r) => r.action)).toEqual(
@@ -420,12 +425,25 @@ describe('reenvio da confirmação', () => {
     const { corpo, dados } = await cadastrarComSucesso()
     const autorizacao = { authorization: `Bearer ${dados.accessToken}` }
 
-    const admin = { name: 'Admin', email: `${corpo.slug}-admin@exemplo.com`, password: 'senha-123' }
+    const admin = {
+      name: 'Admin',
+      email: `${corpo.slug}-admin@exemplo.com`,
+      password: 'Senha-123!',
+    }
+    // O estabelecimento nasce com os perfis prontos: o administrador é um deles.
+    const perfis = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/profiles',
+      headers: autorizacao,
+    })
+    const administrador = perfis
+      .json<{ id: string; name: string }[]>()
+      .find((perfil) => perfil.name === 'Administrador')
     const criado = await app.inject({
       method: 'POST',
       url: '/api/v1/admin/users',
       headers: autorizacao,
-      payload: { ...admin, role: 'ADMIN' },
+      payload: { ...admin, profileId: administrador?.id },
     })
     expect(criado.statusCode, criado.body).toBe(201)
 

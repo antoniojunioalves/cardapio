@@ -1,4 +1,5 @@
 import { recordAudit } from '../audit/record.js'
+import { exigirAlgumaPermissao, exigirPermissao, type Ator } from '../auth/permissions.js'
 import { diferencas } from '../lib/diff.js'
 import type {
   BusinessHour,
@@ -79,15 +80,41 @@ export async function obterConfiguracoes(
  * estabelecimentos, na **mesma transação** — salvar o formulário grava tudo ou
  * nada, e a auditoria é uma só, com o antes e o depois de cada campo.
  */
+/**
+ * Pausar e retomar o recebimento de pedidos é do dia a dia, e tem a permissão
+ * dele (`orders:pause`); quem altera as configurações também pausa. O resto do
+ * formulário é só de `settings:update`.
+ *
+ * Como no produto, vale o que **muda**: a tela envia o formulário inteiro, e
+ * quem só pausa não altera o endereço por tê-lo enviado igual.
+ */
+function exigirPermissaoParaAlterar(
+  ator: Ator,
+  anterior: ConfiguracoesDoEstabelecimento,
+  patch: ConfiguracoesPatch,
+): void {
+  const mudou = (Object.keys(patch) as (keyof ConfiguracoesPatch)[]).filter(
+    (campo) => patch[campo] !== undefined && patch[campo] !== anterior[campo],
+  )
+  if (mudou.some((campo) => campo !== 'isAcceptingOrders')) {
+    exigirPermissao(ator, 'settings:update')
+  }
+  if (mudou.includes('isAcceptingOrders')) {
+    exigirAlgumaPermissao(ator, 'orders:pause', 'settings:update')
+  }
+}
+
 export async function atualizarConfiguracoes(
   context: TenantContext,
-  actorUserId: string,
+  ator: Ator,
   patch: ConfiguracoesPatch,
 ): Promise<ConfiguracoesDoEstabelecimento> {
+  const actorUserId = ator.id
   const { name, timezone, ...configuracoes } = patch
 
   return withTenant(context, async (tx) => {
     const anterior = await carregarConfiguracoes(tx, context)
+    exigirPermissaoParaAlterar(ator, anterior, patch)
     await updateSettings(tx, context, configuracoes)
     await atualizarIdentidade(tx, context, { name, timezone })
     const atualizado = await carregarConfiguracoes(tx, context)

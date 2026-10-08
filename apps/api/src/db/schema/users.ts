@@ -8,10 +8,12 @@ import {
   pgTable,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
 
+import { profiles } from './profiles.js'
 import { currentTenantId, primaryId, timestamps } from './shared.js'
 import { tenants } from './tenants.js'
 
@@ -53,6 +55,15 @@ export const users = pgTable(
     email: varchar({ length: 254 }).notNull(),
     passwordHash: varchar({ length: 255 }).notNull(),
 
+    /**
+     * O proprietário: quem criou o estabelecimento. Tem sempre todas as
+     * permissões do catálogo, e por isso não tem perfil — um perfil se edita,
+     * e o acesso do dono, não.
+     */
+    isOwner: boolean().notNull().default(false),
+    /** O perfil de quem não é o proprietário. Sem perfil, a pessoa não tem permissão nenhuma. */
+    profileId: uuid(),
+
     isActive: boolean().notNull().default(true),
     lastLoginAt: timestamp({ withTimezone: true }),
     /** Quando a pessoa provou ser dona do e-mail, pelo link de confirmação. */
@@ -68,6 +79,17 @@ export const users = pgTable(
     // (tenant_id, id), e não só id, para que o banco exija que a referência
     // fique dentro do mesmo estabelecimento. Ver `tests/rls-guard.test.ts`.
     unique('users_tenant_id_id').on(table.tenantId, table.id),
+    // O perfil é do mesmo estabelecimento, e um perfil em uso não se apaga.
+    foreignKey({
+      name: 'users_perfil_mesmo_tenant',
+      columns: [table.tenantId, table.profileId],
+      foreignColumns: [profiles.tenantId, profiles.id],
+    }).onDelete('restrict'),
+    check('users_dono_sem_perfil', sql`NOT (${table.isOwner} AND ${table.profileId} IS NOT NULL)`),
+    // Um proprietário por estabelecimento.
+    uniqueIndex('users_um_dono_por_tenant')
+      .on(table.tenantId)
+      .where(sql`${table.isOwner}`),
     index('users_tenant_idx').on(table.tenantId),
     pgPolicy('tenant_isolation', {
       as: 'permissive',

@@ -25,13 +25,14 @@ import { corpoMultipart, PNG } from './helpers/imagens.js'
  */
 
 const TODAS = [
-  'categories:read',
   'categories:create',
   'categories:update',
   'categories:delete',
   'products:read',
   'products:create',
   'products:update',
+  'products:price',
+  'products:availability',
   'products:delete',
 ]
 
@@ -66,8 +67,8 @@ const comoA = (
 beforeAll(async () => {
   app = await buildApp({ rateLimit: false })
   await app.ready()
-  tenantA = await criarTenantComUsuario({ permissoes: TODAS, permissoesReais: true })
-  tenantB = await criarTenantComUsuario({ permissoes: TODAS, permissoesReais: true })
+  tenantA = await criarTenantComUsuario({ permissoes: TODAS })
+  tenantB = await criarTenantComUsuario({ permissoes: TODAS })
   tokenA = await entrar(tenantA)
   const tokenB = await entrar(tenantB)
 

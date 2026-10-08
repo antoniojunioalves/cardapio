@@ -102,6 +102,17 @@ export function IconePerfil(props: IconeProps) {
   )
 }
 
+export function IconeEquipe(props: IconeProps) {
+  return (
+    <Icone {...props}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c0-3.5 2.9-5.5 6.5-5.5s6.5 2 6.5 5.5" />
+      <path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4" />
+      <path d="M18 14.8c2.1.6 3.5 2.3 3.5 5.2" />
+    </Icone>
+  )
+}
+
 export function IconeConfiguracoes(props: IconeProps) {
   return (
     <Icone {...props}>

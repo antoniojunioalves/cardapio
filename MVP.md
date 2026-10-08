@@ -21,12 +21,15 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
 ### Administração do estabelecimento
 
 - [x] Login de usuário administrativo, só com e-mail e senha — o sistema acha o estabelecimento
-- [x] Múltiplos usuários por tenant, com papéis `OWNER`, `ADMIN`, `STAFF` — _pela API; a tela é
-      da Fase 25_
-- [ ] Permissões por pessoa: perfis prontos, e o dono montando as permissões de cada um (marcar
-      esgotado separado de mudar preço, por exemplo) — _Fase 25, a rever com o Junio_
-- [ ] Troca da própria senha, redefinição pelo dono e "Esqueci minha senha" por e-mail —
-      _Fase 25_
+- [x] Múltiplos usuários por tenant: a tela Equipe cadastra as pessoas, dá a cada uma um perfil,
+      desativa e reativa, dentro do limite do plano
+- [x] Permissões pelo perfil: o dono monta os perfis do estabelecimento a partir de quatro prontos
+      (Administrador, Gerente do cardápio, Atendente e Cozinha), com marcar o que esgotou separado
+      de mudar preço, e cancelar pedido separado de mudar o status. O proprietário tem sempre tudo
+- [ ] Troca da própria senha e redefinição pelo dono — _Fase 25b_
+- [ ] "Esqueci minha senha" por e-mail — _Fase 25c_
+- [ ] O mesmo e-mail na equipe de mais de um estabelecimento: hoje quem já trabalhou num não é
+      cadastrado em outro — _Fase 25d, antes da 26 (achado do Junio na validação da 25a)_
 - [x] Painel com menu lateral e tela Início, com o resumo dos pedidos de hoje
 - [x] Lista do que falta para receber pedidos, no Início
 - [x] Configuração do estabelecimento: nome, logo, capa, descrição, contato, WhatsApp, endereço
@@ -147,9 +150,9 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 24b:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
+> **Situação ao fim da Fase 25a:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
 > cadastro ao pedido chegando ao painel, com o cardápio inteiro (categorias, produtos, opcionais e
 > combos) montado pelo painel, num cadastro guiado: o produto e os opcionais, um passo de cada
-> vez —, e os testes provam o isolamento. Falta o sistema estar no ar, além das telas de
-> usuários e de clientes. As fases 25 a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o
-> MVP".
+> vez —, e os testes provam o isolamento. O dono já monta a equipe e diz o que cada um pode fazer.
+> Falta o sistema estar no ar, além das senhas (trocar, redefinir e recuperar), do e-mail de uma
+> pessoa em mais de um estabelecimento e da tela de clientes. As fases 25b a 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".

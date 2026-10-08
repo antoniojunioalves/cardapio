@@ -27,6 +27,8 @@ const PERMISSOES = [
   'products:read',
   'products:create',
   'products:update',
+  'products:price',
+  'products:availability',
   'products:delete',
   'categories:create',
 ]
@@ -65,8 +67,8 @@ function como(token: string) {
 beforeAll(async () => {
   app = await buildApp({ rateLimit: false })
   await app.ready()
-  tenantA = await criarTenantComUsuario({ permissoes: PERMISSOES, permissoesReais: true })
-  tenantB = await criarTenantComUsuario({ permissoes: PERMISSOES, permissoesReais: true })
+  tenantA = await criarTenantComUsuario({ permissoes: PERMISSOES })
+  tenantB = await criarTenantComUsuario({ permissoes: PERMISSOES })
   tokenA = await entrar(tenantA)
   const comoA = como(tokenA)
   const comoB = como(await entrar(tenantB))

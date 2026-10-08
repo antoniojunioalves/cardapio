@@ -79,6 +79,11 @@ export const VARIAVEIS: VariavelDaColecao[] = [
   { chave: 'orderId', valor: '', descricao: 'Pedido mais recente do painel.' },
   { chave: 'userId', valor: '', descricao: 'Primeiro usuário que não é o dono, ou o criado.' },
   {
+    chave: 'profileId',
+    valor: '',
+    descricao: 'O perfil "Atendente" do estabelecimento, ou o criado.',
+  },
+  {
     chave: 'menuProductId',
     valor: '',
     descricao: 'Produto escolhido pelo cardápio para o pedido.',
@@ -109,6 +114,7 @@ export const VALORES_PARA_VALIDAR: Record<string, string> = {
   optionGroupId: '01900000-0000-7000-8000-000000000005',
   paymentMethodId: '01900000-0000-7000-8000-000000000006',
   menuProductId: '01900000-0000-7000-8000-000000000007',
+  profileId: '01900000-0000-7000-8000-000000000008',
   orderQuantity: '2',
   orderTotalInCents: '2580',
   fulfillment: 'PICKUP',
@@ -389,7 +395,7 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
   'GET /api/v1/admin/users': {
     depois: [
       'const usuarios = pm.response.json();',
-      "const outro = Array.isArray(usuarios) && usuarios.find((u) => u.role?.code !== 'OWNER');",
+      'const outro = Array.isArray(usuarios) && usuarios.find((u) => !u.isOwner);',
       "if (outro) pm.collectionVariables.set('userId', outro.id);",
     ],
   },
@@ -398,13 +404,39 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
       name: 'Atendente de Teste',
       email: 'atendente-{{$timestamp}}@exemplo.com',
       password: 'Senha-do-atendente',
-      role: 'STAFF',
+      profileId: '{{profileId}}',
     },
     depois: guardarIdCriado('userId'),
-    nota: 'O plano gratuito permite 2 usuários ativos.',
+    nota: 'Rode antes "Perfis do estabelecimento", que guarda o `profileId`. O plano gratuito permite 2 usuários ativos.',
   },
   'PATCH /api/v1/admin/users/:id': {
-    corpo: { role: 'ADMIN' },
+    corpo: { profileId: '{{profileId}}' },
+  },
+
+  // Perfis
+  'GET /api/v1/admin/profiles': {
+    depois: [
+      'const perfis = pm.response.json();',
+      "const atendente = Array.isArray(perfis) && (perfis.find((p) => p.name === 'Atendente') ?? perfis[0]);",
+      "if (atendente) pm.collectionVariables.set('profileId', atendente.id);",
+    ],
+  },
+  'POST /api/v1/admin/profiles': {
+    corpo: {
+      name: 'Caixa {{$timestamp}}',
+      description: 'Atende, cancela pedido e pausa o recebimento.',
+      permissions: ['orders:read', 'orders:update', 'orders:cancel', 'orders:pause'],
+    },
+    depois: guardarIdCriado('profileId'),
+    nota: 'As permissões são as do catálogo (`recurso:acao`); o que cada uma exige entra junto.',
+  },
+  'PUT /api/v1/admin/profiles/:id': {
+    corpo: {
+      name: 'Caixa',
+      description: 'Atende e marca o que esgotou.',
+      permissions: ['orders:read', 'orders:update', 'products:availability'],
+    },
+    nota: 'A lista inteira das permissões: o que não vier sai do perfil.',
   },
 
   // Cardápio público

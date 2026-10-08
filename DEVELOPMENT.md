@@ -362,6 +362,28 @@ escolha e falha se ela ficar implícita.
 **Da plataforma:** declare a tabela em `TABELAS_GLOBAIS`, em `tests/rls-guard.test.ts`, com o
 motivo. Sem isso o teste falha — de propósito.
 
+**Migration que mexe em dados de estabelecimento** (e não só na estrutura): o RLS forçado vale
+também para quem migra. Um `UPDATE` solto não enxerga linha nenhuma — e não dá erro. Percorra os
+estabelecimentos e defina o contexto de cada um, como a `0024_perfis_do_estabelecimento.sql`:
+
+```sql
+DO $$
+DECLARE estabelecimento record;
+BEGIN
+  FOR estabelecimento IN SELECT id FROM tenants LOOP
+    PERFORM set_config('app.tenant_id', estabelecimento.id::text, true);
+    -- … o que muda neste estabelecimento …
+  END LOOP;
+  PERFORM set_config('app.tenant_id', '', true);
+END $$;
+```
+
+Antes de entregar, rode-a numa **cópia do banco de desenvolvimento**, que tem dados que o banco de
+testes não tem (foi assim que apareceu o usuário sem papel, na Fase 25a): crie o banco, copie com
+`pg_dump | psql`, passe a posse para `cardapio_migrator`, dê `CONNECT` a `cardapio_app`, e rode
+`pnpm db:migrate` com `MIGRATION_DATABASE_URL` e `DATABASE_URL` apontando para a cópia. Confira
+as contagens e apague a cópia.
+
 ### Protegendo uma rota
 
 Use sempre `requireAuth()`, que devolve a cadeia pronta:
@@ -381,8 +403,32 @@ ordem errada falharia em silêncio, com o erro parecendo de sessão e não de co
 Dentro do handler, `currentUser(request)` e `tenantContextOf(request)` devolvem os valores já
 com tipo garantido.
 
-Permissão nova: acrescente em `PERMISSOES` no `src/db/seed-rbac.ts` e atribua aos papéis que
-devem tê-la.
+**Permissão nova:** acrescente em `PERMISSOES`, em `packages/shared/src/permissions.ts` — o
+código, o grupo, o nome que o dono lê e, se ela não serve sem outra, o `requer`. Não há migration:
+o catálogo mora no código. O proprietário a tem na hora; a tela de perfis a mostra sozinha; e os
+estabelecimentos que já existem não a ganham nos perfis deles — o dono a marca. Se ela deve vir
+nos perfis prontos de quem se cadastrar daqui em diante, acrescente em `PERFIS_PRONTOS`. Sem tela
+que a use ainda, marque `semTela: true`, e a tela de perfis não a oferece.
+
+**Quando a permissão depende do que o pedido muda**, a guarda é `requireAnyOf()`, e quem confere
+é o serviço:
+
+```ts
+// rota: entra quem tem alguma
+onRequest: requireAnyOf('products:update', 'products:price', 'products:availability')
+// handler: passa o ator, e não só o id
+atualizarProduto(tenantContextOf(request), currentUser(request), id, request.body)
+
+// serviço, dentro da transação, com o que está gravado em mãos
+exigirPermissao(ator, ...permissoesDaAlteracao(anterior, patch))
+```
+
+`exigirPermissao` e `exigirAlgumaPermissao` estão em `src/auth/permissions.ts`. **Uma rota com
+`requireAnyOf` cujo serviço não confere está aberta a quem tem qualquer uma das permissões** —
+escreva primeiro o teste de recusa de cada combinação (`tests/granular-permissions.test.ts` é o
+modelo: duas pessoas do mesmo estabelecimento, com `criarColega`, diante do mesmo dado). A função
+que decide as permissões (`permissoesDaAlteracao`, `permissoesParaGravarOGrupo`) é pura, e ganha
+teste sem banco. Compare com o gravado: campo enviado igual não pede permissão.
 
 ### Registrando auditoria
 
@@ -454,7 +500,9 @@ Duas regras do conteúdo:
   nosso remetente, para qualquer endereço (SECURITY.md, "Cadastro de estabelecimento").
 
 Em desenvolvimento, os e-mails vão para o Mailpit (`pnpm db:up`): abra http://localhost:8025 para
-ver o que a API enviou. Nos testes, `EMAIL_DRIVER=memory` (no `vitest.config.ts`) guarda tudo na
+ver o que a API enviou. Cuidado ao limpar a caixa por script: `DELETE /api/v1/messages` **sem uma
+lista de ids apaga todas as mensagens**, não nenhuma — confira que a lista não está vazia antes de
+chamar. Nos testes, `EMAIL_DRIVER=memory` (no `vitest.config.ts`) guarda tudo na
 memória — a instância `email` é um `MemoryEmailProvider`, com a caixa em `enviados`,
 `limpar()` entre os testes e `falharOsProximos(n)` para simular o servidor fora do ar.
 
@@ -462,12 +510,15 @@ memória — a instância `email` é um `MemoryEmailProvider`, com a caixa em `e
 
 Pelo mesmo caminho do cadastro: `criarEstabelecimento` (`src/signup/service.ts`), dentro de um
 `withTenant` aberto com `tenantContextFromSignup(await novoIdDeEstabelecimento())`. Ele grava o
-estabelecimento, a assinatura e o dono com o papel OWNER numa transação; o seed faz assim.
+estabelecimento, a assinatura, o dono — marcado como proprietário — e os quatro perfis prontos
+numa transação; o seed faz assim.
 
-Precisa do plano e do papel no banco: rode `seedPlans()` e `seedRbac()` antes — o `beforeAll` de
+Precisa do plano no banco: rode `seedPlans()` antes — o `beforeAll` de
 `tests/signup-routes.test.ts` é o modelo. A fixture `criarTenantComUsuario` continua separada de
-propósito: ela cria papéis próprios de cada teste e nenhum plano, que é o que a maioria dos testes
-precisa provar.
+propósito: ela cria um usuário com um perfil só dele, com as permissões que o teste pedir (ou o
+proprietário, com `dono`), e nenhum plano — o que a maioria dos testes precisa provar.
+`criarColega` põe mais uma pessoa no mesmo estabelecimento, com outras permissões, e `comTudo(id)`
+é o ator para chamar direto um serviço que confere permissão.
 
 ### Acessando dados de um tenant
 
@@ -597,6 +648,24 @@ excluir mudam o que as leituras seguintes devolvem — inclusive quem usa cada g
 a API de verdade —, e o teste percorre o fluxo inteiro, da lista à página e de volta. Ela serve a
 `AdminMenu.test.tsx` e `AdminOptions.test.tsx`; acrescente as rotas novas nela, e não um mock
 avulso no teste.
+
+### Permissões numa tela do painel
+
+A sessão traz as permissões de quem entrou (`usePainel().permissoes`); a tela pergunta por elas, **nunca
+pelo nome do perfil** — o perfil é do estabelecimento e pode se chamar qualquer coisa.
+
+- O que cada permissão liga no cardápio está em `features/admin/permissions.ts` (`podeNoProduto`
+  devolve `{ resto, preco, disponibilidade }`). Regra nova de "quem pode o quê" vai para lá ou para
+  um módulo sem React da feature, com teste próprio.
+- **Desligue o campo** quando a pessoa precisa ver o valor; **esconda** quando é só uma ação. Os
+  campos (`TextField`, `SelectField`, `TextAreaField`) já têm a cara de desligado.
+- **Envie só o que a pessoa pode mudar** (`alteracaoAoAlcance` é o modelo), e diga num aviso o que
+  o perfil permite — sem isso, um formulário quase todo desligado parece defeito.
+- Toda regra da tela tem a sua na API. A tela é conveniência; quem recusa é a API.
+
+Para testar, `tests/helpers/equipe.ts` tem a API simulada da equipe (`simularEquipe`), pessoas e
+perfis de exemplo, e `comoPerfil`, que devolve a sessão de quem tem um dos perfis — para abrir a
+tela como o atendente, e não como o proprietário.
 
 ### Testando uma página
 

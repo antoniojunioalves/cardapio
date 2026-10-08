@@ -36,11 +36,9 @@ beforeAll(async () => {
 
   dono = await criarTenantComUsuario({
     permissoes: ['settings:read', 'settings:update'],
-    permissoesReais: true,
   })
   semPermissao = await criarTenantComUsuario({
     permissoes: ['orders:read'],
-    permissoesReais: true,
   })
 
   tokenDoDono = await autenticar(dono)

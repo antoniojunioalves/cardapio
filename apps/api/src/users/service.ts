@@ -1,44 +1,53 @@
 import { recordAudit } from '../audit/record.js'
 import { hashPassword } from '../auth/password.js'
+import type { Ator } from '../auth/permissions.js'
 import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
-import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js'
+import { ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js'
 import { cabeMaisUmUsuario, RECURSO_USUARIOS } from '../plans/limits.js'
 import { travarLimiteDoPlano, usoDeUsuarios } from '../plans/service.js'
+import { buscarPerfil, type Perfil } from '../profiles/repository.js'
+import { exigirAlcance } from '../profiles/service.js'
 import { avisarPedido } from '../realtime/notify.js'
 import type { TenantContext } from '../tenant/context.js'
 import { withTenant, type TenantTransaction } from '../tenant/with-tenant.js'
 import {
   alterarNome,
-  buscarPapel,
   buscarUsuario,
   definirAtivo,
-  definirPapel,
+  definirPerfil,
   inserirUsuario,
   listarUsuarios as listarDoBanco,
   encerrarSessoes,
-  type UsuarioComPapel,
+  type UsuarioDoPainel,
 } from './repository.js'
 
 /**
- * Gestão dos usuários do painel.
+ * Gestão das pessoas do painel.
  *
  * Regras que não dependem de permissão, porque permissão não as cobre:
- * - o papel `OWNER` não é dado nem tirado pela API — o dono é quem criou o
+ * - o proprietário não é dado nem tirado pela API — é quem criou o
  *   estabelecimento; transferir a posse está no ROADMAP;
- * - ninguém muda o próprio papel nem se desativa — perderia o acesso sem
+ * - só o proprietário mexe na conta do proprietário;
+ * - ninguém muda o próprio perfil nem se desativa — perderia o acesso sem
  *   ninguém para devolver;
- * - só o dono mexe na conta do dono;
+ * - ninguém dá a outra pessoa um perfil com permissões que ele mesmo não tem,
+ *   nem mexe em quem tem um perfil assim: seria passar por cima do dono;
  * - criar e reativar respeitam o limite de usuários ativos do plano.
  */
 
-export type PapelAtribuivel = 'ADMIN' | 'STAFF'
-
 const naoEncontrado = () => new NotFoundError('Usuário não encontrado.')
 
-async function exigirUsuario(tx: TenantTransaction, id: string): Promise<UsuarioComPapel> {
+async function exigirUsuario(tx: TenantTransaction, id: string): Promise<UsuarioDoPainel> {
   const usuario = await buscarUsuario(tx, id)
   if (!usuario) throw naoEncontrado()
   return usuario
+}
+
+async function exigirPerfil(tx: TenantTransaction, id: string): Promise<Perfil> {
+  const perfil = await buscarPerfil(tx, id)
+  // Um perfil de outro estabelecimento é invisível aqui: para quem pede, não existe.
+  if (!perfil) throw new NotFoundError('Perfil não encontrado.')
+  return perfil
 }
 
 /**
@@ -58,37 +67,44 @@ async function exigirVaga(tx: TenantTransaction, context: TenantContext): Promis
   }
 }
 
-/** Quem não é dono não mexe na conta do dono. */
-async function protegerDono(
+/**
+ * O ator pode mexer nesta pessoa? Na conta do proprietário, só ele mesmo; em
+ * quem tem um perfil, só quem tem todas as permissões desse perfil.
+ */
+async function exigirAlcanceSobre(
   tx: TenantTransaction,
-  ator: string,
-  alvo: UsuarioComPapel,
+  ator: Ator,
+  alvo: UsuarioDoPainel,
 ): Promise<void> {
-  if (alvo.papel?.codigo !== 'OWNER') return
-  const quemFaz = await buscarUsuario(tx, ator)
-  if (quemFaz?.papel?.codigo !== 'OWNER') {
-    throw new ForbiddenError('Só o proprietário altera a conta do proprietário.')
+  if (alvo.isOwner) {
+    if (alvo.id !== ator.id) {
+      throw new ForbiddenError('Só o proprietário altera a conta do proprietário.')
+    }
+    return
   }
+  if (!alvo.perfil) return
+  const perfil = await exigirPerfil(tx, alvo.perfil.id)
+  exigirAlcance(ator, perfil.permissions, `O perfil de ${alvo.name}`)
 }
 
-export async function listarUsuarios(context: TenantContext): Promise<UsuarioComPapel[]> {
+export async function listarUsuarios(context: TenantContext): Promise<UsuarioDoPainel[]> {
   return withTenant(context, (tx) => listarDoBanco(tx))
 }
 
 export async function criarUsuario(
   context: TenantContext,
-  ator: string,
-  dados: { name: string; email: string; password: string; role: PapelAtribuivel },
-): Promise<UsuarioComPapel> {
+  ator: Ator,
+  dados: { name: string; email: string; password: string; profileId: string },
+): Promise<UsuarioDoPainel> {
   // Fora da transação: o argon2 é lento de propósito, e a transação não
   // precisa ficar aberta esperando por ele.
   const passwordHash = await hashPassword(dados.password)
 
   try {
     return await withTenant(context, async (tx) => {
+      const perfil = await exigirPerfil(tx, dados.profileId)
+      exigirAlcance(ator, perfil.permissions, 'Este perfil')
       await exigirVaga(tx, context)
-      const papel = await buscarPapel(tx, dados.role)
-      if (!papel) throw new AppError('Papel desconhecido.', 400, 'UNKNOWN_ROLE')
 
       const id = await inserirUsuario(tx, {
         tenantId: context.tenantId,
@@ -96,15 +112,15 @@ export async function criarUsuario(
         // O login compara em minúsculas.
         email: dados.email.toLowerCase(),
         passwordHash,
+        profileId: perfil.id,
       })
-      await definirPapel(tx, context.tenantId, id, papel.id)
 
       await recordAudit(tx, context, {
         action: 'user.created',
         entityType: 'user',
         entityId: id,
-        actorUserId: ator,
-        metadata: { role: dados.role },
+        actorUserId: ator.id,
+        metadata: { perfil: perfil.name },
       })
       return exigirUsuario(tx, id)
     })
@@ -121,27 +137,28 @@ export async function criarUsuario(
 
 export async function alterarUsuario(
   context: TenantContext,
-  ator: string,
+  ator: Ator,
   id: string,
-  dados: { name?: string | undefined; role?: PapelAtribuivel | undefined },
-): Promise<UsuarioComPapel> {
+  dados: { name?: string | undefined; profileId?: string | undefined },
+): Promise<UsuarioDoPainel> {
   return withTenant(context, async (tx) => {
     const alvo = await exigirUsuario(tx, id)
-    await protegerDono(tx, ator, alvo)
+    await exigirAlcanceSobre(tx, ator, alvo)
 
-    if (dados.role !== undefined && dados.role !== alvo.papel?.codigo) {
-      if (id === ator) {
+    let perfilNovo: Perfil | undefined
+    if (dados.profileId !== undefined && dados.profileId !== alvo.perfil?.id) {
+      if (id === ator.id) {
         throw new ConflictError(
-          'Você não pode mudar o seu próprio papel.',
-          'CANNOT_CHANGE_OWN_ROLE',
+          'Você não pode mudar o seu próprio perfil.',
+          'CANNOT_CHANGE_OWN_PROFILE',
         )
       }
-      if (alvo.papel?.codigo === 'OWNER') {
-        throw new ConflictError('O papel do proprietário não muda.', 'OWNER_ROLE_FIXED')
+      if (alvo.isOwner) {
+        throw new ConflictError('O proprietário não tem perfil.', 'OWNER_HAS_NO_PROFILE')
       }
-      const papel = await buscarPapel(tx, dados.role)
-      if (!papel) throw new AppError('Papel desconhecido.', 400, 'UNKNOWN_ROLE')
-      await definirPapel(tx, context.tenantId, id, papel.id)
+      perfilNovo = await exigirPerfil(tx, dados.profileId)
+      exigirAlcance(ator, perfilNovo.permissions, 'Este perfil')
+      await definirPerfil(tx, id, perfilNovo.id)
       // As permissões mudaram: a conexão ao vivo se autentica de novo.
       await avisarPedido(tx, { tipo: 'USUARIO_ALTERADO', tenantId: context.tenantId, userId: id })
     }
@@ -151,10 +168,10 @@ export async function alterarUsuario(
       action: 'user.updated',
       entityType: 'user',
       entityId: id,
-      actorUserId: ator,
+      actorUserId: ator.id,
       metadata: {
         ...(dados.name !== undefined && { nome: { de: alvo.name, para: dados.name } }),
-        ...(dados.role !== undefined && { papel: { de: alvo.papel?.codigo, para: dados.role } }),
+        ...(perfilNovo && { perfil: { de: alvo.perfil?.nome ?? null, para: perfilNovo.name } }),
       },
     })
     return exigirUsuario(tx, id)
@@ -163,23 +180,24 @@ export async function alterarUsuario(
 
 export async function desativarUsuario(
   context: TenantContext,
-  ator: string,
+  ator: Ator,
   id: string,
-): Promise<UsuarioComPapel> {
+): Promise<UsuarioDoPainel> {
   return withTenant(context, async (tx) => {
     const alvo = await exigirUsuario(tx, id)
-    if (id === ator) {
+    if (id === ator.id) {
       throw new ConflictError(
         'Você não pode desativar a sua própria conta.',
         'CANNOT_DEACTIVATE_SELF',
       )
     }
-    if (alvo.papel?.codigo === 'OWNER') {
+    if (alvo.isOwner) {
       throw new ConflictError(
         'O proprietário não pode ser desativado.',
         'OWNER_CANNOT_BE_DEACTIVATED',
       )
     }
+    await exigirAlcanceSobre(tx, ator, alvo)
     if (!alvo.isActive) return alvo
 
     await definirAtivo(tx, id, false)
@@ -190,7 +208,7 @@ export async function desativarUsuario(
       action: 'user.deactivated',
       entityType: 'user',
       entityId: id,
-      actorUserId: ator,
+      actorUserId: ator.id,
     })
     return exigirUsuario(tx, id)
   })
@@ -198,11 +216,12 @@ export async function desativarUsuario(
 
 export async function reativarUsuario(
   context: TenantContext,
-  ator: string,
+  ator: Ator,
   id: string,
-): Promise<UsuarioComPapel> {
+): Promise<UsuarioDoPainel> {
   return withTenant(context, async (tx) => {
     const alvo = await exigirUsuario(tx, id)
+    await exigirAlcanceSobre(tx, ator, alvo)
     if (alvo.isActive) return alvo
 
     await exigirVaga(tx, context)
@@ -211,7 +230,7 @@ export async function reativarUsuario(
       action: 'user.reactivated',
       entityType: 'user',
       entityId: id,
-      actorUserId: ator,
+      actorUserId: ator.id,
     })
     return exigirUsuario(tx, id)
   })

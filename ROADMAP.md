@@ -40,9 +40,15 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Autenticação e contas
 
-- Convite de usuário por e-mail — hoje o dono define a senha inicial, e a pessoa a troca depois
-  (Fase 25)
-- Transferência da posse do estabelecimento (papel `OWNER`)
+- Convite de usuário por e-mail — hoje o dono define a senha inicial (Fase 25a), e a pessoa a
+  troca depois (Fase 25b)
+- Transferência da posse do estabelecimento: passar a marca de proprietário (`users.is_owner`) a
+  outra pessoa. Hoje ela fica com quem fez o cadastro
+- Alterar o e-mail de uma pessoa da equipe — hoje se cadastra de novo
+- **Ajuste de permissão por pessoa**, além do perfil. Hoje cada pessoa tem um perfil e não há
+  exceção individual (decisão do Junio, Fase 25a): para alguém diferente, cria-se outro perfil
+- Perfis prontos atualizados quando o catálogo de permissões crescer. Um estabelecimento que já
+  existe não recebe a permissão nova nos perfis dele: o dono a marca (o proprietário a tem na hora)
 - Troca do próprio e-mail, com nova confirmação — o link de confirmação (Fase 17) vale só para o
   e-mail ao qual foi enviado, então a troca já nasce protegida; falta a funcionalidade
 - Captcha no cadastro, se aparecer abuso — hoje há limite por IP, campo-armadilha e o cardápio só
@@ -62,7 +68,6 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   própria conta**, a identidade está provada, e o checkout deve trazer tudo preenchido e visível —
   nome completo, endereços completos (CEP, rua, número, complemento, referência) para conferir e
   editar. O comportamento mascarado continua valendo para quem pede sem login.
-- Papéis personalizados por estabelecimento — hoje OWNER, ADMIN e STAFF são globais
 - Painel da plataforma para o Super Admin — no MVP ele age por comando (Fase 19); a tabela
   `platform_admins` fica para este painel
 - Avisar o dono por e-mail quando o estabelecimento é suspenso ou reativado, e mostrar o motivo a
@@ -165,7 +170,8 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 - Ordenar as formas de pagamento pela tela. A API já guarda a ordem por estabelecimento; a tela
   da Fase 22 só liga e desliga, e mantém a ordem do catálogo.
 - Consulta do registro de auditoria no painel. O registro existe desde a Fase 4, e a permissão
-  `audit:read` já está no RBAC; no MVP basta o registro (decisão do Junio).
+  `audit:read` já está no catálogo — vale num perfil, e a tela de perfis passa a oferecê-la quando
+  a consulta existir; no MVP basta o registro (decisão do Junio).
 
 ## Experiência do cliente
 
@@ -277,6 +283,10 @@ evolução com impacto no carrinho e no cálculo do pedido.
   pertence a um estabelecimento só (é o que permite entrar só com e-mail e senha — Fase 18b); quem
   tem dois usa um e-mail em cada. Para uma conta só, o usuário deixa de pertencer a um tenant: vira
   conta da plataforma, com vínculos a estabelecimentos e uma tela para escolher em qual entrar.
+  **O caso do funcionário saiu daqui e virou a Fase 25d** (PROJECT_PLAN.md, "O que falta para o
+  MVP"): quem trabalhou num estabelecimento precisa poder ser cadastrado em outro. Se a 25d
+  resolver só a troca de estabelecimento, a conta única para quem está em dois ao mesmo tempo —
+  e para o dono com duas lojas — continua aqui.
 - Internacionalização _(o MVP é pt-BR, sem biblioteca de i18n)_
 
 ## Infraestrutura

@@ -246,7 +246,7 @@ describe('a lista dos grupos', () => {
     abrir('/opcionais', {}, ATENDENTE)
     await screen.findByText('Adicionais')
 
-    expect(screen.getByRole('note')).toHaveTextContent('só quem administra o estabelecimento')
+    expect(screen.getByRole('note')).toHaveTextContent('o seu perfil não permite alterá-lo')
     expect(screen.queryByRole('button', { name: /Novo grupo|^Editar|^Excluir/ })).toBeNull()
   })
 })

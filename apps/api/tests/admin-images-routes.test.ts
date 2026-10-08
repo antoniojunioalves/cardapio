@@ -48,9 +48,8 @@ beforeAll(async () => {
   await app.ready()
   dono = await criarTenantComUsuario({
     permissoes: ['settings:read', 'settings:update'],
-    permissoesReais: true,
   })
-  atendente = await criarTenantComUsuario({ permissoes: ['settings:read'], permissoesReais: true })
+  atendente = await criarTenantComUsuario({ permissoes: ['settings:read'] })
   token = await entrar(dono)
   tokenDoAtendente = await entrar(atendente)
 })

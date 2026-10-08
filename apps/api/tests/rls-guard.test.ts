@@ -20,9 +20,6 @@ const TABELAS_GLOBAIS: Record<string, string> = {
   tenants: 'é o próprio registro de tenants; a resolução do slug antecede o contexto',
   plans: 'catálogo de planos da plataforma, igual para todos',
   plan_features: 'recursos e limites de um plano, não de um estabelecimento',
-  roles: 'OWNER, ADMIN e STAFF significam o mesmo em todo estabelecimento',
-  permissions: 'catálogo de permissões da plataforma',
-  role_permissions: 'liga papel a permissão; ambos globais',
   platform_admins:
     'super admin não pertence a tenant nenhum — com tenant_id nulo a policy nunca casaria e a linha ficaria invisível até para ela mesma',
   payment_methods:

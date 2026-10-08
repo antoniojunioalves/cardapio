@@ -43,7 +43,13 @@ export async function registerOpenApi(instance: FastifyInstance): Promise<void> 
         { name: 'Catálogo', description: 'Categorias e produtos' },
         { name: 'Personalização', description: 'Grupos de opção, adicionais, remoções e combos' },
         { name: 'Pedidos', description: 'Pedidos do estabelecimento e mudança de status' },
-        { name: 'Usuários', description: 'Usuários do painel e seus papéis' },
+        { name: 'Usuários', description: 'As pessoas do painel e o perfil de cada uma' },
+        {
+          name: 'Perfis',
+          description:
+            'Os conjuntos de permissões que o estabelecimento monta e dá às pessoas. O ' +
+            'proprietário tem sempre todas, e não tem perfil.',
+        },
         { name: 'Plano', description: 'Plano do estabelecimento e uso do mês' },
         {
           name: 'Cardápio público',

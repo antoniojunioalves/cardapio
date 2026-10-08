@@ -18,6 +18,7 @@ export function AdminSettingsPage() {
           slug={slug}
           configuracoes={configuracoes}
           podeEditar={permissoes.includes('settings:update')}
+          podePausar={permissoes.includes('settings:update') || permissoes.includes('orders:pause')}
         />
       )}
     </Carregado>

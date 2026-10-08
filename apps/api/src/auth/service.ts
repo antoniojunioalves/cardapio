@@ -1,14 +1,8 @@
+import { TODAS_AS_PERMISSOES } from '@repo/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 
 import { recordAudit } from '../audit/record.js'
-import {
-  permissions,
-  refreshTokens,
-  rolePermissions,
-  tenants,
-  userRoles,
-  users,
-} from '../db/schema/index.js'
+import { profilePermissions, refreshTokens, tenants, users } from '../db/schema/index.js'
 import { ForbiddenError, UnauthorizedError } from '../lib/errors.js'
 import {
   tenantContextFromLoginEmail,
@@ -49,16 +43,30 @@ export interface Session {
   establishment: SessionEstablishment
 }
 
-/** Carrega as permissões efetivas do usuário, vindas dos papéis dele. */
+/**
+ * As permissões efetivas do usuário: todas, se é o proprietário; senão, as do
+ * perfil dele. Só os códigos do catálogo, na ordem dele — uma permissão que
+ * saiu do catálogo e ficou gravada num perfil não vale mais nada.
+ *
+ * É lido a cada requisição (`loadAuthenticatedUser`): mudar o perfil de alguém,
+ * ou as permissões de um perfil, vale na requisição seguinte.
+ */
 async function loadPermissions(tx: TenantTransaction, userId: string): Promise<string[]> {
-  const linhas = await tx
-    .select({ code: permissions.code })
-    .from(userRoles)
-    .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
-    .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
-    .where(eq(userRoles.userId, userId))
+  const [usuario] = await tx
+    .select({ isOwner: users.isOwner, profileId: users.profileId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  if (!usuario) return []
+  if (usuario.isOwner) return [...TODAS_AS_PERMISSOES]
+  if (!usuario.profileId) return []
 
-  return [...new Set(linhas.map((linha) => linha.code))].sort()
+  const linhas = await tx
+    .select({ permission: profilePermissions.permission })
+    .from(profilePermissions)
+    .where(eq(profilePermissions.profileId, usuario.profileId))
+  const gravadas = new Set(linhas.map((linha) => linha.permission))
+  return TODAS_AS_PERMISSOES.filter((codigo) => gravadas.has(codigo))
 }
 
 /** O estabelecimento do contexto. `tenants` é o registro global, lido pelo id que o servidor resolveu. */

@@ -28,8 +28,13 @@ type Campo = keyof ValoresDoFormulario
 interface SettingsFormProps {
   slug: string
   configuracoes: Configuracoes
-  /** Sem `settings:update`, a pessoa vê tudo e não altera nada. */
+  /** Sem `settings:update`, a pessoa vê tudo e não altera nada — a não ser pausar, se puder. */
   podeEditar: boolean
+  /**
+   * Pausar e retomar o recebimento de pedidos é do dia a dia, e tem a
+   * permissão dele (`orders:pause`). Quem altera as configurações também pausa.
+   */
+  podePausar: boolean
 }
 
 /**
@@ -37,7 +42,7 @@ interface SettingsFormProps {
  * tudo de uma vez — a API altera o nome, o fuso e o resto na mesma transação.
  * As imagens ficam fora dele: são gravadas ao escolher o arquivo.
  */
-export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormProps) {
+export function SettingsForm({ slug, configuracoes, podeEditar, podePausar }: SettingsFormProps) {
   const salvar = useSalvarConfiguracoes(slug)
   const envioDoLogo = useEnviarImagem(slug, 'logo')
   const remocaoDoLogo = useRemoverImagem(slug, 'logo')
@@ -52,7 +57,8 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
   const erros = formState.errors
 
   function aoEnviar(dados: DadosDoFormulario) {
-    salvar.mutate(dados, {
+    // Quem só pausa envia só isso: o resto do formulário não é dele.
+    salvar.mutate(podeEditar ? dados : { isAcceptingOrders: dados.isAcceptingOrders }, {
       onSuccess: (salvas) => {
         // Os campos passam a mostrar o que foi gravado, e o formulário deixa de estar "alterado".
         reset(paraFormulario(salvas))
@@ -71,7 +77,12 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
 
   return (
     <div className="flex flex-col gap-section-y">
-      {!podeEditar && <AvisoDeSomenteLeitura />}
+      {!podeEditar &&
+        (podePausar ? (
+          <AvisoDeSomenteLeitura texto="O seu perfil permite só pausar e retomar o recebimento de pedidos." />
+        ) : (
+          <AvisoDeSomenteLeitura />
+        ))}
 
       <Secao titulo="Imagens">
         <div className="grid grid-cols-1 gap-stack sm:grid-cols-[12rem_1fr]">
@@ -275,14 +286,18 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
               </SelectField>
             </div>
           </Secao>
+        </fieldset>
 
-          <Secao titulo="Pedidos">
-            <Marcavel
-              type="checkbox"
-              titulo="Recebendo pedidos"
-              descricao="Desmarque para pausar o cardápio sem mexer no horário de funcionamento."
-              {...register('isAcceptingOrders')}
-            />
+        {/* Fora do `fieldset` de cima: o "Recebendo pedidos" tem a permissão dele. */}
+        <Secao titulo="Pedidos">
+          <Marcavel
+            type="checkbox"
+            titulo="Recebendo pedidos"
+            descricao="Desmarque para pausar o cardápio sem mexer no horário de funcionamento."
+            disabled={!podePausar}
+            {...register('isAcceptingOrders')}
+          />
+          <fieldset disabled={!podeEditar} className="flex min-w-0 flex-col gap-stack">
             <TextField
               rotulo="Pedido mínimo (R$)"
               inputMode="decimal"
@@ -307,10 +322,10 @@ export function SettingsForm({ slug, configuracoes, podeEditar }: SettingsFormPr
                 {...register('prepTimeMaxMinutes')}
               />
             </div>
-          </Secao>
-        </fieldset>
+          </fieldset>
+        </Secao>
 
-        {podeEditar && (
+        {(podeEditar || podePausar) && (
           <RodapeDeSalvar
             envio={salvar}
             alterado={formState.isDirty}

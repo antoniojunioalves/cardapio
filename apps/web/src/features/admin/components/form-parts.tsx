@@ -19,7 +19,7 @@ export function Secao({ titulo, children }: { titulo: string; children: ReactNod
 
 /** Sem a permissão de alterar, a pessoa vê tudo e não altera nada. */
 export function AvisoDeSomenteLeitura({
-  texto = 'Você pode ver as configurações, mas só quem administra o estabelecimento as altera.',
+  texto = 'Você pode ver as configurações, mas o seu perfil não permite alterá-las.',
 }: {
   texto?: string
 }) {

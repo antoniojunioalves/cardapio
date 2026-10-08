@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
-import { currentUser, requireAuth, tenantContextOf } from '../auth/middleware.js'
+import { currentUser, requireAnyOf, requireAuth, tenantContextOf } from '../auth/middleware.js'
 import { definirComposicao, obterComposicao } from '../catalog/combos.js'
 import {
   atualizarGrupo,
@@ -18,9 +18,13 @@ import {
  * Grupos de opção e combos.
  *
  * Usam as permissões de produto: `products:read` para consultar e
- * `products:update` para alterar. Personalizar um produto é alterá-lo — um
- * atendente que pode mudar o preço do lanche precisa poder mudar o preço do
- * bacon.
+ * `products:update` para alterar. Personalizar um produto é alterá-lo.
+ *
+ * Gravar um grupo segue a mesma divisão do produto: o acréscimo de uma opção é
+ * preço (`products:price`), o "disponível" dela é o que esgotou
+ * (`products:availability`), e o resto é `products:update` — quem pode mudar o
+ * preço do lanche pode mudar o preço do bacon, e quem marca o lanche como
+ * esgotado marca o bacon. Quem confere é o serviço, pelo que o pedido muda.
  */
 
 const paramsComId = z.object({ id: z.uuid() })
@@ -92,6 +96,11 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
   const typed = instance.withTypeProvider<ZodTypeProvider>()
   const LER = requireAuth('products:read')
   const ALTERAR = requireAuth('products:update')
+  const GRAVAR_O_GRUPO = requireAnyOf('products:update', 'products:price', 'products:availability')
+  const PERMISSOES_DO_GRUPO =
+    'A permissão é a do que **muda**: `products:price` para o acréscimo de uma opção (e para ' +
+    'uma opção nova que já nasce com acréscimo), `products:availability` para o `isAvailable` ' +
+    'de uma opção que existe, e `products:update` para o resto.'
 
   // --- Grupos de opção -------------------------------------------------------
 
@@ -117,7 +126,8 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         tags: tag,
         summary: 'Cria um grupo de opções',
         description:
-          'Tamanho, adicionais e remoções são todos grupos — muda o mínimo e o máximo. `isRequired` é derivado de `minSelections >= 1`. O grupo é reutilizável: crie "Adicionais" uma vez e ligue a vários produtos.',
+          'Tamanho, adicionais e remoções são todos grupos — muda o mínimo e o máximo. `isRequired` é derivado de `minSelections >= 1`. O grupo é reutilizável: crie "Adicionais" uma vez e ligue a vários produtos.\n\n' +
+          'Exige `products:update`; com alguma opção com acréscimo, também `products:price`.',
         body: dadosDoGrupo,
         response: { 201: grupoSchema },
         security: seguranca,
@@ -125,11 +135,7 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
       onRequest: ALTERAR,
     },
     async (request, reply) => {
-      const criado = await criarGrupo(
-        tenantContextOf(request),
-        currentUser(request).id,
-        request.body,
-      )
+      const criado = await criarGrupo(tenantContextOf(request), currentUser(request), request.body)
       return reply.status(201).send(criado)
     },
   )
@@ -156,18 +162,19 @@ export function adminCustomizationRoutes(instance: FastifyInstance): void {
         tags: tag,
         summary: 'Altera o grupo e as opções dele',
         description:
-          'Opções com `id` são alteradas, sem `id` são criadas, e as ausentes são removidas. A alteração vale para todos os produtos que usam o grupo.',
+          'Opções com `id` são alteradas, sem `id` são criadas, e as ausentes são removidas. A alteração vale para todos os produtos que usam o grupo.\n\n' +
+          PERMISSOES_DO_GRUPO,
         params: paramsComId,
         body: dadosDoGrupo,
         response: { 200: grupoSchema },
         security: seguranca,
       },
-      onRequest: ALTERAR,
+      onRequest: GRAVAR_O_GRUPO,
     },
     async (request) =>
       atualizarGrupo(
         tenantContextOf(request),
-        currentUser(request).id,
+        currentUser(request),
         request.params.id,
         request.body,
       ),
