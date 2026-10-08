@@ -1,27 +1,31 @@
-import { eq, inArray } from 'drizzle-orm'
+import { TODAS_AS_PERMISSOES } from '@repo/shared'
+import { eq } from 'drizzle-orm'
 
 import { hashPassword } from '../../src/auth/password.js'
+import type { Ator } from '../../src/auth/permissions.js'
 import { db } from '../../src/db/index.js'
-import {
-  permissions,
-  rolePermissions,
-  roles,
-  tenants,
-  userRoles,
-  users,
-} from '../../src/db/schema/index.js'
+import { profilePermissions, profiles, tenants, users } from '../../src/db/schema/index.js'
 import { tenantContextFromUser } from '../../src/tenant/context.js'
 import { withTenant } from '../../src/tenant/with-tenant.js'
 
 export const SENHA_PADRAO = 'senha-de-teste-123'
+
+/**
+ * Quem pode tudo, para chamar direto os serviços que conferem a permissão pelo
+ * que o pedido muda. A conferência em si é testada pelas rotas.
+ */
+export const comTudo = (userId: string): Ator => ({
+  id: userId,
+  permissions: TODAS_AS_PERMISSOES,
+})
 
 export interface TenantDeTeste {
   tenantId: string
   slug: string
   userId: string
   email: string
-  roleId: string
-  permissionIds: string[]
+  /** O perfil do usuário criado; `null` quando ele é o proprietário. */
+  profileId: string | null
 }
 
 function sufixo(): string {
@@ -29,33 +33,25 @@ function sufixo(): string {
 }
 
 /**
- * Cria um estabelecimento com um usuário administrativo e um papel próprio.
+ * Cria um estabelecimento com um usuário do painel.
  *
- * Papéis e permissões são globais, então cada chamada cria os seus com códigos
- * únicos — sem isso, testes rodando sobre o mesmo banco disputariam as mesmas
- * linhas e passariam ou falhariam conforme a ordem de execução.
+ * O usuário recebe um perfil só dele, com as permissões pedidas — os códigos
+ * do catálogo (`@repo/shared`), como as rotas conferem. Com `dono`, ele é o
+ * proprietário: sem perfil, e com todas as permissões.
+ *
+ * Os perfis são do estabelecimento, então cada chamada cria o seu e nenhum
+ * teste disputa linha com outro.
  */
 export async function criarTenantComUsuario(
   opcoes: {
     permissoes?: readonly string[]
-    /**
-     * Usa os códigos de permissão exatamente como informados, em vez de
-     * sufixá-los. Necessário para testar rotas reais, que conferem
-     * `settings:read` e não `settings:read#abc123`.
-     *
-     * Permissões reais são globais e compartilhadas entre os testes, então
-     * são criadas com `onConflictDoNothing` e **não** removidas na limpeza.
-     */
-    permissoesReais?: boolean
+    dono?: boolean
     ativo?: boolean
     senha?: string
   } = {},
 ): Promise<TenantDeTeste> {
   const id = sufixo()
-  const solicitadas = opcoes.permissoes ?? ['products:read']
-  const codigosDePermissao = opcoes.permissoesReais
-    ? [...solicitadas]
-    : solicitadas.map((codigo) => `${codigo}#${id}`)
+  const permissoes = opcoes.permissoes ?? ['products:read']
 
   const [tenant] = await db
     .insert(tenants)
@@ -63,35 +59,15 @@ export async function criarTenantComUsuario(
     .returning({ id: tenants.id, slug: tenants.slug })
   if (!tenant) throw new Error('falha ao criar tenant de teste')
 
-  const [papel] = await db
-    .insert(roles)
-    .values({ code: `TESTE_${id.toUpperCase()}`, name: 'Papel de teste' })
-    .returning({ id: roles.id })
-  if (!papel) throw new Error('falha ao criar papel de teste')
-
-  const permissionIds: string[] = []
-  for (const code of codigosDePermissao) {
-    await db.insert(permissions).values({ code }).onConflictDoNothing({
-      target: permissions.code,
-    })
-
-    const [permissao] = await db
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(eq(permissions.code, code))
-      .limit(1)
-    if (!permissao) throw new Error(`falha ao criar a permissão ${code}`)
-
-    // Só as sufixadas são removidas depois; as reais são catálogo compartilhado.
-    if (!opcoes.permissoesReais) permissionIds.push(permissao.id)
-
-    await db.insert(rolePermissions).values({ roleId: papel.id, permissionId: permissao.id })
-  }
-
   const email = `usuario-${id}@exemplo.com`
   const passwordHash = await hashPassword(opcoes.senha ?? SENHA_PADRAO)
 
-  const userId = await withTenant(tenantContextFromUser(tenant.id), async (tx) => {
+  const criado = await withTenant(tenantContextFromUser(tenant.id), async (tx) => {
+    let profileId: string | null = null
+    if (!opcoes.dono) {
+      profileId = await criarPerfilDeTeste(tx, tenant.id, 'Perfil de teste', permissoes)
+    }
+
     const [usuario] = await tx
       .insert(users)
       .values({
@@ -100,42 +76,69 @@ export async function criarTenantComUsuario(
         email,
         passwordHash,
         isActive: opcoes.ativo ?? true,
+        isOwner: opcoes.dono ?? false,
+        profileId,
       })
       .returning({ id: users.id })
     if (!usuario) throw new Error('falha ao criar usuário de teste')
 
-    await tx.insert(userRoles).values({
-      tenantId: tenant.id,
-      userId: usuario.id,
-      roleId: papel.id,
-    })
-
-    return usuario.id
+    return { userId: usuario.id, profileId }
   })
 
-  return {
-    tenantId: tenant.id,
-    slug: tenant.slug,
-    userId,
-    email,
-    roleId: papel.id,
-    permissionIds,
-  }
+  return { tenantId: tenant.id, slug: tenant.slug, email, ...criado }
 }
 
-/** Remove tudo que `criarTenantComUsuario` criou. Tenant em cascata leva o resto. */
+/**
+ * Mais uma pessoa num estabelecimento que já existe, com um perfil só dela.
+ * Serve onde a regra depende de quem faz: duas pessoas do mesmo
+ * estabelecimento, com permissões diferentes, diante do mesmo dado.
+ */
+export async function criarColega(
+  de: TenantDeTeste,
+  permissoes: readonly string[],
+): Promise<TenantDeTeste> {
+  const id = sufixo()
+  const email = `colega-${id}@exemplo.com`
+  const passwordHash = await hashPassword(SENHA_PADRAO)
+
+  const criado = await withTenant(tenantContextFromUser(de.tenantId), async (tx) => {
+    const profileId = await criarPerfilDeTeste(tx, de.tenantId, `Perfil ${id}`, permissoes)
+    const [usuario] = await tx
+      .insert(users)
+      .values({ tenantId: de.tenantId, name: `Colega ${id}`, email, passwordHash, profileId })
+      .returning({ id: users.id })
+    if (!usuario) throw new Error('falha ao criar o colega de teste')
+    return { userId: usuario.id, profileId }
+  })
+
+  return { tenantId: de.tenantId, slug: de.slug, email, ...criado }
+}
+
+type Transacao = Parameters<Parameters<typeof withTenant>[1]>[0]
+
+/** Um perfil com as permissões dadas, gravadas como vieram. */
+export async function criarPerfilDeTeste(
+  tx: Transacao,
+  tenantId: string,
+  nome: string,
+  permissoes: readonly string[],
+): Promise<string> {
+  const [perfil] = await tx
+    .insert(profiles)
+    .values({ tenantId, name: nome })
+    .returning({ id: profiles.id })
+  if (!perfil) throw new Error('falha ao criar perfil de teste')
+  if (permissoes.length > 0) {
+    await tx
+      .insert(profilePermissions)
+      .values(permissoes.map((permission) => ({ tenantId, profileId: perfil.id, permission })))
+  }
+  return perfil.id
+}
+
+/** Remove tudo que `criarTenantComUsuario` criou: o estabelecimento leva o resto em cascata. */
 export async function removerTenantDeTeste(fixture: TenantDeTeste): Promise<void> {
   await db.delete(tenants).where(eq(tenants.id, fixture.tenantId))
-  await db.delete(roles).where(eq(roles.id, fixture.roleId))
-  if (fixture.permissionIds.length > 0) {
-    await db.delete(permissions).where(inArray(permissions.id, fixture.permissionIds))
-  }
-}
-
-/** O código real da permissão criada, com o sufixo único do fixture. */
-export function permissaoDe(fixture: TenantDeTeste, codigo: string): string {
-  const sufixoDoTenant = fixture.slug.replace('teste-', '')
-  return `${codigo}#${sufixoDoTenant}`
 }
 
 /**

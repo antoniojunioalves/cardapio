@@ -169,6 +169,20 @@
       "when": 1790966221739,
       "tag": "0023_entrega_nasce_desligada",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791340822367,
+      "tag": "0024_perfis_do_estabelecimento",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791341155971,
+      "tag": "0025_fim_dos_papeis_globais",
+      "breakpoints": true
     }
   ]
 }

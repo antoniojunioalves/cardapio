@@ -19,16 +19,17 @@ export const sessao = (permissions: string[]) => ({
 export const DONO = sessao([
   'orders:read',
   'settings:read',
-  'categories:read',
   'categories:create',
   'categories:update',
   'categories:delete',
   'products:read',
   'products:create',
   'products:update',
+  'products:price',
+  'products:availability',
   'products:delete',
 ])
-export const ATENDENTE = sessao(['orders:read', 'categories:read', 'products:read'])
+export const ATENDENTE = sessao(['orders:read', 'products:read'])
 
 export const categoria = (
   dados: Partial<Categoria> & Pick<Categoria, 'id' | 'name'>,

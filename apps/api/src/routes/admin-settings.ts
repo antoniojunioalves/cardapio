@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
-import { currentUser, requireAuth, tenantContextOf } from '../auth/middleware.js'
+import { currentUser, requireAnyOf, requireAuth, tenantContextOf } from '../auth/middleware.js'
 import {
   atualizarConfiguracoes,
   definirFormasDePagamento,
@@ -264,20 +264,19 @@ export function adminSettingsRoutes(instance: FastifyInstance): void {
         summary: 'Altera as configurações do estabelecimento',
         description:
           'Só os campos enviados mudam. O nome e o fuso são gravados na mesma transação dos ' +
-          'demais. O endereço do cardápio (`slug`) não muda por aqui.',
+          'demais. O endereço do cardápio (`slug`) não muda por aqui.\n\n' +
+          'Exige `settings:update`. Pausar e retomar o recebimento de pedidos ' +
+          '(`isAcceptingOrders`) é a exceção: basta `orders:pause`. Um campo enviado com o ' +
+          'valor que já tinha não pede permissão.',
         body: patchDeConfiguracoes,
         response: { 200: configuracoesDoEstabelecimentoSchema },
         security: seguranca,
       },
-      onRequest: requireAuth(ESCREVER),
+      onRequest: requireAnyOf(ESCREVER, 'orders:pause'),
     },
     async (request) =>
       apresentarConfiguracoes(
-        await atualizarConfiguracoes(
-          tenantContextOf(request),
-          currentUser(request).id,
-          request.body,
-        ),
+        await atualizarConfiguracoes(tenantContextOf(request), currentUser(request), request.body),
         storage,
       ),
   )

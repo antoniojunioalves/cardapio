@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router'
 import {
   IconeCardapio,
   IconeConfiguracoes,
+  IconeEquipe,
   IconeExterno,
   IconeInicio,
   IconePedidos,
@@ -17,6 +18,7 @@ const ICONES: Record<IconeDoMenu, (props: IconeProps) => ReactNode> = {
   inicio: IconeInicio,
   pedidos: IconePedidos,
   cardapio: IconeCardapio,
+  equipe: IconeEquipe,
   configuracoes: IconeConfiguracoes,
 }
 

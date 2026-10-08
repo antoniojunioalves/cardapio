@@ -21,14 +21,26 @@ import {
   type GrupoDeOpcoes,
   type ValoresDoGrupo,
 } from '../option-groups'
+import { limiteNoProduto, type PodeNoProduto } from '../permissions'
 import { BotoesDeOrdem } from './catalog-parts'
-import { AvisoDeAtencao, botaoDeTexto, botaoDeTextoPerigo } from './form-parts'
+import {
+  AvisoDeAtencao,
+  AvisoDeSomenteLeitura,
+  botaoDeTexto,
+  botaoDeTextoPerigo,
+} from './form-parts'
 import { FormSheet } from './FormSheet'
 
 interface OptionGroupSheetProps {
   slug: string
   /** Sem ele, a janela cria um grupo novo. */
   grupo?: GrupoDeOpcoes | undefined
+  /**
+   * O que o perfil da pessoa alcança, como no produto: o acréscimo de uma opção
+   * é preço, o "disponível" dela é o que esgotou, e o resto é alterar os
+   * opcionais. O que ela não alcança fica desligado.
+   */
+  pode: PodeNoProduto
   aoFechar: () => void
   /** O grupo foi gravado: quem abriu a janela a fecha e faz o resto — liga ao produto, avisa. */
   aoSalvar: (grupo: GrupoDeOpcoes) => void
@@ -44,10 +56,10 @@ const parte = 'flex flex-col gap-stack border-t border-border pt-stack'
  * Opcionais do produto — a pessoa não sai de onde estava. As regras entre os
  * limites e as opções são as mesmas da API (`@repo/shared`).
  */
-export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGroupSheetProps) {
+export function OptionGroupSheet({ slug, grupo, pode, aoFechar, aoSalvar }: OptionGroupSheetProps) {
   const id = useId()
   const salvar = useSalvarGrupo(slug)
-  const { register, control, formState, handleSubmit, trigger } = useForm<
+  const { register, control, formState, handleSubmit, trigger, getValues } = useForm<
     ValoresDoGrupo,
     unknown,
     DadosDoGrupo
@@ -64,6 +76,7 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
   const reconferirLimites = reconferir(form, 'minSelections', 'maxSelections', 'options')
   const regra = regraDigitada(minimo, maximo)
   const erroDasOpcoes = erros.options?.root?.message ?? erros.options?.message
+  const limite = limiteNoProduto(pode)
 
   function aoEnviar(dados: DadosDoGrupo) {
     salvar.mutate({ id: grupo?.id, dados }, { onSuccess: aoSalvar })
@@ -100,17 +113,21 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
           </AvisoDeAtencao>
         )}
 
+        {limite && <AvisoDeSomenteLeitura texto={limite} />}
+
         <TextField
           rotulo="Nome do grupo"
           placeholder="Adicionais"
           dica="É o que o cliente lê em cima das opções."
           erro={erros.name?.message}
+          disabled={!pode.resto}
           {...register('name')}
         />
         <TextAreaField
           rotulo="Descrição"
           dica="Opcional. Aparece para o cliente ao lado da regra, como “Capriche no seu lanche”."
           erro={erros.description?.message}
+          disabled={!pode.resto}
           {...register('description')}
         />
 
@@ -122,12 +139,14 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
               inputMode="numeric"
               dica="0: se quiser."
               erro={erros.minSelections?.message}
+              disabled={!pode.resto}
               {...register('minSelections', { onChange: reconferirLimites })}
             />
             <TextField
               rotulo="Máximo"
               inputMode="numeric"
               erro={erros.maxSelections?.message}
+              disabled={!pode.resto}
               {...register('maxSelections', { onChange: reconferirLimites })}
             />
           </div>
@@ -151,6 +170,9 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
           <ul className="flex flex-col">
             {opcoes.fields.map((campo, indice) => {
               const numero = String(indice + 1)
+              // Uma opção que ainda não existe é de quem a cria: o "disponível"
+              // dela não é marcar o que esgotou. O acréscimo é sempre preço.
+              const nova = !getValues(`options.${indice}.id`)
               return (
                 <li
                   key={campo.id}
@@ -163,6 +185,7 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
                       rotulo="Nome"
                       placeholder="Bacon"
                       erro={erros.options?.[indice]?.name?.message}
+                      disabled={!pode.resto}
                       {...register(campoDaOpcao(indice, 'name'), {
                         onChange: reconferir(form, 'options'),
                       })}
@@ -172,6 +195,7 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
                       inputMode="decimal"
                       placeholder="0,00"
                       erro={erros.options?.[indice]?.priceDeltaInCents?.message}
+                      disabled={!pode.preco}
                       {...register(campoDaOpcao(indice, 'priceDeltaInCents'))}
                     />
                     <div className="col-span-2 -ml-2 flex flex-wrap items-center gap-x-2">
@@ -179,32 +203,37 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
                         <input
                           type="checkbox"
                           className="size-5"
+                          disabled={nova ? !pode.resto : !pode.disponibilidade}
                           {...register(campoDaOpcao(indice, 'isAvailable'))}
                         />
                         Disponível
                       </label>
-                      <button
-                        type="button"
-                        aria-label={`Remover a opção ${numero}`}
-                        onClick={() => {
-                          opcoes.remove(indice)
-                          reconferirLimites()
-                        }}
-                        className={botaoDeTextoPerigo}
-                      >
-                        Remover
-                      </button>
+                      {pode.resto && (
+                        <button
+                          type="button"
+                          aria-label={`Remover a opção ${numero}`}
+                          onClick={() => {
+                            opcoes.remove(indice)
+                            reconferirLimites()
+                          }}
+                          className={botaoDeTextoPerigo}
+                        >
+                          Remover
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <BotoesDeOrdem
-                    quem={`a opção ${numero}`}
-                    primeiro={indice === 0}
-                    ultimo={indice === opcoes.fields.length - 1}
-                    ocupado={false}
-                    aoMover={(direcao) => {
-                      opcoes.move(indice, direcao === 'subir' ? indice - 1 : indice + 1)
-                    }}
-                  />
+                  {pode.resto && (
+                    <BotoesDeOrdem
+                      quem={`a opção ${numero}`}
+                      primeiro={indice === 0}
+                      ultimo={indice === opcoes.fields.length - 1}
+                      ocupado={false}
+                      aoMover={(direcao) => {
+                        opcoes.move(indice, direcao === 'subir' ? indice - 1 : indice + 1)
+                      }}
+                    />
+                  )}
                 </li>
               )
             })}
@@ -214,19 +243,21 @@ export function OptionGroupSheet({ slug, grupo, aoFechar, aoSalvar }: OptionGrou
               {erroDasOpcoes}
             </p>
           )}
-          <div className="-ml-2">
-            <button
-              type="button"
-              onClick={() => {
-                opcoes.append(OPCAO_NOVA)
-                reconferirLimites()
-              }}
-              className={`${botaoDeTexto} inline-flex items-center gap-1`}
-            >
-              <IconeMais className="size-4" />
-              Adicionar opção
-            </button>
-          </div>
+          {pode.resto && (
+            <div className="-ml-2">
+              <button
+                type="button"
+                onClick={() => {
+                  opcoes.append(OPCAO_NOVA)
+                  reconferirLimites()
+                }}
+                className={`${botaoDeTexto} inline-flex items-center gap-1`}
+              >
+                <IconeMais className="size-4" />
+                Adicionar opção
+              </button>
+            </div>
+          )}
         </section>
       </form>
     </FormSheet>

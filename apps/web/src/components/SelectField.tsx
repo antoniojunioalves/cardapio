@@ -31,7 +31,7 @@ export function SelectField({
         id={idDoCampo}
         aria-invalid={erro ? true : undefined}
         aria-describedby={descricao || undefined}
-        className={`text-body w-full rounded-control border bg-surface px-3 py-2 ${
+        className={`text-body w-full rounded-control border bg-surface px-3 py-2 disabled:bg-surface-muted disabled:text-content-muted ${
           erro ? 'border-danger' : 'border-border'
         }`}
         {...props}

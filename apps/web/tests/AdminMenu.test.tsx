@@ -464,11 +464,7 @@ describe('a tela do cardápio', () => {
   })
 
   it('cada ícone só aparece para quem pode: alterar sem excluir mostra só o lápis', async () => {
-    abrir(
-      '',
-      {},
-      sessao(['categories:read', 'categories:update', 'products:read', 'products:update']),
-    )
+    abrir('', {}, sessao(['categories:update', 'products:read', 'products:update']))
     await screen.findByRole('region', { name: 'Lanches' })
     abrirCategoria('Lanches')
 
@@ -647,7 +643,7 @@ describe('a tela do cardápio', () => {
     // Recolher e abrir é só olhar: o atendente também pode.
     clicar('Abrir todas')
 
-    expect(screen.getByRole('note')).toHaveTextContent('só quem administra o estabelecimento')
+    expect(screen.getByRole('note')).toHaveTextContent('o seu perfil não permite alterá-lo')
     expect(lanches.getByText('Esgotado')).toBeVisible()
     expect(screen.queryByRole('checkbox')).toBeNull()
     expect(screen.queryByRole('button', { name: /Subir|Descer/ })).toBeNull()

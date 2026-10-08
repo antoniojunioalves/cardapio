@@ -4,6 +4,14 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { AO_EXCLUIR, useExcluirProduto, type Categoria, type Produto } from '../catalog'
 import { caminhoDoPainel } from '../menu'
 import {
+  limiteNoProduto,
+  NADA_NO_PRODUTO,
+  podeAlgoNoProduto,
+  podeNoProduto,
+  SO_VE_O_CARDAPIO,
+  TUDO_NO_PRODUTO,
+} from '../permissions'
+import {
   maisAdiante,
   NOME_DO_PASSO,
   passoAberto,
@@ -78,9 +86,15 @@ export function ProductSteps({
   const ate = maisAdiante(passos, chegada?.ate, atual)
   const anterior = passoAnterior(passos, atual)
 
-  const pode = (permissao: string) => permissoes.includes(permissao)
-  const podeAlterar = pode('products:update')
-  const podeNoProduto = produto ? podeAlterar : pode('products:create')
+  const tem = (permissao: string) => permissoes.includes(permissao)
+  // Num produto que existe, o preço, o que esgotou e o resto são permissões
+  // separadas; num produto novo, quem cria informa tudo, o preço inclusive.
+  const pode = produto
+    ? podeNoProduto(permissoes)
+    : tem('products:create')
+      ? TUDO_NO_PRODUTO
+      : NADA_NO_PRODUTO
+  const limite = limiteNoProduto(pode)
 
   function irPara(passo: Passo) {
     setSegurada(null)
@@ -139,9 +153,8 @@ export function ProductSteps({
         aoIr={pedirPara}
       />
 
-      {!podeNoProduto && (
-        <AvisoDeSomenteLeitura texto="Você pode ver o cardápio, mas só quem administra o estabelecimento o altera." />
-      )}
+      {!podeAlgoNoProduto(pode) && <AvisoDeSomenteLeitura texto={SO_VE_O_CARDAPIO} />}
+      {limite && <AvisoDeSomenteLeitura texto={limite} />}
       {chegada?.atencao && <AvisoDeAtencao>{chegada.atencao}</AvisoDeAtencao>}
       {segurada && alterado && (
         <div className="flex flex-col items-start gap-1">
@@ -167,7 +180,7 @@ export function ProductSteps({
           produto={produto}
           categorias={categorias}
           categoriaInicial={categoriaInicial}
-          podeEditar={podeNoProduto}
+          pode={pode}
           aoAlterar={setAlterado}
           aoMudarTipo={setTipoEscolhido}
           aoAvancar={avancar}
@@ -189,13 +202,13 @@ export function ProductSteps({
         />
       )}
       {atual === 'itens' && produto && (
-        <StepComboItems {...doPasso} combo={produto} podeEditar={podeAlterar} />
+        <StepComboItems {...doPasso} combo={produto} podeEditar={pode.resto} />
       )}
       {atual === 'opcionais' && produto && (
-        <StepOptions {...doPasso} produto={produto} podeEditar={podeAlterar} />
+        <StepOptions {...doPasso} produto={produto} pode={pode} />
       )}
 
-      {!cadastrando && produto && pode('products:delete') && (
+      {!cadastrando && produto && tem('products:delete') && (
         <Excluir
           oQue="o produto"
           nome={produto.name}

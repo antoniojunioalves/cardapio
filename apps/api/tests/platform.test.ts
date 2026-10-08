@@ -14,7 +14,6 @@ import {
   tenants,
 } from '../src/db/schema/index.js'
 import { seedPlans } from '../src/db/seed-plans.js'
-import { seedRbac } from '../src/db/seed-rbac.js'
 import { email, MemoryEmailProvider } from '../src/email/index.js'
 import { interpretar } from '../src/platform/args.js'
 import { executar, formatarLista } from '../src/platform/commands.js'
@@ -138,7 +137,6 @@ const cardapio = (e: Cadastrado) =>
   app.inject({ method: 'GET', url: `/api/v1/public/${e.slug}/menu` })
 
 beforeAll(async () => {
-  await seedRbac()
   await seedPlans()
   app = await buildApp({ rateLimit: false })
   await app.ready()

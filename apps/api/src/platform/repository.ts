@@ -5,10 +5,8 @@ import {
   auditLogs,
   plans,
   refreshTokens,
-  roles,
   subscriptions,
   tenants,
-  userRoles,
   users,
 } from '../db/schema/index.js'
 import type { TenantTransaction } from '../tenant/with-tenant.js'
@@ -61,15 +59,12 @@ export interface DonoDoEstabelecimento {
   emailConfirmado: boolean
 }
 
-/** O dono é quem tem o papel OWNER — quem cadastrou o estabelecimento. */
+/** O proprietário do estabelecimento — quem o cadastrou. */
 export async function buscarDono(tx: TenantTransaction): Promise<DonoDoEstabelecimento | null> {
   const [dono] = await tx
     .select({ id: users.id, email: users.email, confirmadoEm: users.emailVerifiedAt })
     .from(users)
-    .innerJoin(userRoles, eq(userRoles.userId, users.id))
-    .innerJoin(roles, eq(roles.id, userRoles.roleId))
-    .where(eq(roles.code, 'OWNER'))
-    .orderBy(users.createdAt)
+    .where(eq(users.isOwner, true))
     .limit(1)
   return dono
     ? { id: dono.id, email: dono.email, emailConfirmado: dono.confirmadoEm !== null }

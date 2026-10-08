@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
-import { currentUser, requireAuth, tenantContextOf } from '../auth/middleware.js'
+import { currentUser, requireAnyOf, requireAuth, tenantContextOf } from '../auth/middleware.js'
 import { apresentarCategoria, apresentarProduto } from '../catalog/presenter.js'
 import {
   atualizarCategoria,
@@ -117,10 +117,11 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
       schema: {
         tags: tag,
         summary: 'Categorias, na ordem de exibição',
+        description: 'Quem vê o cardápio vê as categorias dele: a permissão é `products:read`.',
         response: { 200: z.array(categoriaSchema) },
         security: seguranca,
       },
-      onRequest: requireAuth('categories:read'),
+      onRequest: requireAuth('products:read'),
     },
     async (request) =>
       (await listarCategorias(tenantContextOf(request))).map((c) =>
@@ -371,19 +372,22 @@ export function adminCatalogRoutes(instance: FastifyInstance): void {
         summary: 'Altera um produto — inclusive preço e disponibilidade',
         description:
           'Só os campos enviados mudam. Trocar de categoria sem informar `sortOrder` põe o ' +
-          'produto no fim da categoria nova.',
+          'produto no fim da categoria nova.\n\n' +
+          'A permissão é a do que **muda**: `products:price` para o preço, ' +
+          '`products:availability` para o `isAvailable` e `products:update` para o resto. Um ' +
+          'campo enviado com o valor que já tinha não pede permissão.',
         params: paramsComId,
         body: patchDeProduto,
         response: { 200: produtoSchema },
         security: seguranca,
       },
-      onRequest: requireAuth('products:update'),
+      onRequest: requireAnyOf('products:update', 'products:price', 'products:availability'),
     },
     async (request) =>
       apresentarProduto(
         await atualizarProduto(
           tenantContextOf(request),
-          currentUser(request).id,
+          currentUser(request),
           request.params.id,
           request.body,
         ),

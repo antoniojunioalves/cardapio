@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router'
 import { AdminLayout } from '@/features/admin/components/AdminLayout'
 import { CardapioTabs } from '@/features/admin/components/CardapioTabs'
 import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
+import { TeamTabs } from '@/features/admin/components/TeamTabs'
 import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminHoursPage } from '@/pages/AdminHoursPage'
@@ -13,7 +14,9 @@ import { AdminOptionGroupsPage } from '@/pages/AdminOptionGroupsPage'
 import { AdminOrdersPage } from '@/pages/AdminOrdersPage'
 import { AdminPaymentPage } from '@/pages/AdminPaymentPage'
 import { AdminProductPage } from '@/pages/AdminProductPage'
+import { AdminProfilesPage } from '@/pages/AdminProfilesPage'
 import { AdminSettingsPage } from '@/pages/AdminSettingsPage'
+import { AdminTeamPage } from '@/pages/AdminTeamPage'
 import { CheckoutPage } from '@/pages/CheckoutPage'
 import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
 import { EnterPage } from '@/pages/EnterPage'
@@ -49,6 +52,10 @@ import { SignupPage } from '@/pages/SignupPage'
  * `cardapio/produtos/:id`, com `?passo=`); a categoria e os grupos de
  * opcionais se criam e se editam em janelas, sobre as listas.
  *
+ * A equipe também tem duas abas (`TeamTabs`): as pessoas, em `/admin/equipe`,
+ * e os perfis, em `/admin/equipe/perfis`. Cadastrar e editar uma pessoa ou um
+ * perfil é numa janela, sobre a lista.
+ *
  * As configurações têm abas, e cada aba é uma rota filha de
  * `/admin/configuracoes` (`SettingsTabs`): a do estabelecimento no índice, e
  * `horarios`, `entrega` e `pagamento`.
@@ -77,6 +84,10 @@ export function AppRoutes() {
         </Route>
         <Route path="cardapio/produtos/novo" element={<AdminProductPage />} />
         <Route path="cardapio/produtos/:produtoId" element={<AdminProductPage />} />
+        <Route path="equipe" element={<TeamTabs />}>
+          <Route index element={<AdminTeamPage />} />
+          <Route path="perfis" element={<AdminProfilesPage />} />
+        </Route>
         <Route path="configuracoes" element={<SettingsTabs />}>
           <Route index element={<AdminSettingsPage />} />
           <Route path="horarios" element={<AdminHoursPage />} />

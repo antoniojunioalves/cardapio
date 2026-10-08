@@ -1,9 +1,9 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-06
-**Fase atual:** 24b — concluída, aguardando validação
-**Próxima:** 25 — usuários, senha e permissões por pessoa. As fases 25 a 28 fecham o MVP (ver "O
-que falta para o MVP")
+**Atualizado em:** 2026-10-07
+**Fase atual:** 25a — concluída, aguardando validação
+**Próxima:** 25b — senhas: trocar a própria, o dono redefinir a de outra pessoa. As fases 25 a 28
+fecham o MVP (ver "O que falta para o MVP")
 
 ---
 
@@ -41,13 +41,13 @@ título da aba.
 
 **O plano é respeitado.** O painel avisa a partir de 80% dos pedidos do mês; atingido o limite,
 há 10% de tolerância e, depois, o cardápio para de receber pedidos — dizendo só "não está
-recebendo pedidos", sem citar o plano. Usuários do painel são criados, alterados, desativados e
-reativados pela API, dentro do limite de usuários ativos do plano.
+recebendo pedidos", sem citar o plano. As pessoas do painel são cadastradas, alteradas, desativadas
+e reativadas dentro do limite de usuários ativos do plano.
 
 **As fronteiras foram revisadas (Fase 15).** O refresh token do painel saiu do `localStorage` e
 foi para um cookie `httpOnly`; toda rota do painel recusa quem não está logado antes de ler o
-corpo, e um teste-guarda confere isso pelo inventário de rotas; desativar ou mudar o papel de um
-usuário fecha a conexão ao vivo dele na hora.
+corpo, e um teste-guarda confere isso pelo inventário de rotas; desativar uma pessoa ou mudar as
+permissões dela fecha a conexão ao vivo dela na hora.
 
 **O CI está pronto e guardado (Fase 16).** Formatação, typecheck, lint, testes e build no GitHub
 Actions, com o PostgreSQL criado do zero pelos mesmos scripts de init do desenvolvimento. Foi
@@ -108,8 +108,17 @@ mesmos passos. Criar ou editar um grupo de opcionais abre uma janela por cima, s
 cadastro — a mesma janela da aba Opcionais; a categoria também se cria e se edita numa janela,
 sobre a lista.
 
-**Ainda não existe:** as telas de usuários e de clientes — isso ainda é configurado pela API. As
-fases 25 a 28 fecham o MVP; ver "O que falta para o MVP".
+**A equipe e o que cada um pode fazer também (Fase 25a).** A tela Equipe tem duas abas. Em
+"Pessoas", o dono cadastra quem trabalha com ele, dá a cada um um perfil, e desativa ou reativa. Em
+"Perfis", monta os perfis — conjuntos de permissões com nome —, a partir de quatro prontos:
+Administrador, Gerente do cardápio, Atendente e Cozinha. As permissões ficaram mais finas: marcar o
+que esgotou, mexer em preço e alterar o resto do produto são três; cancelar um pedido é separado de
+mudar o status; pausar o recebimento de pedidos é separado das configurações. O painel inteiro
+passou a ligar só o que o perfil de quem está logado alcança.
+
+**Ainda não existe:** trocar a própria senha, redefinir a de outra pessoa e o "esqueci minha senha"
+(Fases 25b e 25c), cadastrar num estabelecimento o e-mail de quem já trabalhou em outro (Fase 25d),
+e a tela de clientes (Fase 26). As fases 25 a 28 fecham o MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -147,7 +156,10 @@ fases 25 a 28 fecham o MVP; ver "O que falta para o MVP".
 | 22  | Horários, entrega e retirada, formas de pagamento                                                                   | ✅ Concluída |
 | 23  | Categorias e produtos                                                                                               | ✅ Concluída |
 | 24  | Grupos de opção, adicionais e combos                                                                                | ✅ Concluída |
-| 25  | Usuários e senha                                                                                                    | ⬜ Próxima   |
+| 25a | Equipe e permissões: perfis do estabelecimento, permissões mais finas, as telas Pessoas e Perfis                    | ✅ Concluída |
+| 25b | Senhas: trocar a própria, o dono redefinir a de outra pessoa                                                        | ⬜ Próxima   |
+| 25c | "Esqueci minha senha", por e-mail                                                                                   | ⬜           |
+| 25d | O mesmo e-mail em mais de um estabelecimento — _achado do Junio na validação da 25a; antes da 26_                   | ⬜           |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
 | 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
 | 28  | Colocar no ar — religa antes o CI guardado na Fase 16                                                               | ⬜           |
@@ -156,6 +168,238 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 25a — concluída
+
+A primeira das três entregas da Fase 25: a tela da equipe e as permissões. Mudou a API (modelo de
+permissões, rotas de perfis, conferência por campo), o `packages/shared` (o catálogo das
+permissões) e o painel inteiro, que passou a ligar só o que o perfil de quem está logado alcança.
+**Duas migrations novas** — a segunda apaga as tabelas dos papéis globais. A coleção do Postman
+mudou: importe de novo.
+
+### Decisões do Junio (2026-10-06)
+
+- **Três entregas:** 25a, a equipe e as permissões; 25b, as senhas; 25c, o "esqueci minha senha".
+- **Perfis criados pelo dono.** O dono monta perfis com nome, e cada pessoa tem **um**. Mudar um
+  perfil muda todos que o têm; não há ajuste por pessoa.
+- **Permissões mais finas no cardápio e no dia a dia:** marcar o que esgotou, mexer em preço e
+  alterar o resto são três permissões — no produto e nas opções dos opcionais; cancelar um pedido é
+  separado de mudar o status; pausar o recebimento de pedidos é separado das configurações.
+- **Quatro perfis prontos:** Administrador, Gerente do cardápio, Atendente e Cozinha. O
+  proprietário tem sempre tudo, e não é um perfil.
+
+### Microtasks
+
+| #   | Tarefa                                                                                                    | Status |
+| --- | --------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | O catálogo das permissões no `packages/shared`, com o que cada uma exige, e os quatro perfis prontos      | ✅     |
+| 2   | Tabelas `profiles` e `profile_permissions`, `users.is_owner` e `users.profile_id`; saem os papéis globais | ✅     |
+| 3   | A migration que passa cada usuário do papel que tinha para o perfil correspondente                        | ✅     |
+| 4   | As permissões lidas do perfil a cada requisição; o proprietário com todas, sempre                         | ✅     |
+| 5   | API dos perfis (`/admin/profiles`): listar, criar, alterar e excluir, com as regras de alcance            | ✅     |
+| 6   | API das pessoas com perfil no lugar de papel; a senha inicial com as regras do cadastro                   | ✅     |
+| 7   | A permissão pelo que muda: produto, opções dos opcionais, cancelar pedido, pausar o recebimento           | ✅     |
+| 8   | O cadastro, o seed e os comandos da plataforma criando o proprietário e os perfis prontos                 | ✅     |
+| 9   | O painel ligando só o que o perfil alcança: cardápio, opcionais, pedidos e configurações                  | ✅     |
+| 10  | Equipe › Pessoas: cadastrar, alterar o nome e o perfil, desativar e reativar, com o uso do plano          | ✅     |
+| 11  | Equipe › Perfis: criar, alterar e excluir, com as permissões em grupos                                    | ✅     |
+| 12  | Coleção do Postman regenerada (66 requisições, pasta "Perfis")                                            | ✅     |
+
+### O que foi decidido
+
+**Os papéis globais deram lugar a perfis do estabelecimento.** OWNER, ADMIN e STAFF eram iguais em
+todo estabelecimento e não se ajustavam. Agora cada estabelecimento tem os seus perfis (`profiles`),
+cada um com as suas permissões (`profile_permissions`), e cada pessoa tem um (`users.profile_id`).
+As duas tabelas são tenant-scoped, com RLS forçado e chave estrangeira composta com o `tenant_id`:
+uma pessoa não recebe o perfil de outro estabelecimento nem por engano do código. As tabelas
+`roles`, `permissions`, `role_permissions` e `user_roles` foram apagadas, e com elas o
+`seed-rbac.ts`.
+
+**O proprietário não é um perfil.** É uma marca na pessoa (`users.is_owner`), uma por
+estabelecimento — o banco não deixa haver duas, nem um proprietário com perfil. Quem criou o
+estabelecimento tem sempre todas as permissões, inclusive as que o catálogo ganhar depois; isso não
+se edita, e por isso o dono não perde o acesso por um perfil mal montado. Só o próprio
+proprietário altera a conta dele, e ela não se desativa.
+
+**O catálogo das permissões mora no código** (`packages/shared/src/permissions.ts`), e não mais no
+banco: a lista é do produto, igual para todos, e a tela de perfis mostra o mesmo catálogo que a API
+confere — código, nome, descrição e grupo (Pedidos, Cardápio, Configurações, Equipe). Uma
+permissão gravada que não esteja mais no catálogo não vale nada. São 22:
+
+| Grupo         | Permissões                                                                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pedidos       | `orders:read`, `orders:update` (mudar o status), `orders:cancel`, `orders:pause` (o "Recebendo pedidos"), `customers:read`                                                                                   |
+| Cardápio      | `products:read`, `products:availability` (o que esgotou), `products:price`, `products:update` (o resto), `products:create`, `products:delete`, `categories:create`, `categories:update`, `categories:delete` |
+| Configurações | `settings:read`, `settings:update`                                                                                                                                                                           |
+| Equipe        | `users:read`, `users:create`, `users:update`, `users:delete` (desativar e reativar), `profiles:manage`, `audit:read`                                                                                         |
+
+`categories:read` deixou de existir: quem vê o cardápio vê as categorias dele (`products:read`).
+
+**Cada permissão puxa a que ela exige.** Quem altera precisa ver: marcar "Alterar preços" marca
+"Ver o cardápio", e desmarcar "Ver o cardápio" desmarca tudo o que dependia dela. A API faz o mesmo
+ao gravar (`completarPermissoes`), para que um perfil nunca fique com uma permissão que não serve.
+
+**Os quatro perfis prontos** nascem com o estabelecimento e são dele: o dono pode mudá-los,
+renomeá-los, excluí-los e criar outros (até 50).
+
+| Perfil              | O que pode                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| Administrador       | Tudo, menos desativar e reativar pessoas (21 das 22)                                      |
+| Gerente do cardápio | O cardápio inteiro: produtos, preços, o que esgotou, categorias, opcionais e combos       |
+| Atendente           | Ver, atualizar e cancelar pedidos; ver os clientes; ver o cardápio e marcar o que esgotou |
+| Cozinha             | Ver os pedidos e mudar o status; ver o cardápio e marcar o que esgotou                    |
+
+**Ninguém dá o que não tem.** `profiles:manage` sozinha não basta; quem não é o proprietário:
+
+- não cria nem altera um perfil com uma permissão que ele mesmo não tem, nem mexe num perfil que
+  tem mais do que ele (403 `PROFILE_OUT_OF_REACH`, dizendo quais faltam);
+- não dá a uma pessoa um perfil fora do seu alcance, nem altera quem já tem um;
+- não altera o perfil que ele mesmo tem, nem troca o próprio perfil (409
+  `CANNOT_CHANGE_OWN_PROFILE`) — senão subiria sozinho, ou se trancaria para fora.
+
+E, para todos: perfil com alguém dentro não se exclui (409 `PROFILE_IN_USE`, dizendo quantas
+pessoas), o nome é único no estabelecimento (409 `PROFILE_NAME_TAKEN`) e código de permissão
+desconhecido é recusado (400 `UNKNOWN_PERMISSION`).
+
+**A permissão é a do que muda.** Nas rotas em que uma gravação cobre coisas de permissões
+diferentes, a guarda da rota deixa entrar quem tem **alguma** delas (`requireAnyOf`), e o serviço
+compara o pedido com o que está gravado e exige a de cada coisa que muda (`exigirPermissao`). Um
+campo enviado igual ao gravado não pede permissão — a tela pode mandar o formulário inteiro.
+
+| Rota                             | O que muda → a permissão                                                                                                                                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH /admin/products/:id`      | preço → `products:price`; disponível → `products:availability`; nome, descrição, categoria, ordem → `products:update`                                                                                                  |
+| `PUT /admin/option-groups/:id`   | acréscimo de uma opção, ou opção nova com acréscimo → `products:price`; disponível de uma opção que existe → `products:availability`; o resto (grupo, opção criada, renomeada, tirada, reordenada) → `products:update` |
+| `POST /admin/option-groups`      | `products:update`; com alguma opção com acréscimo, também `products:price`                                                                                                                                             |
+| `PATCH /admin/orders/:id/status` | `CANCELLED` → `orders:cancel`; os outros → `orders:update`. Uma não inclui a outra                                                                                                                                     |
+| `PATCH /admin/settings`          | só o "Recebendo pedidos" → `orders:pause` ou `settings:update`; qualquer outro campo → `settings:update`                                                                                                               |
+
+Criar um produto (`products:create`) inclui o preço inicial: quem cadastra precisa dizer quanto
+custa. Já uma opção nova com acréscimo pede `products:price` — criar a opção "Bacon" de graça é
+alterar o grupo; cobrar R$ 4 por ela é mexer em preço.
+
+**A mudança vale na hora.** As permissões não vão no token: são lidas do banco a cada requisição.
+Trocar o perfil de uma pessoa, ou as permissões de um perfil, vale no pedido seguinte de quem foi
+afetado, com a sessão que ele já tinha — e a conexão ao vivo de cada um se autentica de novo.
+Desativar encerra as sessões, e o login responde 403, "Esta conta está desativada. Fale com o
+administrador.".
+
+**Tudo vai para a auditoria:** `profile.created`, `profile.updated` (com as permissões dadas e as
+tiradas) e `profile.deleted`, além das de usuário, que já existiam.
+
+**Quem já existia foi passado para os perfis pela migration** `0024`, estabelecimento por
+estabelecimento, sob as mesmas policies de isolamento que a aplicação: OWNER virou o proprietário,
+ADMIN foi para "Administrador" e STAFF para "Atendente" — que continua atualizando e cancelando
+pedidos, e passa a marcar o que esgotou. Um usuário que estivesse sem papel fica **sem perfil**:
+entra, mas não alcança nada, até o dono dar um perfil a ele. A `0025` apaga as tabelas dos papéis.
+As listas de permissões dos perfis prontos estão congeladas na migration; estabelecimento novo
+recebe as do código.
+
+**A tela Equipe** fica no grupo de baixo do menu, junto de Configurações, para quem tem
+`users:read`. Tem duas abas, cada uma com o seu endereço:
+
+- **Pessoas** (`/admin/equipe`): o nome, o e-mail, o perfil e o último acesso de cada um, com
+  "Você", "Proprietário" e "Desativada" marcados, e quantas pessoas ativas o plano permite. "Nova
+  pessoa" e o lápis abrem uma janela; desativar pergunta antes. No limite do plano, "Nova pessoa"
+  fica desligado, com o aviso do porquê; reativar alguém é recusado pela API, e a tela mostra a
+  explicação dela.
+- **Perfis** (`/admin/equipe/perfis`): cada perfil com o resumo do que pode e quantas pessoas o
+  têm. A janela do perfil mostra as permissões em grupos, com caixas de marcar; as que a pessoa
+  logada não tem ficam desligadas. Perfil com gente dentro não se exclui, e a tela diz por quê.
+
+A tela só oferece o que a API aceitaria: os perfis fora do alcance não aparecem para dar, o próprio
+perfil e o do proprietário não se editam, e ninguém se desativa.
+
+**A senha inicial é o dono quem dá, e já segue as regras do cadastro** (maiúscula, minúscula,
+caractere especial, 8 ou mais) — adiantado da 25b, para não nascer senha fraca nesta entrega. O
+campo mostra o que se digita, com as regras marcadas: o dono precisa ler a senha para passá-la
+adiante. Trocá-la depois é a Fase 25b.
+
+**O painel liga só o que o perfil alcança, e envia só o que a pessoa pode mudar.** No produto, cada
+campo segue a sua permissão — o atendente vê a página inteira, com só o "Disponível" ligado —, e um
+aviso diz o que o perfil permite. O mesmo na janela do grupo de opcionais ("A mais (R$)" com
+`products:price`, o "Disponível" de cada opção com `products:availability`), na lista do cardápio
+(a caixa do esgotado, a ordem, o lápis), nos pedidos ("Cancelar" só com `orders:cancel`) e nas
+Configurações (quem só pausa mexe só no "Recebendo pedidos", e a tela envia só ele). Os avisos de
+somente leitura passaram a dizer "o seu perfil não permite".
+
+**Uma pessoa sem perfil aparece como "Sem perfil"** na lista e na janela, e quem pode alterar
+pessoas dá um a ela. Achado ao rodar a migration numa cópia do banco de desenvolvimento, onde
+havia um usuário sem papel: a primeira versão da tela não deixava editá-lo.
+
+**`customers:read` e `audit:read` valem num perfil, mas a tela de perfis não as oferece:** ainda
+não há tela que as use. Os perfis prontos que as têm continuam com elas ao serem editados, e a
+caixa aparece quando a tela existir (clientes, na Fase 26).
+
+**Achados no navegador, corrigidos:** um campo desligado tinha a mesma cara de um ligado — os
+campos de texto, de escolha e de texto longo ganharam o fundo e a cor de desligado, no painel
+inteiro; e o cabeçalho da aba Perfis apertava o botão no celular — agora empilha.
+
+### A validar com o Junio
+
+Escolhas feitas sem perguntar, fáceis de mudar:
+
+1. **A permissão pelo que muda**, e não pela rota: um campo enviado igual ao gravado não pede
+   permissão.
+2. **Opção nova com acréscimo pede "Alterar preços"**, enquanto criar um produto já inclui o preço
+   inicial.
+3. **A senha inicial visível enquanto o dono digita**, e já com as regras do cadastro.
+4. **"Equipe" no grupo de baixo do menu**, com Configurações.
+5. **"Sem perfil"** para quem ficou sem perfil na migração, em vez de dar um perfil por conta
+   própria.
+6. **"Ver os clientes" e "Consultar a auditoria" fora da tela de perfis** até existir a tela de
+   cada uma.
+7. **O Administrador pronto não desativa pessoas** — só o proprietário, a menos que o dono marque
+   a permissão no perfil.
+
+### Achado do Junio na validação (2026-10-07)
+
+**O e-mail de quem já trabalhou em outro estabelecimento não pode ser cadastrado.** Ao cadastrar
+`antonio@antonio.com.br` na `lanchonete-do-ze`, a tela recusou: o e-mail já existia no
+`sanduiche-do-joao`. Não é defeito desta fase — é a regra da Fase 18b, em que o e-mail passou a ser
+único na plataforma para o login não perguntar o estabelecimento —, mas a tela da equipe a tornou
+um problema de verdade: um funcionário que trabalhou num estabelecimento não entra na equipe de
+outro com o mesmo e-mail, nem depois de desativado no primeiro. **Decisão do Junio: resolver antes
+da Fase 26, sem mudar o que já estava planejado para a 25** — virou a Fase 25d (ver "O que falta
+para o MVP").
+
+### Verificação executada
+
+| Verificação                                                                                                                                                                                                                                                                                                            | Resultado                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                                                                                                                                                                                                                                                                                                          | **1230 testes** (676 API + 489 web + 65 shared); formatação, typecheck, lint e build                                                                                            |
+| Clone limpo, `--frozen-lockfile`                                                                                                                                                                                                                                                                                       | os mesmos 1230 testes                                                                                                                                                           |
+| As duas migrations numa cópia do banco de desenvolvimento, com os dados de verdade                                                                                                                                                                                                                                     | 26 migrations aplicadas; 7 estabelecimentos, cada um com o seu proprietário e os 4 perfis (21, 9, 6 e 4 permissões); as tabelas dos papéis apagadas; RLS forçado nas duas novas |
+| Catálogo: permissão marcada sem a que ela exige; "o que falta" ignorando a exigida                                                                                                                                                                                                                                     | 2 quebras, pegas em `permissions.test.ts` (shared)                                                                                                                              |
+| Quem pode o quê: proprietário sem tudo, permissão fora do catálogo valendo, dar ou atribuir o que não se tem, alterar o próprio perfil, mexer na conta do proprietário, perfil em uso excluído, estabelecimento nascendo sem perfis, senha inicial fraca, `requireAnyOf` exigindo todas ou deixando entrar sem nenhuma | 12 quebras, pegas em `profiles-routes`, `users-routes`, `signup-routes`, `auth-routes` e `granular-permissions`                                                                 |
+| A permissão pelo que muda: preço, esgotado, nome e categoria do produto; campo igual ao gravado pedindo permissão; acréscimo, esgotado, ordem e remoção de opção; grupo e produto gravados sem conferir; cancelar e mudar status trocados; quem pausa alterando o resto                                                | 18 quebras, pegas em `granular-permissions` e `orders-routes`                                                                                                                   |
+| O painel pelo perfil: campo ligado para quem não pode, envio do que o perfil não alcança, produto novo com as permissões do que existe, caixa do esgotado e ordem na lista, "Cancelar", "Recebendo pedidos"                                                                                                            | 13 quebras, pegas em `AdminPermissions`, `AdminProductSteps`, `AdminPanel` e `AdminSettings`                                                                                    |
+| A equipe na tela: "Equipe" no menu de todos, conta do proprietário editável, perfil fora do alcance oferecido ou editável, o próprio perfil editável ou enviado, desativar a si mesmo ou sem perguntar, "Nova pessoa" no limite do plano, permissões que a tela não mostra perdidas ao salvar                          | 17 quebras, pegas em `AdminTeam`                                                                                                                                                |
+| Ao todo                                                                                                                                                                                                                                                                                                                | 62 quebras propositais, todas pegas                                                                                                                                             |
+| Navegador de verdade, em 390 e 1280 px                                                                                                                                                                                                                                                                                 | 13 conferências; sem erro no console e sem rolagem lateral                                                                                                                      |
+| Validação do Junio                                                                                                                                                                                                                                                                                                     | a fazer                                                                                                                                                                         |
+
+O clone limpo recebeu as alterações da árvore de trabalho por cima, porque nada foi commitado.
+
+**Visto num navegador de verdade**, contra a cópia migrada do banco, num estabelecimento
+descartável criado do zero: o dono cadastra uma pessoa com o perfil Atendente e cria um perfil
+novo; o perfil em uso não se exclui; a atendente entra e vê no menu só o que o perfil alcança; na
+página do produto, só o "Disponível" está ligado, com o aviso; a API recusa o preço enviado por
+fora (403, faltando `products:price`); trocar o perfil dela vale na hora, com a mesma sessão; e,
+desativada, ela não entra mais. A cópia do banco foi apagada no fim, e o banco de desenvolvimento
+não foi tocado — as migrations ficam para o `pnpm db:migrate` do Junio.
+
+**As migrations foram testadas numa cópia do banco de desenvolvimento**, e não só no banco de
+testes, porque mexem em dados: lá apareceu o usuário sem papel, que o banco de testes não tinha.
+
+**Uma interrupção, e o que ela deixou.** A máquina foi reiniciada com o lote de quebras
+propositais no meio. O roteiro restaura cada arquivo ao terminar o teste, mas não teve a chance:
+`AdminOptionGroupsPage.tsx` ficou com uma quebra aplicada (o lápis do grupo só para quem altera os
+opcionais). Foi achada conferindo, item por item, se o trecho original de cada quebra ainda
+estava no arquivo; desfeita, o lote rodou de novo do começo — as 62 —, e o `pnpm verify` e o clone
+limpo desta tabela são de depois disso.
 
 ---
 
@@ -559,6 +803,8 @@ num formulário vazio, o botão de criar não dizia o que faltava; ligado, mostr
 acabou; hoje ele não consegue, e dar `products:update` ao papel deixaria trocar o preço também.
 **Decisão do Junio (2026-10-04): vai para a Fase 25**, dentro de uma revisão maior das
 permissões — por pessoa, com perfis prontos e o dono montando as de cada um (ver "Fase 25").
+_Feito na Fase 25a: o perfil "Atendente" marca o que esgotou, com `products:availability`, e
+`categories:read` deixou de existir._
 
 **Visto num navegador de verdade, a partir de um cadastro novo**, em 390 e 1280 px: cardápio vazio,
 categoria em branco recusada, nome repetido no campo, produto criado com foto (guardada em WebP),
@@ -1222,7 +1468,8 @@ troca de tema em tempo de execução, que ela demonstrava, virou teste das próp
 uma letra maiúscula, uma minúscula e um caractere especial — letra com ou sem acento; especial é
 o que não é letra, número nem espaço. As regras moram em `REGRAS_DA_SENHA` (`packages/shared`): o
 schema recusa cada uma com a própria mensagem, e a tela as lista marcadas enquanto a pessoa digita.
-A criação de usuários do painel ainda pede só os 8 caracteres; a mesma regra chega lá na Fase 25.
+A criação de usuários do painel ainda pede só os 8 caracteres; a mesma regra chega lá na Fase 25
+(_chegou na 25a: a senha inicial de uma pessoa segue as regras do cadastro_).
 Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ### Verificação executada
@@ -1239,10 +1486,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 24 estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
+As fases 1 a 25a estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
 (MVP.md, "Como saber que acabou"). Os passos 1 a 7 já funcionam de ponta a ponta pela tela; falta
-o sistema estar no ar, e as telas de usuários e de clientes. As fases 25 a 28 fecham essa
-distância.
+o sistema estar no ar, as senhas (trocar, redefinir, recuperar) e a tela de clientes. As fases 25b
+a 28 fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -1285,30 +1532,50 @@ vazio**, como faria alguém que nunca viu o sistema.
 - Todas sobre rotas que já existem: `admin-settings.ts`, `admin-catalog.ts` e
   `admin-customization.ts`.
 
-### Fase 25 — Usuários e senha
+### Fase 25 — Equipe, permissões e senhas
 
-- Tela de usuários sobre a API da Fase 14.
-- **Permissões maleáveis, por pessoa** (decisão do Junio, 2026-10-04): alguns perfis prontos, e o
-  dono com autonomia total para montar as permissões de cada pessoa como quiser. O exemplo dele:
-  um funcionário marca produto como esgotado mas não mexe no preço; outro mexe no preço mas não
-  marca esgotado. **A rever com o Junio no começo da fase**, antes de implementar.
-- Para isso, as permissões ficam mais finas onde hoje uma só cobre coisas diferentes. A primeira:
-  `products:update` cobre preço, nome, descrição, foto e disponibilidade; marcar esgotado precisa
-  ser uma permissão separada. Rever as outras com o mesmo olho — pedidos, configurações, cardápio.
-- Ponto de desenho a resolver na fase: hoje os papéis são **globais** (OWNER, ADMIN e STAFF são
-  iguais em todo estabelecimento — ARCHITECTURE.md, 6.4). Permissões por pessoa pedem que o dono
-  escolha permissões além do papel: por usuário, ou com perfis próprios do estabelecimento. A
-  conferência na API não muda — continua sendo por permissão, rota a rota (`requireAuth`).
-- Garantias a considerar no desenho: o dono não perde o acesso total; quem monta permissões não
-  dá a outra pessoa o que ele mesmo não tem; toda mudança de permissão vai para a auditoria; e
-  quem perdeu uma permissão deixa de tê-la na hora (as conexões ao vivo de um usuário alterado já
-  fecham desde a Fase 19).
-- Cada pessoa troca a própria senha, e o dono redefine a de um atendente.
-- As regras de senha do cadastro (`REGRAS_DA_SENHA`, Fase 18) passam a valer para toda senha do
-  painel: criação de usuário, troca e redefinição.
-- "Esqueci minha senha" por e-mail, com o envio da Fase 17 — e o mesmo desenho do link de
-  confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link. A conta é
+Em três entregas (decisão do Junio, 2026-10-06), e uma quarta, achada por ele na validação da
+primeira (2026-10-07).
+
+- **25a (concluída):** a tela Equipe, com as abas Pessoas e Perfis. Os três papéis globais deram
+  lugar a **perfis do estabelecimento** — o dono monta, cada pessoa tem um —, com quatro prontos, e
+  as permissões ficaram mais finas no cardápio e no dia a dia. Ver "Fase 25a — concluída".
+- **25b — senhas:**
+  - Cada pessoa troca a própria senha, informando a atual.
+  - O dono — ou quem tiver a permissão — redefine a senha de outra pessoa. A decidir no começo da
+    fase: se quem recebeu uma senha de outra pessoa (a inicial ou a redefinida) é obrigado a
+    trocá-la ao entrar.
+  - Trocar ou redefinir encerra as outras sessões da pessoa.
+  - As regras de senha do cadastro (`REGRAS_DA_SENHA`, Fase 18) em toda senha do painel. A senha
+    inicial de uma pessoa já as segue desde a 25a.
+- **25c — "esqueci minha senha"**, por e-mail, com o envio da Fase 17 — e o mesmo desenho do link
+  de confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link. A conta é
   achada pelo e-mail com `tenantDoEmail` (Fase 18b), e a resposta é a mesma exista o e-mail ou não.
+- **25d — o mesmo e-mail em mais de um estabelecimento** (pedido do Junio, 2026-10-07; **antes da
+  Fase 26**).
+  - **O problema:** quem já tem conta num estabelecimento não é cadastrado na equipe de outro —
+    "Este e-mail já está em uso". Vale para quem saiu do primeiro (desativar não solta o e-mail, e
+    não há como excluir uma pessoa) e para quem trabalha nos dois.
+  - **A causa:** desde a Fase 18b o e-mail é único na plataforma (`users_email`), e é ele que diz
+    de qual estabelecimento a pessoa é — por isso o login não pergunta o estabelecimento. Uma
+    conta pertence a um estabelecimento só (ARCHITECTURE.md, 6.9).
+  - **A decidir com o Junio no começo da fase**, entre três caminhos:
+    1. **Soltar o e-mail de quem saiu:** excluir a pessoa da equipe (ou anonimizar o e-mail dela)
+       libera o endereço. É a menor mudança, e resolve "trabalhou num, agora trabalha em outro";
+       não resolve quem trabalha nos dois ao mesmo tempo. Precisa preservar a auditoria e os
+       pedidos que a pessoa atualizou.
+    2. **Uma conta, vários estabelecimentos:** a conta passa a ser da pessoa, com um vínculo — e
+       um perfil — em cada estabelecimento; depois de entrar, quem tem mais de um escolhe em qual.
+       Resolve tudo, inclusive o dono com duas lojas, e é a maior mudança: `users` deixa de ser de
+       um tenant só, e mudam o login, o token e o cadastro de uma pessoa (que vira "acrescentar à
+       equipe", sem senha inicial, quando a conta já existe).
+    3. **O login volta a distinguir o estabelecimento** quando o e-mail existe em mais de um, com
+       uma conta (e uma senha) em cada. É o modelo de antes da Fase 18b, só para quem precisa.
+  - **Cuidado com a ordem das fases:** a 25b ("o dono redefine a senha de outra pessoa") e a 25c
+    ("esqueci minha senha") são feitas antes, sobre o modelo de hoje. No caminho 2, a senha deixa
+    de ser de um estabelecimento: um dono não pode redefinir uma senha que também abre o painel de
+    outro. A decidir no começo da 25b se a redefinição pelo dono já nasce de um jeito que
+    sobreviva — por exemplo, o dono dispara o e-mail de redefinição, em vez de escolher a senha.
 
 ### Fase 26 — Clientes e histórico de pedidos
 
@@ -1343,8 +1610,9 @@ Pode virar duas fases.
 - Escolher a hospedagem, no início da fase.
 - Dockerfiles de produção, HTTPS e a CSP da aplicação web.
 - Backup do banco e das imagens, com a restauração testada.
-- **Seed essencial de produção** — papéis, formas de pagamento e planos, sem os estabelecimentos
-  de demonstração. Hoje o plano FREE só existe porque o seed de demonstração o cria.
+- **Seed essencial de produção** — formas de pagamento e planos, sem os estabelecimentos de
+  demonstração. Hoje o plano FREE só existe porque o seed de demonstração o cria. (Os perfis não
+  entram: nascem com cada estabelecimento, desde a Fase 25a.)
 - SMTP de produção com SPF e DKIM; rate limit compartilhado, se houver mais de uma instância; os
   textos jurídicos finais.
 
@@ -1495,17 +1763,21 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pendências conhecidas
 
-| Item                                                                                                                                                              | Quando resolve                           |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Permissões por pessoa: perfis prontos, o dono montando as de cada um, "marcar esgotado" separado de "mudar preço"                                                 | Fase 25 (decisão do Junio)               |
-| Sair de um formulário do painel (aba das configurações, página de produto ou categoria) com alterações não salvas perde o que foi digitado, sem aviso             | A decidir; ver ROADMAP                   |
-| Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                                   | Fase própria, a encaixar                 |
-| Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                                           | A definir pelo Junio                     |
-| Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                                          | Fase 28                                  |
-| CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                                | Fase 28, antes do deploy                 |
-| Sem Dockerfile para API e web                                                                                                                                     | Fase 28                                  |
-| Rate limit conta em memória — vira limite por instância se houver mais de uma                                                                                     | Fase 28, se houver mais de uma instância |
-| Rate limit global por IP (100/min): os aparelhos de um estabelecimento costumam sair pelo mesmo IP                                                                | Fase 28, com a revisão do rate limit     |
-| Os catálogos (papéis, formas de pagamento, planos) só são semeados pelo seed de demonstração — já separados em `seed-rbac`, `seed-payment-methods` e `seed-plans` | Fase 28 (seed essencial de produção)     |
-| Contrato do cardápio público copiado no web, fora do `packages/shared`                                                                                            | Quando o contrato mudar de novo          |
-| Checkout não lembra os dados no aparelho ao voltar ao cardápio                                                                                                    | ROADMAP                                  |
+| Item                                                                                                                                                  | Quando resolve                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Trocar a própria senha e o dono redefinir a de outra pessoa — hoje a senha inicial, dada pelo dono, é a que fica                                      | Fase 25b                                 |
+| "Esqueci minha senha", por e-mail                                                                                                                     | Fase 25c                                 |
+| O e-mail de quem tem conta num estabelecimento não é aceito na equipe de outro — nem depois de a pessoa ser desativada no primeiro                    | Fase 25d (antes da 26; pedido do Junio)  |
+| `customers:read` e `audit:read` valem num perfil, mas a tela de perfis ainda não as oferece: não há tela que as use                                   | Fase 26 (clientes); ROADMAP (auditoria)  |
+| O e-mail de uma pessoa da equipe não se altera, e o proprietário não se transfere                                                                     | ROADMAP                                  |
+| Sair de um formulário do painel (aba das configurações, página de produto ou categoria) com alterações não salvas perde o que foi digitado, sem aviso | A decidir; ver ROADMAP                   |
+| Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                       | Fase própria, a encaixar                 |
+| Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                               | A definir pelo Junio                     |
+| Repositório público no GitHub — tornar privado antes da publicação oficial (obrigatório)                                                              | Fase 28                                  |
+| CI desligado — o workflow está em `CI_PARA_IMPLEMENTAR_DEPOIS.txt`                                                                                    | Fase 28, antes do deploy                 |
+| Sem Dockerfile para API e web                                                                                                                         | Fase 28                                  |
+| Rate limit conta em memória — vira limite por instância se houver mais de uma                                                                         | Fase 28, se houver mais de uma instância |
+| Rate limit global por IP (100/min): os aparelhos de um estabelecimento costumam sair pelo mesmo IP                                                    | Fase 28, com a revisão do rate limit     |
+| Os catálogos (formas de pagamento, planos) só são semeados pelo seed de demonstração — já separados em `seed-payment-methods` e `seed-plans`          | Fase 28 (seed essencial de produção)     |
+| Contrato do cardápio público copiado no web, fora do `packages/shared`                                                                                | Quando o contrato mudar de novo          |
+| Checkout não lembra os dados no aparelho ao voltar ao cardápio                                                                                        | ROADMAP                                  |

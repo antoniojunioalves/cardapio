@@ -183,7 +183,7 @@ Requisição
    │                         · área pública:  do tenantSlug da URL, resolvido no backend
    │                         · login:         do e-mail de quem entra, resolvido no backend
    │
-   ├─ Autorização ......... este usuário pode fazer isto neste tenant? (RBAC)
+   ├─ Autorização ......... este usuário pode fazer isto neste tenant? (o perfil dele)
    │
    ├─ Serviço ............. regra de negócio
    │
@@ -259,8 +259,8 @@ com `UNIQUE (tenant_id, id)` na tabela referenciada. Aí as duas camadas se comp
 para a categoria de B mantendo o próprio tenant é barrado pela FK, e fingir ser B é barrado pelo
 `WITH CHECK` do RLS.
 
-A mesma falha existia em três FKs das Fases 3 e 4 (`user_roles`, `refresh_tokens` e
-`audit_logs` apontando para `users`). Não era explorável — em todos os caminhos o id vinha do
+A mesma falha existia em três FKs das Fases 3 e 4 (`user_roles` — tabela que saiu na Fase 25a —,
+`refresh_tokens` e `audit_logs` apontando para `users`). Não era explorável — em todos os caminhos o id vinha do
 servidor —, mas era o formato exato de um IDOR esperando a rota "atribuir papel ao usuário".
 Foram corrigidas na mesma fase.
 
@@ -508,24 +508,47 @@ na auditoria e, com a pessoa reativada, a derrubada das sessões novas dela pelo
 Foi assim até a Fase 19, e há teste para os três casos: desativado, usuário reativado e
 estabelecimento reativado.
 
-### 6.4 Papéis e permissões
+### 6.4 Perfis e permissões
 
-Papéis e permissões são **globais**: OWNER, ADMIN e STAFF significam o mesmo em todo
-estabelecimento, e duplicá-los por tenant só criaria oportunidade de divergirem. O vínculo entre
-usuário e papel é que é tenant-scoped.
+Até a Fase 24 havia três papéis **globais** — OWNER, ADMIN e STAFF, iguais em todo
+estabelecimento. Não se ajustavam: o atendente não podia marcar o que esgotou sem ganhar também o
+poder de mudar preço. Desde a Fase 25a o desenho é este:
 
-O vínculo tem `tenant_id` próprio, e não apenas o do usuário. Sem a coluna, a tabela ficaria
-fora do alcance do RLS e dependeria de um JOIN correto para não vazar; com ela, a policy protege
-a linha diretamente.
+**O catálogo de permissões é do produto, e mora no código** (`packages/shared/src/permissions.ts`).
+A lista é a mesma para todos, e a tela de perfis mostra o mesmo catálogo que a API confere: código,
+nome, descrição, grupo e a permissão que cada uma exige (`requer`). Permissões seguem
+`recurso:acao` (`products:price`): formato previsível é o que permite conferir comparando strings.
+Acrescentar uma permissão é mexer no código, não no banco.
 
-Permissões seguem `recurso:acao` (`products:create`). Formato previsível é o que permite
-conferir permissão comparando strings, sem tabela de tradução no meio.
+**Os perfis são do estabelecimento.** `profiles` (nome único por tenant, sem diferenciar
+maiúsculas) e `profile_permissions` (uma linha por permissão) são tenant-scoped, com RLS forçado.
+Cada pessoa tem **um** perfil (`users.profile_id`), por FK composta com o `tenant_id` — dar a
+alguém o perfil de outro estabelecimento é barrado pelo banco (2.9). A FK é `ON DELETE RESTRICT`:
+perfil com gente dentro não some. Todo estabelecimento nasce com quatro perfis prontos
+(`PERFIS_PRONTOS`), que passam a ser dele — o dono muda, renomeia, exclui e cria outros.
 
-**A Fase 25 revê este desenho** (decisão do Junio): permissões por pessoa, com perfis prontos e o
-dono montando as de cada um, e permissões mais finas — marcar esgotado separado de mudar o preço,
-que hoje são o mesmo `products:update`. Os papéis globais deixam de bastar; como fica — permissões
-por usuário, ou perfis do estabelecimento — é decisão daquela fase. A conferência rota a rota por
-permissão continua igual.
+Não há ajuste por pessoa (decisão do Junio): mudar um perfil muda todos que o têm, e para alguém
+diferente cria-se outro perfil. O que se perde em flexibilidade se ganha em poder responder "o que
+a Maria pode fazer?" olhando um lugar só.
+
+**O proprietário é uma marca na pessoa, não um perfil** (`users.is_owner`). Um índice único parcial
+garante um por estabelecimento, e um `CHECK` impede proprietário com perfil. Ele tem
+`TODAS_AS_PERMISSOES` — a lista inteira do catálogo, calculada na hora —, de modo que uma
+permissão nova já nasce com ele e nenhum perfil mal montado tranca o dono para fora.
+
+**As permissões de quem pede são lidas do banco a cada requisição** (`loadPermissions`, em
+`auth/service.ts`), junto com o usuário: proprietário → todas; com perfil → as do perfil que
+ainda existem no catálogo, na ordem dele; sem perfil → nenhuma. Não vão no token. Trocar o perfil
+de alguém, ou as permissões de um perfil, vale no pedido seguinte de quem foi afetado.
+
+**Quem monta permissões não passa do que tem** (`profiles/service.ts`, `exigirAlcance`). Com
+`profiles:manage`, quem não é o proprietário só cria, altera e exclui perfis cujas permissões ele
+mesmo tem — as de antes e as de depois da alteração —, e só dá a uma pessoa, ou tira dela, um
+perfil dentro desse alcance. Ninguém altera o perfil que tem, nem troca o próprio perfil. Sem
+essas regras, `profiles:manage` seria o mesmo que ter tudo.
+
+**Ao gravar um perfil, cada permissão puxa a que ela exige** (`completarPermissoes`): quem altera
+precisa ver. A tela faz o mesmo ao marcar e desmarcar, para a pessoa ver o que vai gravar.
 
 ### 6.5 A cadeia de proteção de uma rota
 
@@ -545,6 +568,29 @@ Autenticar e autorizar em duas peças separadas permitiria montá-las na ordem e
 `[authorize('x'), authenticate]` falharia em silêncio — `authorize` não encontraria usuário e o
 erro pareceria de sessão, não de configuração. Devolvendo a cadeia pronta, a ordem deixa de ser
 uma decisão de quem usa.
+
+**Quando a permissão depende do que o pedido muda, há `requireAnyOf()`.** Em algumas rotas uma
+gravação só cobre coisas de permissões diferentes: o `PATCH` de um produto muda o preço
+(`products:price`), o "disponível" (`products:availability`) ou o resto (`products:update`).
+Exigir as três barraria o atendente que só marca o que esgotou; exigir uma só deixaria ele mudar o
+preço.
+
+```ts
+app.patch(
+  '/products/:id',
+  { onRequest: requireAnyOf('products:update', 'products:price', 'products:availability') },
+  handler,
+)
+```
+
+A guarda deixa entrar quem tem **alguma**; quem decide é o serviço, que lê o que está gravado,
+vê o que o pedido muda e chama `exigirPermissao(ator, ...)` com a permissão de cada mudança
+(`auth/permissions.ts`). Um campo enviado com o valor que já está gravado não muda nada, e não
+pede permissão — a tela pode mandar o formulário inteiro. A conferência fica **dentro da
+transação**, sobre a mesma leitura que a gravação usa. Vale para o produto, o grupo de opcionais
+(o acréscimo de uma opção é preço; o "disponível" dela, o que esgotou), o status do pedido
+(`CANCELLED` pede `orders:cancel`; os outros, `orders:update`) e as configurações (só o "Recebendo
+pedidos" aceita `orders:pause`). O serviço recebe o **ator** — id e permissões —, e não só o id.
 
 A autenticação **consulta o banco a cada requisição** em vez de confiar apenas no conteúdo do
 token. O custo é uma consulta indexada; o que se compra é que desativar um usuário valha
@@ -611,7 +657,8 @@ Aberto, no plano gratuito, sem pagamento (Fase 17). É o primeiro passo da visã
 page, escolher o plano, assinar, cadastrar-se e usar na hora —, e a parte paga fica no ROADMAP.
 
 **Uma transação só.** `criarEstabelecimento` (`signup/service.ts`) grava o estabelecimento, a
-assinatura do FREE, o dono e o papel OWNER; o cadastro acrescenta, na mesma transação, o aceite
+assinatura do FREE, o dono — marcado como proprietário — e os quatro perfis prontos; o cadastro
+acrescenta, na mesma transação, o aceite
 dos termos, o link de confirmação e a sessão. Para isso o id do estabelecimento é pedido ao banco
 (`select uuidv7()`) **antes** da transação: o contexto nasce dele, e a tabela `tenants` — sem RLS —
 aceita o insert dentro do contexto. Falhou qualquer passo, não sobra estabelecimento pela metade. O
@@ -653,6 +700,13 @@ e a do cadastro — traz `establishment: { id, slug, name, status }`, de onde o 
 estabelecimento continua com vários usuários — o dono e os funcionários, cada um com o seu e-mail e
 a sua senha —, mas o mesmo e-mail não existe em dois estabelecimentos: quem tem dois usa um e-mail
 em cada. Uma pessoa em vários estabelecimentos com uma conta só está no ROADMAP.
+
+**O custo dessa escolha apareceu na Fase 25a**, com a tela da equipe: quem já tem conta num
+estabelecimento não é cadastrado em outro — nem depois de desativado no primeiro, porque a conta
+desativada continua com o e-mail. Para um funcionário que troca de emprego, é um bloqueio. Resolver
+isso é a Fase 25d (PROJECT_PLAN.md), e os caminhos mexem justamente nesta seção: soltar o e-mail de
+quem saiu, a conta deixar de pertencer a um estabelecimento só, ou o login voltar a distinguir o
+estabelecimento.
 
 **Como o tenant é achado.** `users` está sob RLS, e nenhuma role ignora RLS. `tenantDoEmail`
 (`auth/login-lookup.ts`) abre uma transação, define `app.login_email` e lê só o `tenant_id` da linha
@@ -759,7 +813,7 @@ máximo. O estado "as duas desligadas" só existe no nascimento.
 
 ### 7.4 Formas de pagamento
 
-Catálogo global mais uma tabela de junção tenant-scoped, o mesmo desenho de `roles`/`user_roles`.
+Catálogo global mais uma tabela de junção tenant-scoped.
 Global porque "Pix" significa o mesmo em todo estabelecimento, e duplicá-lo por tenant só criaria
 grafias divergentes. Acrescentar uma bandeira é um INSERT, não uma migration.
 
@@ -1315,6 +1369,27 @@ em passos: o produto, os itens (só no combo) e os opcionais.
   põe na lista dos grupos em cache) e entra no fim da lista do produto como mudança por salvar; é
   o botão do passo que grava a lista inteira (`useDefinirGruposDoProduto`).
 
+**As permissões no painel (Fase 25a).** A sessão traz as permissões de quem entrou, e as telas
+perguntam por elas — nunca pelo nome do perfil, que é do estabelecimento e pode ser qualquer um.
+
+- **O que cada permissão liga no cardápio** está em `features/admin/permissions.ts`:
+  `podeNoProduto(permissoes)` devolve `{ resto, preco, disponibilidade }`, e cada campo do produto e
+  da janela do grupo de opcionais se desliga pelo seu. `limiteNoProduto` monta o aviso ("O seu
+  perfil permite só…").
+- **A tela envia só o que a pessoa pode mudar** (`alteracaoAoAlcance`, em `catalog.ts`): um campo
+  desligado não vai no pedido. A API aceitaria o campo igual ao gravado, mas não depender disso
+  evita um 403 se outra pessoa mudou o valor nesse meio-tempo.
+- **Desligado, e não escondido,** onde a pessoa precisa ver o valor (o preço, para quem só marca o
+  que esgotou); escondido onde é só uma ação (o "Cancelar" do pedido, a lixeira).
+- **A tela é conveniência; quem recusa é a API.** Toda regra daqui tem a sua na API, com teste.
+
+**A equipe** (`features/admin/team.ts`, `AdminTeamPage` e `AdminProfilesPage`) segue o desenho das
+Configurações: um item no menu, abas com endereço próprio (`TeamTabs`) e janelas `FormSheet`
+(`PersonSheet`, `ProfileSheet`). As regras de alcance da API estão espelhadas em funções sem tela —
+`alcanca`, `alcancaAPessoa`, `marcarPermissao`, `desmarcarPermissao` —, para a tela não oferecer o
+que seria recusado. A janela do perfil desenha as caixas a partir de `permissoesPorGrupo()`, do
+`packages/shared`: permissão nova no catálogo aparece na tela sem mexer nela.
+
 ### 9.7 Temas
 
 Os **valores** vivem em CSS custom properties, em
@@ -1485,8 +1560,9 @@ token em 5 s, com token inválido ou quando ele expira (o painel renova e recone
 permissão (o painel desiste). A origem é conferida no handshake, porque o navegador não aplica
 CORS a WebSocket. Um ping a cada 30 s derruba conexão morta.
 
-**Usuário alterado:** desativar ou mudar o papel de alguém emite `USUARIO_ALTERADO`, e as
-conexões dele fecham com `4001` na hora — o painel se autentica de novo com o que valer agora.
+**Usuário alterado:** desativar alguém, trocar o perfil dele ou mudar as permissões do perfil que
+ele tem emite `USUARIO_ALTERADO` — um por pessoa afetada —, e as conexões dela fecham com `4001`
+na hora: o painel se autentica de novo com o que valer agora.
 
 **Estabelecimento suspenso:** a suspensão pela plataforma (6.6) emite `ESTABELECIMENTO_SUSPENSO`,
 e **todas** as conexões daquele estabelecimento fecham com `4001`. O painel tenta se autenticar de

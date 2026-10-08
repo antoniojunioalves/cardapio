@@ -223,7 +223,7 @@ export function useConfiguracoes(slug: string) {
 export function useSalvarConfiguracoes(slug: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (dados: DadosDoFormulario) =>
+    mutationFn: (dados: Partial<DadosDoFormulario>) =>
       comSessao<Configuracoes>('/api/v1/admin/settings', { method: 'PATCH', body: dados }),
     onSuccess: (salvas) => {
       queryClient.setQueryData(chaveDasConfiguracoes(slug), salvas)

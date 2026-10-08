@@ -102,6 +102,11 @@
       "description": "Primeiro usuário que não é o dono, ou o criado."
     },
     {
+      "key": "profileId",
+      "value": "",
+      "description": "O perfil \"Atendente\" do estabelecimento, ou o criado."
+    },
+    {
       "key": "menuProductId",
       "value": "",
       "description": "Produto escolhido pelo cardápio para o pedido."
@@ -576,7 +581,7 @@
                 "settings"
               ]
             },
-            "description": "Só os campos enviados mudam. O nome e o fuso são gravados na mesma transação dos demais. O endereço do cardápio (`slug`) não muda por aqui."
+            "description": "Só os campos enviados mudam. O nome e o fuso são gravados na mesma transação dos demais. O endereço do cardápio (`slug`) não muda por aqui.\n\nExige `settings:update`. Pausar e retomar o recebimento de pedidos (`isAcceptingOrders`) é a exceção: basta `orders:pause`. Um campo enviado com o valor que já tinha não pede permissão."
           }
         },
         {
@@ -935,7 +940,7 @@
                 "categories"
               ]
             },
-            "description": ""
+            "description": "Quem vê o cardápio vê as categorias dele: a permissão é `products:read`."
           }
         },
         {
@@ -1343,7 +1348,7 @@
                 }
               ]
             },
-            "description": "Só os campos enviados mudam. Trocar de categoria sem informar `sortOrder` põe o produto no fim da categoria nova."
+            "description": "Só os campos enviados mudam. Trocar de categoria sem informar `sortOrder` põe o produto no fim da categoria nova.\n\nA permissão é a do que **muda**: `products:price` para o preço, `products:availability` para o `isAvailable` e `products:update` para o resto. Um campo enviado com o valor que já tinha não pede permissão."
           }
         },
         {
@@ -1519,7 +1524,7 @@
                 "option-groups"
               ]
             },
-            "description": "Tamanho, adicionais e remoções são todos grupos — muda o mínimo e o máximo. `isRequired` é derivado de `minSelections >= 1`. O grupo é reutilizável: crie \"Adicionais\" uma vez e ligue a vários produtos."
+            "description": "Tamanho, adicionais e remoções são todos grupos — muda o mínimo e o máximo. `isRequired` é derivado de `minSelections >= 1`. O grupo é reutilizável: crie \"Adicionais\" uma vez e ligue a vários produtos.\n\nExige `products:update`; com alguma opção com acréscimo, também `products:price`."
           }
         },
         {
@@ -1587,7 +1592,7 @@
                 }
               ]
             },
-            "description": "Opções com `id` são alteradas, sem `id` são criadas, e as ausentes são removidas. A alteração vale para todos os produtos que usam o grupo.\n\nOpção sem `id` é criada; para manter uma opção existente, mande o `id` dela."
+            "description": "Opções com `id` são alteradas, sem `id` são criadas, e as ausentes são removidas. A alteração vale para todos os produtos que usam o grupo.\n\nA permissão é a do que **muda**: `products:price` para o acréscimo de uma opção (e para uma opção nova que já nasce com acréscimo), `products:availability` para o `isAvailable` de uma opção que existe, e `products:update` para o resto.\n\nOpção sem `id` é criada; para manter uma opção existente, mande o `id` dela."
           }
         },
         {
@@ -1899,14 +1904,14 @@
                 }
               ]
             },
-            "description": "O status só avança — pode pular etapas, nunca voltar. `OUT_FOR_DELIVERY` só para entrega. Cancelar exige `reason`. Uma mudança feita por outra pessoa no meio responde 409 (`ORDER_CHANGED`).\n\nO status só avança. Para cancelar: `{ \"status\": \"CANCELLED\", \"reason\": \"Cliente desistiu\" }`."
+            "description": "O status só avança — pode pular etapas, nunca voltar. `OUT_FOR_DELIVERY` só para entrega. Cancelar exige `reason`. Uma mudança feita por outra pessoa no meio responde 409 (`ORDER_CHANGED`).\n\nCancelar (`CANCELLED`) exige `orders:cancel`; os demais status, `orders:update`. Uma permissão não inclui a outra.\n\nO status só avança. Para cancelar: `{ \"status\": \"CANCELLED\", \"reason\": \"Cliente desistiu\" }`."
           }
         }
       ]
     },
     {
       "name": "Usuários",
-      "description": "Usuários do painel e seus papéis",
+      "description": "As pessoas do painel e o perfil de cada uma",
       "item": [
         {
           "name": "Usuários do estabelecimento",
@@ -1917,7 +1922,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const usuarios = pm.response.json();",
-                  "const outro = Array.isArray(usuarios) && usuarios.find((u) => u.role?.code !== 'OWNER');",
+                  "const outro = Array.isArray(usuarios) && usuarios.find((u) => !u.isOwner);",
                   "if (outro) pm.collectionVariables.set('userId', outro.id);"
                 ]
               }
@@ -1938,7 +1943,7 @@
                 "users"
               ]
             },
-            "description": ""
+            "description": "O proprietário primeiro; os demais, por nome, cada um com o perfil."
           }
         },
         {
@@ -1964,7 +1969,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Atendente de Teste\",\n  \"email\": \"atendente-{{$timestamp}}@exemplo.com\",\n  \"password\": \"Senha-do-atendente\",\n  \"role\": \"STAFF\"\n}",
+              "raw": "{\n  \"name\": \"Atendente de Teste\",\n  \"email\": \"atendente-{{$timestamp}}@exemplo.com\",\n  \"password\": \"Senha-do-atendente\",\n  \"profileId\": \"{{profileId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1983,11 +1988,11 @@
                 "users"
               ]
             },
-            "description": "Com senha inicial, que o dono repassa à pessoa — ainda não há envio de convite por e-mail. Respeita o limite de usuários ativos do plano (409 `PLAN_USER_LIMIT`).\n\nO plano gratuito permite 2 usuários ativos."
+            "description": "Com o perfil dele e uma senha inicial, que quem cadastra repassa à pessoa — ainda não há envio de convite por e-mail. Respeita o limite de usuários ativos do plano (409 `PLAN_USER_LIMIT`). Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`).\n\nRode antes \"Perfis do estabelecimento\", que guarda o `profileId`. O plano gratuito permite 2 usuários ativos."
           }
         },
         {
-          "name": "Altera nome ou papel de um usuário",
+          "name": "Altera o nome ou o perfil de um usuário",
           "request": {
             "method": "PATCH",
             "header": [
@@ -1998,7 +2003,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"ADMIN\"\n}",
+              "raw": "{\n  \"profileId\": \"{{profileId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2024,7 +2029,7 @@
                 }
               ]
             },
-            "description": ""
+            "description": "Ninguém muda o próprio perfil (409 `CANNOT_CHANGE_OWN_PROFILE`), e o proprietário não tem perfil (409 `OWNER_HAS_NO_PROFILE`). Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`)."
           }
         },
         {
@@ -2052,7 +2057,7 @@
                 }
               ]
             },
-            "description": ""
+            "description": "Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`)."
           }
         },
         {
@@ -2080,7 +2085,159 @@
                 }
               ]
             },
-            "description": ""
+            "description": "Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Perfis",
+      "description": "Os conjuntos de permissões que o estabelecimento monta e dá às pessoas. O proprietário tem sempre todas, e não tem perfil.",
+      "item": [
+        {
+          "name": "Perfis do estabelecimento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const perfis = pm.response.json();",
+                  "const atendente = Array.isArray(perfis) && (perfis.find((p) => p.name === 'Atendente') ?? perfis[0]);",
+                  "if (atendente) pm.collectionVariables.set('profileId', atendente.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/profiles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "profiles"
+              ]
+            },
+            "description": "Por nome, cada um com as permissões e quantas pessoas o têm."
+          }
+        },
+        {
+          "name": "Cria um perfil",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set('profileId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Caixa {{$timestamp}}\",\n  \"description\": \"Atende, cancela pedido e pausa o recebimento.\",\n  \"permissions\": [\n    \"orders:read\",\n    \"orders:update\",\n    \"orders:cancel\",\n    \"orders:pause\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/profiles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "profiles"
+              ]
+            },
+            "description": "As permissões são completadas com o que cada uma exige: quem altera os produtos vê o cardápio. Código que não existe responde 400 `UNKNOWN_PERMISSION`; nome repetido, 409 `PROFILE_NAME_TAKEN`. Ninguém põe num perfil uma permissão que não tem, nem mexe num perfil que tem mais do que ele (403 `PROFILE_OUT_OF_REACH`). O proprietário tem todas.\n\nAs permissões são as do catálogo (`recurso:acao`); o que cada uma exige entra junto."
+          }
+        },
+        {
+          "name": "Altera um perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Caixa\",\n  \"description\": \"Atende e marca o que esgotou.\",\n  \"permissions\": [\n    \"orders:read\",\n    \"orders:update\",\n    \"products:availability\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/profiles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "profiles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{profileId}}"
+                }
+              ]
+            },
+            "description": "O nome, a descrição e a lista inteira das permissões. Vale na hora para todos que têm o perfil. Ninguém altera o perfil que tem (409 `CANNOT_CHANGE_OWN_PROFILE`). Ninguém põe num perfil uma permissão que não tem, nem mexe num perfil que tem mais do que ele (403 `PROFILE_OUT_OF_REACH`). O proprietário tem todas.\n\nA lista inteira das permissões: o que não vier sai do perfil."
+          }
+        },
+        {
+          "name": "Exclui um perfil",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/profiles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "profiles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{profileId}}"
+                }
+              ]
+            },
+            "description": "Com alguém dentro, não se exclui (409 `PROFILE_IN_USE`). Ninguém põe num perfil uma permissão que não tem, nem mexe num perfil que tem mais do que ele (403 `PROFILE_OUT_OF_REACH`). O proprietário tem todas."
           }
         }
       ]

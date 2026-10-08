@@ -2,6 +2,7 @@ import { mensagemDoProblemaDoGrupo, problemasDoGrupoDeOpcoes } from '@repo/share
 import { asc, count, eq, inArray } from 'drizzle-orm'
 
 import { recordAudit } from '../audit/record.js'
+import { exigirPermissao, type Ator } from '../auth/permissions.js'
 import {
   optionGroups,
   options,
@@ -49,6 +50,14 @@ export interface DadosDoGrupo {
   options: readonly DadosDaOpcao[]
 }
 
+/** Do grupo gravado, o que a alteração pode mudar. */
+type GrupoGravado = Pick<
+  OptionGroup,
+  'name' | 'description' | 'minSelections' | 'maxSelections'
+> & {
+  options: readonly Pick<Option, 'id' | 'name' | 'priceDeltaInCents' | 'isAvailable'>[]
+}
+
 const grupoNaoEncontrado = () => new NotFoundError('Grupo de opções não encontrado.')
 
 /**
@@ -74,6 +83,53 @@ function exigirGrupoCoerente(dados: DadosDoGrupo): void {
       problemas,
     )
   }
+}
+
+/**
+ * As permissões que gravar o grupo usa, pelo que **muda** em relação ao que
+ * está gravado (`anterior` ausente: o grupo é novo). São as três do produto:
+ *
+ * - `products:price` — o acréscimo de uma opção que existe, ou uma opção nova
+ *   que já nasce com acréscimo. Sem ela, opção nova só de graça;
+ * - `products:availability` — o "disponível" de uma opção que existe;
+ * - `products:update` — o resto: o nome e os limites do grupo, e criar,
+ *   renomear, tirar e reordenar opções.
+ *
+ * A tela envia o grupo inteiro; o que veio igual ao gravado não pede permissão.
+ */
+export function permissoesParaGravarOGrupo(
+  anterior: GrupoGravado | null,
+  dados: DadosDoGrupo,
+): string[] {
+  const gravadas = new Map((anterior?.options ?? []).map((o) => [o.id, o]))
+  // Cada opção enviada com a gravada de mesmo id. Um id que não é do grupo
+  // conta como opção nova aqui, e é recusado mais adiante, ao gravar.
+  const pares = dados.options.map((o) => ({ nova: o, gravada: gravadas.get(o.id ?? '') }))
+  const mantidas = pares.flatMap((par) => (par.gravada ? [par.gravada.id] : []))
+
+  const preco = pares.some(({ nova, gravada }) =>
+    gravada ? nova.priceDeltaInCents !== gravada.priceDeltaInCents : nova.priceDeltaInCents !== 0,
+  )
+  const disponibilidade = pares.some(
+    ({ nova, gravada }) => gravada && (nova.isAvailable ?? true) !== gravada.isAvailable,
+  )
+  const resto =
+    !anterior ||
+    dados.name !== anterior.name ||
+    (dados.description ?? null) !== anterior.description ||
+    dados.minSelections !== anterior.minSelections ||
+    dados.maxSelections !== anterior.maxSelections ||
+    // Uma opção criada, uma tirada, ou as mesmas em outra ordem.
+    mantidas.length !== dados.options.length ||
+    mantidas.some((id, indice) => id !== anterior.options[indice]?.id) ||
+    mantidas.length !== anterior.options.length ||
+    pares.some(({ nova, gravada }) => gravada && nova.name !== gravada.name)
+
+  return [
+    ...(preco ? ['products:price'] : []),
+    ...(disponibilidade ? ['products:availability'] : []),
+    ...(resto ? ['products:update'] : []),
+  ]
 }
 
 // --- Acesso a dados ---------------------------------------------------------
@@ -224,9 +280,11 @@ export async function obterGrupo(context: TenantContext, id: string): Promise<Gr
 
 export async function criarGrupo(
   context: TenantContext,
-  actorUserId: string,
+  ator: Ator,
   dados: DadosDoGrupo,
 ): Promise<GrupoComOpcoes> {
+  const actorUserId = ator.id
+  exigirPermissao(ator, ...permissoesParaGravarOGrupo(null, dados))
   exigirGrupoCoerente(dados)
 
   return withTenant(context, async (tx) => {
@@ -274,15 +332,18 @@ export async function criarGrupo(
  */
 export async function atualizarGrupo(
   context: TenantContext,
-  actorUserId: string,
+  ator: Ator,
   id: string,
   dados: DadosDoGrupo,
 ): Promise<GrupoComOpcoes> {
+  const actorUserId = ator.id
   exigirGrupoCoerente(dados)
 
   return withTenant(context, async (tx) => {
     const anterior = await buscarGrupo(tx, id)
     if (!anterior) throw grupoNaoEncontrado()
+
+    exigirPermissao(ator, ...permissoesParaGravarOGrupo(anterior, dados))
 
     await tx
       .update(optionGroups)

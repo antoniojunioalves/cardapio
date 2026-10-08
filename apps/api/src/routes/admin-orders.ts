@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
-import { currentUser, requireAuth, tenantContextOf } from '../auth/middleware.js'
+import { currentUser, requireAnyOf, requireAuth, tenantContextOf } from '../auth/middleware.js'
+import { exigirPermissao } from '../auth/permissions.js'
 import { orderStatus } from '../db/schema/index.js'
 import {
   listarPedidos,
@@ -216,7 +217,9 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
         description:
           'O status só avança — pode pular etapas, nunca voltar. `OUT_FOR_DELIVERY` só para ' +
           'entrega. Cancelar exige `reason`. Uma mudança feita por outra pessoa no meio ' +
-          'responde 409 (`ORDER_CHANGED`).',
+          'responde 409 (`ORDER_CHANGED`).\n\n' +
+          'Cancelar (`CANCELLED`) exige `orders:cancel`; os demais status, `orders:update`. ' +
+          'Uma permissão não inclui a outra.',
         params: z.object({ id: z.uuid() }),
         body: z.object({
           status,
@@ -225,10 +228,15 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
         response: { 200: pedidoSchema },
         security: seguranca,
       },
-      onRequest: requireAuth('orders:update'),
+      onRequest: requireAnyOf('orders:update', 'orders:cancel'),
     },
-    async (request) =>
-      apresentar(
+    async (request) => {
+      // Cancelar é uma permissão à parte: quem toca os pedidos não os cancela por isso.
+      exigirPermissao(
+        currentUser(request),
+        request.body.status === 'CANCELLED' ? 'orders:cancel' : 'orders:update',
+      )
+      return apresentar(
         await mudarStatusDoPedido(
           tenantContextOf(request),
           currentUser(request).id,
@@ -236,6 +244,7 @@ export function adminOrderRoutes(instance: FastifyInstance): void {
           request.body.status,
           request.body.reason ?? null,
         ),
-      ),
+      )
+    },
   )
 }

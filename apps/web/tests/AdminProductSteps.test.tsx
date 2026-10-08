@@ -1175,7 +1175,7 @@ describe('quem só pode ver', () => {
 
     expect(await screen.findByLabelText('Preço (R$)')).toBeDisabled()
     expect(screen.getByLabelText('Categoria')).toBeDisabled()
-    expect(screen.getByRole('note')).toHaveTextContent('só quem administra o estabelecimento')
+    expect(screen.getByRole('note')).toHaveTextContent('o seu perfil não permite alterá-lo')
     expect(screen.queryByRole('button', { name: /Salvar|Excluir|Voltar/ })).toBeNull()
     expect(screen.queryByLabelText('Enviar foto')).toBeNull()
 

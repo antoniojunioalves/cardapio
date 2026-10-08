@@ -20,13 +20,14 @@ import {
 import { corpoMultipart, PNG } from './helpers/imagens.js'
 
 const TODAS = [
-  'categories:read',
   'categories:create',
   'categories:update',
   'categories:delete',
   'products:read',
   'products:create',
   'products:update',
+  'products:price',
+  'products:availability',
   'products:delete',
 ]
 
@@ -48,10 +49,9 @@ async function entrar(f: TenantDeTeste): Promise<string> {
 beforeAll(async () => {
   app = await buildApp({ rateLimit: false })
   await app.ready()
-  dono = await criarTenantComUsuario({ permissoes: TODAS, permissoesReais: true })
+  dono = await criarTenantComUsuario({ permissoes: TODAS })
   atendente = await criarTenantComUsuario({
-    permissoes: ['categories:read', 'products:read'],
-    permissoesReais: true,
+    permissoes: ['products:read'],
   })
   token = await entrar(dono)
   tokenDoAtendente = await entrar(atendente)

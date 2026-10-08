@@ -58,10 +58,11 @@ beforeAll(async () => {
       'products:read',
       'products:create',
       'products:update',
+      'products:price',
+      'products:availability',
       'products:delete',
       'categories:create',
     ],
-    permissoesReais: true,
   })
   token = (
     await app.inject({

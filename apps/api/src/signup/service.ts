@@ -11,6 +11,7 @@ import { enviarSemDerrubar } from '../email/index.js'
 import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
 import { AppError, ConflictError } from '../lib/errors.js'
 import { infraLogger } from '../lib/logger.js'
+import { criarPerfisProntos } from '../profiles/repository.js'
 import {
   tenantContextFromSignup,
   tenantContextFromToken,
@@ -26,7 +27,6 @@ import {
 import {
   buscarDono,
   buscarEstabelecimento,
-  buscarPapel,
   buscarPlanoAtivo,
   buscarTokenDeConfirmacao,
   inserirAssinatura,
@@ -37,12 +37,10 @@ import {
   marcarTokenUsado,
   publicarEstabelecimento,
   ultimoEnvio,
-  vincularPapel,
 } from './repository.js'
 
 /** O cadastro pela página inicial assina sempre o plano gratuito; pagos ficam para a cobrança (ROADMAP). */
 const PLANO_DO_CADASTRO = 'FREE'
-const PAPEL_DO_DONO = 'OWNER'
 const INTERVALO_ENTRE_ENVIOS_MS = 60_000
 const HORA_EM_MS = 60 * 60_000
 
@@ -72,8 +70,8 @@ export interface NovoEstabelecimento {
 }
 
 /**
- * Cria um estabelecimento: o registro, a assinatura do plano e o dono com o
- * papel OWNER. As configurações não entram — nascem sob demanda na primeira
+ * Cria um estabelecimento: o registro, a assinatura do plano, os perfis prontos
+ * e o proprietário. As configurações não entram — nascem sob demanda na primeira
  * leitura (`ensureSettings`), como sempre nasceram.
  *
  * Recebe a transação, e não abre a sua, porque quem chama compõe mais trabalho
@@ -87,14 +85,13 @@ export async function criarEstabelecimento(
   dados: NovoEstabelecimento,
 ): Promise<{ donoId: string }> {
   const plano = await buscarPlanoAtivo(tx, dados.planoCodigo)
-  const papel = await buscarPapel(tx, PAPEL_DO_DONO)
 
-  if (!plano || !papel) {
+  if (!plano) {
     // Configuração da plataforma, não erro de quem se cadastra: o seed de
-    // planos e papéis não rodou neste banco.
+    // planos não rodou neste banco.
     infraLogger.error(
-      { plano: dados.planoCodigo, planoExiste: Boolean(plano), papelExiste: Boolean(papel) },
-      'cadastro sem o plano ou o papel do dono no banco — rode os seeds da plataforma',
+      { plano: dados.planoCodigo },
+      'cadastro sem o plano no banco — rode os seeds da plataforma',
     )
     throw new AppError(
       'O cadastro está indisponível no momento. Tente de novo mais tarde.',
@@ -138,7 +135,7 @@ export async function criarEstabelecimento(
     }
     throw error
   })
-  await vincularPapel(tx, { tenantId: context.tenantId, userId: dono.id, roleId: papel.id })
+  await criarPerfisProntos(tx, context.tenantId)
 
   await recordAudit(tx, context, {
     action: 'tenant.created',

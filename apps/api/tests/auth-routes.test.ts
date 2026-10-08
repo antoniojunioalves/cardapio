@@ -9,7 +9,6 @@ import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
   criarTenantComUsuario,
-  permissaoDe,
   removerTenantDeTeste,
   SENHA_PADRAO,
   sessaoDe,
@@ -49,10 +48,8 @@ describe('POST /api/v1/auth/login', () => {
 
     const sessao = sessaoDe<RespostaSessao>(resposta)
     expect(sessao.user).toMatchObject({ id: fixture.userId, tenantId: fixture.tenantId })
-    expect(sessao.user.permissions).toEqual([
-      permissaoDe(fixture, 'orders:update'),
-      permissaoDe(fixture, 'products:read'),
-    ])
+    // As do perfil dele, na ordem do catálogo.
+    expect(sessao.user.permissions).toEqual(['orders:update', 'products:read'])
     expect(sessao.accessToken.split('.')).toHaveLength(3)
     expect(sessao.refreshToken.startsWith(`${fixture.tenantId}.`)).toBe(true)
   })

@@ -9,7 +9,7 @@
  * continua marcado em `configuracoes/horarios`.
  */
 
-export type IconeDoMenu = 'inicio' | 'pedidos' | 'cardapio' | 'configuracoes'
+export type IconeDoMenu = 'inicio' | 'pedidos' | 'cardapio' | 'equipe' | 'configuracoes'
 
 export interface ItemDoMenu {
   rotulo: string
@@ -30,6 +30,8 @@ export const MENU: readonly ItemDoMenu[] = [
   { rotulo: 'Pedidos', caminho: 'pedidos', icone: 'pedidos', permissao: 'orders:read' },
   // Fica entre as telas do dia a dia: é aqui que se marca o que acabou.
   { rotulo: 'Cardápio', caminho: 'cardapio', icone: 'cardapio', permissao: 'products:read' },
+  // Quem entra no painel e o que cada pessoa pode: ajusta-se de vez em quando.
+  { rotulo: 'Equipe', caminho: 'equipe', icone: 'equipe', permissao: 'users:read', rodape: true },
   {
     rotulo: 'Configurações',
     caminho: 'configuracoes',
@@ -59,6 +61,15 @@ export const ABAS_DAS_CONFIGURACOES: readonly { rotulo: string; caminho: string 
 export const ABAS_DO_CARDAPIO: readonly { rotulo: string; caminho: string }[] = [
   { rotulo: 'Produtos', caminho: 'cardapio' },
   { rotulo: 'Opcionais', caminho: 'cardapio/opcionais' },
+]
+
+/**
+ * As abas da Equipe: as pessoas que entram no painel e os perfis — os conjuntos
+ * de permissões que cada uma recebe. As duas pedem a permissão do item do menu.
+ */
+export const ABAS_DA_EQUIPE: readonly { rotulo: string; caminho: string }[] = [
+  { rotulo: 'Pessoas', caminho: 'equipe' },
+  { rotulo: 'Perfis', caminho: 'equipe/perfis' },
 ]
 
 /** Os itens que as permissões da pessoa alcançam, na ordem do menu. */

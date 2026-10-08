@@ -11,6 +11,7 @@ import {
   useGruposDoProduto,
   type GrupoDeOpcoes,
 } from '../option-groups'
+import { podeAlgoNoProduto, type PodeNoProduto } from '../permissions'
 import { useAlteracaoDoPasso } from '../product-steps'
 import { BotoesDeOrdem, EditarEExcluir } from './catalog-parts'
 import { botaoDeTexto, botaoDeTextoPerigo, Secao } from './form-parts'
@@ -20,7 +21,12 @@ import { RodapeDoPasso } from './Passos'
 interface StepOptionsProps {
   slug: string
   produto: Produto
-  podeEditar: boolean
+  /**
+   * Escolher os grupos do produto é de quem altera o produto. A janela de um
+   * grupo abre também para quem só mexe em preço ou no que esgotou: é nela que
+   * se muda o acréscimo de uma opção e se marca a que acabou.
+   */
+  pode: PodeNoProduto
   aoAlterar: (alterado: boolean) => void
   /** O passo foi gravado, ou não tinha o que gravar: é o último, e encerra. */
   aoAvancar: () => void
@@ -44,11 +50,12 @@ const mesmaLista = (a: readonly string[], b: readonly string[]) =>
 export function StepOptions({
   slug,
   produto,
-  podeEditar,
+  pode,
   aoAlterar,
   aoAvancar,
   aoVoltar,
 }: StepOptionsProps) {
+  const podeEditar = pode.resto
   const doProduto = useGruposDoProduto(slug, produto.id)
   const todos = useGrupos(slug)
   const definir = useDefinirGruposDoProduto(slug, produto.id)
@@ -124,7 +131,7 @@ export function StepOptions({
                       <EditarEExcluir
                         quem={`o grupo ${grupo.name}`}
                         editar={
-                          podeEditar
+                          podeAlgoNoProduto(pode)
                             ? () => {
                                 setJanela({ grupo })
                               }
@@ -238,6 +245,7 @@ export function StepOptions({
         <OptionGroupSheet
           slug={slug}
           grupo={janela.grupo}
+          pode={pode}
           aoFechar={() => {
             setJanela(null)
           }}

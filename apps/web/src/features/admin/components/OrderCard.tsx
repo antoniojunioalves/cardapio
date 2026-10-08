@@ -16,6 +16,8 @@ import type { PedidoDoPainel } from '../types'
 interface OrderCardProps {
   pedido: PedidoDoPainel
   podeAtualizar: boolean
+  /** A permissão de cancelar pedidos, que não vem junto com a de mudar o status. */
+  permiteCancelar: boolean
   atualizando: boolean
   aoMudarStatus: (status: StatusDoPedido) => void
   aoCancelar: () => void
@@ -38,12 +40,14 @@ const CORES: Record<StatusDoPedido, string> = {
 export function OrderCard({
   pedido,
   podeAtualizar,
+  permiteCancelar,
   atualizando,
   aoMudarStatus,
   aoCancelar,
 }: OrderCardProps) {
   const [aberto, setAberto] = useState(pedido.status === 'RECEIVED')
   const acoes = podeAtualizar ? acoesDoPedido(pedido) : []
+  const cancelavel = permiteCancelar && podeCancelar(pedido)
   const idDoDetalhe = `detalhe-${pedido.id}`
 
   return (
@@ -154,7 +158,7 @@ export function OrderCard({
             )}
           </dl>
 
-          {(acoes.length > 0 || (podeAtualizar && podeCancelar(pedido))) && (
+          {(acoes.length > 0 || cancelavel) && (
             <div className="flex flex-wrap gap-2">
               {acoes.map((status, i) => (
                 <button
@@ -173,7 +177,7 @@ export function OrderCard({
                   {ACAO_PARA_O_STATUS[status]}
                 </button>
               ))}
-              {podeAtualizar && podeCancelar(pedido) && (
+              {cancelavel && (
                 <button
                   type="button"
                   disabled={atualizando}

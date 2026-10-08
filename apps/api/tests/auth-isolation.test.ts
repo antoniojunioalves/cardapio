@@ -6,7 +6,7 @@ import { buildApp } from '../src/app.js'
 import { recordAudit } from '../src/audit/record.js'
 import { tenantDoEmail } from '../src/auth/login-lookup.js'
 import { closeDatabase, db } from '../src/db/index.js'
-import { auditLogs, refreshTokens, userRoles, users } from '../src/db/schema/index.js'
+import { auditLogs, profiles, refreshTokens, users } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant, type TenantTransaction } from '../src/tenant/with-tenant.js'
 import { hashPassword } from '../src/auth/password.js'
@@ -165,11 +165,11 @@ describe('login por e-mail', () => {
   })
 
   it('não abre nenhuma outra tabela', async () => {
-    const papeis = await comEmailEmLogin(tenantA.email, (tx) =>
-      tx.select({ userId: userRoles.userId }).from(userRoles),
+    const perfis = await comEmailEmLogin(tenantA.email, (tx) =>
+      tx.select({ id: profiles.id }).from(profiles),
     )
 
-    expect(papeis).toEqual([])
+    expect(perfis).toEqual([])
   })
 
   it('o e-mail em login não sobrevive ao fim da transação', async () => {
@@ -206,25 +206,33 @@ describe('login por e-mail', () => {
   })
 })
 
-describe('papéis atribuídos', () => {
+describe('perfis', () => {
   it('não vazam entre estabelecimentos', async () => {
     const deA = await withTenant(contextoDe(tenantA), (tx) =>
-      tx.select({ userId: userRoles.userId }).from(userRoles),
+      tx.select({ id: profiles.id }).from(profiles),
     )
 
-    expect(deA).toEqual([{ userId: tenantA.userId }])
+    expect(deA).toEqual([{ id: tenantA.profileId }])
   })
 
-  it('o Tenant A não concede a si mesmo um papel dentro do Tenant B', async () => {
+  it('o Tenant A não cria um perfil dentro do Tenant B', async () => {
     await expect(
       withTenant(contextoDe(tenantA), (tx) =>
-        tx.insert(userRoles).values({
-          tenantId: tenantB.tenantId,
-          userId: tenantB.userId,
-          roleId: tenantB.roleId,
-        }),
+        tx.insert(profiles).values({ tenantId: tenantB.tenantId, name: 'Infiltrado' }),
       ),
     ).rejects.toThrow()
+  })
+
+  it('o Tenant A não altera um perfil do Tenant B', async () => {
+    const alterados = await withTenant(contextoDe(tenantA), (tx) =>
+      tx
+        .update(profiles)
+        .set({ name: 'Tomado' })
+        .where(eq(profiles.id, tenantB.profileId ?? ''))
+        .returning({ id: profiles.id }),
+    )
+
+    expect(alterados).toEqual([])
   })
 })
 
@@ -333,18 +341,14 @@ describe('registro de auditoria', () => {
  * banco agora recusa.
  */
 describe('referências a usuário de outro estabelecimento', () => {
-  it('o Tenant A não atribui papel a um usuário do Tenant B', async () => {
-    // É o IDOR que a futura rota "atribuir papel" abriria: o dono de A manda
-    // o UUID de um usuário de B no corpo da requisição.
+  it('o Tenant A não dá a um usuário seu um perfil do Tenant B', async () => {
+    // É o IDOR que a rota "mudar o perfil" abriria: o dono de A manda o UUID de
+    // um perfil de B no corpo da requisição. A chave composta recusa.
     await expect(
       withTenant(contextoDe(tenantA), (tx) =>
-        tx.insert(userRoles).values({
-          tenantId: tenantA.tenantId,
-          userId: tenantB.userId,
-          roleId: tenantA.roleId,
-        }),
+        tx.update(users).set({ profileId: tenantB.profileId }).where(eq(users.id, tenantA.userId)),
       ),
-    ).rejects.toThrow()
+    ).rejects.toMatchObject({ cause: { constraint: 'users_perfil_mesmo_tenant' } })
   })
 
   it('o Tenant A não grava sessão para um usuário do Tenant B', async () => {

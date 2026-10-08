@@ -1,7 +1,8 @@
 import type { FastifyReply, FastifyRequest, onRequestAsyncHookHandler } from 'fastify'
 
-import { ForbiddenError, UnauthorizedError } from '../lib/errors.js'
+import { UnauthorizedError } from '../lib/errors.js'
 import { tenantContextFromUser, type TenantContext } from '../tenant/context.js'
+import { exigirAlgumaPermissao, exigirPermissao } from './permissions.js'
 import { loadAuthenticatedUser, type AuthenticatedUser } from './service.js'
 import { verifyAccessToken } from './tokens.js'
 
@@ -42,7 +43,10 @@ const authenticate: onRequestAsyncHookHandler = async (request: FastifyRequest) 
   request.currentUser = usuario
 }
 
-function authorize(...required: readonly string[]): onRequestAsyncHookHandler {
+function authorize(
+  conferir: typeof exigirPermissao,
+  required: readonly string[],
+): onRequestAsyncHookHandler {
   return (request: FastifyRequest, _reply: FastifyReply) => {
     const usuario = request.currentUser
 
@@ -50,15 +54,7 @@ function authorize(...required: readonly string[]): onRequestAsyncHookHandler {
     // 403 de propósito: o problema é não sabermos quem é, não a permissão.
     if (!usuario) throw new UnauthorizedError('Autenticação necessária.')
 
-    const faltando = required.filter((permissao) => !usuario.permissions.includes(permissao))
-
-    if (faltando.length > 0) {
-      throw new ForbiddenError('Você não tem permissão para esta ação.', {
-        required: [...required],
-        missing: faltando,
-      })
-    }
-
+    conferir(usuario, ...required)
     return Promise.resolve()
   }
 }
@@ -81,7 +77,27 @@ function authorize(...required: readonly string[]): onRequestAsyncHookHandler {
  * `route-guard.test.ts` confere toda rota do painel.
  */
 export function requireAuth(...permissions: readonly string[]): onRequestAsyncHookHandler[] {
-  return permissions.length > 0 ? [authenticate, authorize(...permissions)] : [authenticate]
+  return permissions.length > 0
+    ? [authenticate, authorize(exigirPermissao, permissions)]
+    : [authenticate]
+}
+
+/**
+ * Como o `requireAuth`, para a rota em que a permissão depende do que o pedido
+ * muda: **uma** das permissões basta para entrar.
+ *
+ * Entrar não é poder: qual delas o pedido usa, só o serviço sabe, comparando
+ * com o que está gravado — e é ele que confere, com `exigirPermissao`. Aqui só
+ * fica de fora quem não poderia fazer nenhuma das coisas que a rota faz.
+ *
+ *     app.patch('/products/:id', {
+ *       onRequest: requireAnyOf('products:update', 'products:price', 'products:availability'),
+ *     }, handler)
+ */
+export function requireAnyOf(
+  ...permissions: readonly [string, string, ...string[]]
+): onRequestAsyncHookHandler[] {
+  return [authenticate, authorize(exigirAlgumaPermissao, permissions)]
 }
 
 /** Recupera o usuário autenticado com tipo garantido, dentro de uma rota protegida. */

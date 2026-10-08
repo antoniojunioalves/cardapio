@@ -6,6 +6,7 @@ import { formatarPreco } from '@/utils/money'
 
 import { resumoDaCategoria, useDisponibilidade, type Categoria, type Produto } from '../catalog'
 import { caminhoDoPainel } from '../menu'
+import { podeAlgoNoProduto, type PodeNoProduto } from '../permissions'
 import { BotoesDeOrdem, EditarEExcluir, Miniatura } from './catalog-parts'
 
 const selo = 'text-caption rounded-pill px-2 py-0.5 font-semibold'
@@ -14,7 +15,8 @@ interface PodeNoCardapio {
   alterarCategoria: boolean
   excluirCategoria: boolean
   criarProduto: boolean
-  alterarProduto: boolean
+  /** Num produto que existe: o preço, o que esgotou e o resto são separados. */
+  produto: PodeNoProduto
   excluirProduto: boolean
 }
 
@@ -174,7 +176,7 @@ export function MenuCategorySection({
                 key={produto.id}
                 slug={slug}
                 produto={produto}
-                podeAlterar={pode.alterarProduto}
+                pode={pode.produto}
                 podeExcluir={pode.excluirProduto}
                 aoExcluir={() => {
                   aoExcluirProduto(produto)
@@ -201,7 +203,7 @@ const novoProduto =
 interface LinhaDoProdutoProps {
   slug: string
   produto: Produto
-  podeAlterar: boolean
+  pode: PodeNoProduto
   podeExcluir: boolean
   aoExcluir: () => void
   primeiro: boolean
@@ -217,7 +219,7 @@ interface LinhaDoProdutoProps {
 function LinhaDoProduto({
   slug,
   produto,
-  podeAlterar,
+  pode,
   podeExcluir,
   aoExcluir,
   primeiro,
@@ -243,7 +245,9 @@ function LinhaDoProduto({
           <EditarEExcluir
             quem={produto.name}
             editar={
-              podeAlterar ? caminhoDoPainel(slug, `cardapio/produtos/${produto.id}`) : undefined
+              podeAlgoNoProduto(pode)
+                ? caminhoDoPainel(slug, `cardapio/produtos/${produto.id}`)
+                : undefined
             }
             aoExcluir={podeExcluir ? aoExcluir : undefined}
           />
@@ -258,7 +262,7 @@ function LinhaDoProduto({
           )}
         </p>
 
-        {podeAlterar && (
+        {pode.disponibilidade && (
           <label className="text-caption mt-1 flex w-fit items-center gap-2 text-content">
             <input
               type="checkbox"
@@ -280,7 +284,7 @@ function LinhaDoProduto({
         )}
       </div>
 
-      {podeAlterar && (
+      {pode.resto && (
         <BotoesDeOrdem
           quem={produto.name}
           primeiro={primeiro}

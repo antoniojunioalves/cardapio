@@ -8,6 +8,7 @@ import { TextField } from '@/components/TextField'
 import { ApiError } from '@/services/api'
 
 import {
+  alteracaoAoAlcance,
   alteracaoDoProduto,
   formularioDeProdutoSchema,
   produtoNovo,
@@ -21,6 +22,7 @@ import {
   type ValoresDoProduto,
 } from '../catalog'
 import { useImagemEscolhida } from '../image-choice'
+import { podeAlgoNoProduto, type PodeNoProduto } from '../permissions'
 import { useAlteracaoDoPasso } from '../product-steps'
 import { Marcavel, Secao } from './form-parts'
 import { ImageField, ImagemAEnviar } from './ImageField'
@@ -34,7 +36,11 @@ interface StepProductProps {
   categorias: readonly Categoria[]
   /** A categoria já escolhida num produto novo — a de onde a pessoa clicou em "Novo produto". */
   categoriaInicial?: string | undefined
-  podeEditar: boolean
+  /**
+   * O que o perfil da pessoa alcança neste produto: o preço, o "disponível" e
+   * o resto são permissões separadas. Num produto novo, quem cria alcança tudo.
+   */
+  pode: PodeNoProduto
   aoAlterar: (alterado: boolean) => void
   /** Produto ou combo, enquanto a pessoa escolhe: o combo tem um passo a mais. */
   aoMudarTipo: (tipo: Produto['type']) => void
@@ -60,7 +66,7 @@ export function StepProduct({
   produto,
   categorias,
   categoriaInicial,
-  podeEditar,
+  pode,
   aoAlterar,
   aoMudarTipo,
   aoCriar,
@@ -82,6 +88,7 @@ export function StepProduct({
   })
   const erros = formState.errors
   const camposAlterados = formState.isDirty
+  const podeEditar = podeAlgoNoProduto(pode)
   const tipo = useWatch({ control, name: 'type' })
 
   useAlteracaoDoPasso(camposAlterados || Boolean(foto.escolhida), aoAlterar)
@@ -107,7 +114,7 @@ export function StepProduct({
       return
     }
     alterar.mutate(
-      { id: produto.id, dados: alteracaoDoProduto(dados) },
+      { id: produto.id, dados: alteracaoAoAlcance(alteracaoDoProduto(dados), pode) },
       {
         onSuccess: (salvo) => {
           reset(produtoParaFormulario(salvo))
@@ -151,7 +158,7 @@ export function StepProduct({
           <div className="flex flex-col gap-stack lg:flex-row lg:items-start lg:gap-6">
             <div className="lg:shrink-0">
               {produto ? (
-                <FotoDoProduto slug={slug} produto={produto} podeEditar={podeEditar} />
+                <FotoDoProduto slug={slug} produto={produto} podeEditar={pode.resto} />
               ) : (
                 <ImagemAEnviar
                   rotulo="Foto"
@@ -167,6 +174,7 @@ export function StepProduct({
                 rotulo="Nome"
                 placeholder="X-Burger"
                 erro={erros.name?.message}
+                disabled={!pode.resto}
                 {...register('name')}
               />
               <TextField
@@ -175,12 +183,14 @@ export function StepProduct({
                 placeholder="0,00"
                 erro={erros.priceInCents?.message}
                 className="sm:max-w-48"
+                disabled={!pode.preco}
                 {...register('priceInCents')}
               />
               <Marcavel
                 type="checkbox"
                 titulo="Disponível"
                 descricao="Desmarque quando acabar: o produto continua no cardápio, marcado como esgotado."
+                disabled={!pode.disponibilidade}
                 {...register('isAvailable')}
               />
             </div>
@@ -188,6 +198,7 @@ export function StepProduct({
           <SelectField
             rotulo="Categoria"
             erro={erros.categoryId?.message}
+            disabled={!pode.resto}
             {...register('categoryId')}
           >
             {categorias.map((categoria) => (
@@ -200,6 +211,7 @@ export function StepProduct({
             rotulo="Descrição"
             dica="Opcional. O que vem nele, o tamanho, o que acompanha."
             erro={erros.description?.message}
+            disabled={!pode.resto}
             {...register('description')}
           />
         </Secao>

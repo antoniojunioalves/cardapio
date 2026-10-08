@@ -3,10 +3,8 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
   emailVerificationTokens,
   plans,
-  roles,
   subscriptions,
   tenants,
-  userRoles,
   users,
 } from '../db/schema/index.js'
 import type { TenantTransaction } from '../tenant/with-tenant.js'
@@ -15,7 +13,7 @@ import type { TenantTransaction } from '../tenant/with-tenant.js'
  * Acesso a dados do cadastro. Recebe a transação, nunca abre a sua.
  *
  * Toda escrita em tabela com escopo de tenant roda na transação do contexto do
- * estabelecimento, sob RLS. `tenants`, `plans` e `roles` não têm RLS — são o
+ * estabelecimento, sob RLS. `tenants` e `plans` não têm RLS — são o
  * registro de estabelecimentos e os catálogos da plataforma.
  */
 
@@ -29,18 +27,6 @@ export async function buscarPlanoAtivo(
     .where(and(eq(plans.code, codigo), eq(plans.isActive, true)))
     .limit(1)
   return plano ?? null
-}
-
-export async function buscarPapel(
-  tx: TenantTransaction,
-  codigo: string,
-): Promise<{ id: string } | null> {
-  const [papel] = await tx
-    .select({ id: roles.id })
-    .from(roles)
-    .where(eq(roles.code, codigo))
-    .limit(1)
-  return papel ?? null
 }
 
 export async function inserirEstabelecimento(
@@ -64,33 +50,27 @@ export async function inserirAssinatura(
   await tx.insert(subscriptions).values({ tenantId, planId })
 }
 
+/** O proprietário: quem cadastra o estabelecimento. Tem todas as permissões e não tem perfil. */
 export async function inserirDono(
   tx: TenantTransaction,
   dados: { tenantId: string; name: string; email: string; passwordHash: string },
 ): Promise<{ id: string }> {
-  const [dono] = await tx.insert(users).values(dados).returning({ id: users.id })
+  const [dono] = await tx
+    .insert(users)
+    .values({ ...dados, isOwner: true })
+    .returning({ id: users.id })
   if (!dono) throw new Error('o dono do estabelecimento não foi criado')
   return dono
 }
 
-export async function vincularPapel(
-  tx: TenantTransaction,
-  dados: { tenantId: string; userId: string; roleId: string },
-): Promise<void> {
-  await tx.insert(userRoles).values(dados)
-}
-
-/** O dono é quem tem o papel OWNER — quem cadastrou o estabelecimento. */
+/** O proprietário do estabelecimento — quem o cadastrou. */
 export async function buscarDono(
   tx: TenantTransaction,
 ): Promise<{ id: string; email: string } | null> {
   const [dono] = await tx
     .select({ id: users.id, email: users.email })
     .from(users)
-    .innerJoin(userRoles, eq(userRoles.userId, users.id))
-    .innerJoin(roles, eq(roles.id, userRoles.roleId))
-    .where(eq(roles.code, 'OWNER'))
-    .orderBy(users.createdAt)
+    .where(eq(users.isOwner, true))
     .limit(1)
   return dono ?? null
 }

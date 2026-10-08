@@ -119,7 +119,7 @@ const SESSAO = {
     tenantId: 't',
     name: 'Zé',
     email: 'ze@exemplo.com',
-    permissions: ['orders:read', 'orders:update'],
+    permissions: ['orders:read', 'orders:update', 'orders:cancel'],
   },
   establishment: { id: 't', slug: 'lanchonete-do-ze', name: 'Lanchonete do Zé', status: 'ACTIVE' },
 }
@@ -194,8 +194,8 @@ function logar() {
   useSessaoStore.getState().guardar(SESSAO)
 }
 
-async function abrirPainel(api: Api) {
-  logar()
+async function abrirPainel(api: Api, permissions = SESSAO.user.permissions) {
+  useSessaoStore.getState().guardar({ ...SESSAO, user: { ...SESSAO.user, permissions } })
   const fetch = mockarApi(api)
   abrir('/lanchonete-do-ze/admin/pedidos')
   await screen.findByRole('heading', { level: 1, name: 'Pedidos' })
@@ -665,6 +665,29 @@ describe('lista de pedidos', () => {
       status: 'CANCELLED',
       reason: 'Cliente desistiu',
     })
+  })
+
+  it('quem muda o status sem poder cancelar não tem o "Cancelar"', async () => {
+    await abrirPainel({ pedidos: [pedido()] }, ['orders:read', 'orders:update'])
+    const card = within(await screen.findByRole('article', { name: 'Pedido #1' }))
+
+    expect(card.getByRole('button', { name: 'Aceitar' })).toBeVisible()
+    expect(card.queryByRole('button', { name: 'Cancelar' })).toBeNull()
+  })
+
+  it('quem cancela sem poder mudar o status tem só o "Cancelar"', async () => {
+    await abrirPainel({ pedidos: [pedido()] }, ['orders:read', 'orders:cancel'])
+    const card = within(await screen.findByRole('article', { name: 'Pedido #1' }))
+
+    expect(card.getByRole('button', { name: 'Cancelar' })).toBeVisible()
+    expect(card.getAllByRole('button').map((b) => b.textContent)).not.toContain('Aceitar')
+  })
+
+  it('quem só vê os pedidos não tem botão de mudar nada', async () => {
+    await abrirPainel({ pedidos: [pedido()] }, ['orders:read'])
+    const card = within(await screen.findByRole('article', { name: 'Pedido #1' }))
+
+    expect(card.queryByRole('button', { name: /Aceitar|Cancelar/ })).toBeNull()
   })
 })
 
