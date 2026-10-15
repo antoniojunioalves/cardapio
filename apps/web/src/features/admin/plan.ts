@@ -11,7 +11,8 @@ export interface UsoDoPlano {
     ceiling: number | null
     state: 'LIVRE' | 'PERTO_DO_LIMITE' | 'NA_TOLERANCIA' | 'BLOQUEADO'
   }
-  users: { active: number; limit: number | null }
+  /** `invited`: os convites pendentes no prazo, que ocupam vaga como as pessoas ativas. */
+  users: { active: number; invited: number; limit: number | null }
   /** Todo produto conta: combo, esgotado, sem foto. */
   products: { used: number; limit: number | null }
   categories: { used: number; limit: number | null }

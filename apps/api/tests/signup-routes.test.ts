@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildApp } from '../src/app.js'
 import { closeDatabase, db } from '../src/db/index.js'
 import {
+  accounts,
   auditLogs,
   emailVerificationTokens,
   plans,
@@ -18,6 +19,8 @@ import { email, MemoryEmailProvider } from '../src/email/index.js'
 import { listarPerfis } from '../src/profiles/repository.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
+import { aceitarConvite, tokenDoConvitePara } from './helpers/convites.js'
+import { removerContasSemVinculo } from './helpers/fixtures.js'
 
 let app: FastifyInstance
 const PREFIXO = `cad${Math.random().toString(36).slice(2, 8)}`
@@ -65,7 +68,7 @@ function tokenDoEmailPara(para: string): string {
 
 interface RespostaDoCadastro {
   accessToken: string
-  user: { id: string; tenantId: string; email: string; permissions: string[] }
+  user: { id: string; tenantId: string; name: string; email: string; permissions: string[] }
   establishment: { id: string; slug: string; name: string; status: string }
   confirmationEmailSent: boolean
 }
@@ -97,6 +100,11 @@ afterAll(async () => {
   await app.close()
   // Em cascata: dono, assinatura, links, sessões e auditoria de cada um.
   await db.delete(tenants).where(like(tenants.slug, `${PREFIXO}-%`))
+  // As contas são globais: saem à parte, pelos e-mails que os testes usaram.
+  const slugs = Array.from({ length: contador }, (_, i) => `${PREFIXO}-${String(i + 1)}`)
+  await removerContasSemVinculo(
+    slugs.flatMap((slug) => [`${slug}@exemplo.com`, `${slug}-admin@exemplo.com`]),
+  )
   await closeDatabase()
 })
 
@@ -210,17 +218,23 @@ describe('cadastro pela página', () => {
     expect(aviso?.texto).toContain(para)
   })
 
-  it('e-mail que já tem conta responde 409 e não cria nada — o e-mail é o login, único na plataforma', async () => {
+  it('e-mail que já tem conta, com outra senha, responde 409 e não cria nada', async () => {
     const { corpo } = await cadastrarComSucesso()
     caixaDeSaida().limpar()
 
     // Maiúsculas e minúsculas são o mesmo e-mail.
     for (const email of [corpo.email, corpo.email.toUpperCase()]) {
-      const segundo = cadastro({ email })
+      const segundo = cadastro({ email, password: 'Outra-senha-456' })
       const resposta = await cadastrar(segundo)
 
       expect(resposta.statusCode).toBe(409)
-      expect(resposta.json<{ error: { code: string } }>().error.code).toBe('EMAIL_TAKEN')
+      expect(resposta.json<{ error: { code: string; message: string } }>().error).toEqual({
+        code: 'EMAIL_TAKEN',
+        message:
+          'Este e-mail já tem uma conta. Para abrir mais um estabelecimento com ele, use a ' +
+          'senha dessa conta.',
+        requestId: expect.any(String) as string,
+      })
       expect(resposta.cookies).toEqual([])
 
       // Nem estabelecimento pela metade: o endereço continua livre.
@@ -232,6 +246,57 @@ describe('cadastro pela página', () => {
     }
 
     expect(caixaDeSaida().enviados).toEqual([])
+  })
+
+  it('com a senha da conta, abre mais um estabelecimento, ligado à mesma conta', async () => {
+    const { corpo, dados: primeiro } = await cadastrarComSucesso()
+    caixaDeSaida().limpar()
+
+    const { dados: segundo } = await cadastrarComSucesso({
+      email: corpo.email.toUpperCase(),
+      ownerName: 'Outro Nome',
+    })
+
+    // A conta é a mesma: o nome do formulário é ignorado, e o e-mail ainda não foi
+    // confirmado — o segundo também espera a confirmação, com o link dele.
+    expect(segundo.user.name).toBe('Maria Dona')
+    expect(segundo.establishment.status).toBe('PENDING')
+    expect(segundo.confirmationEmailSent).toBe(true)
+    expect(caixaDeSaida().enviados.map((m) => m.para)).toContain(corpo.email.toLowerCase())
+
+    const contaDe = (tenantId: string) =>
+      withTenant(tenantContextFromUser(tenantId), (tx) =>
+        tx.select({ accountId: users.accountId, isOwner: users.isOwner }).from(users),
+      )
+    const [donoDoPrimeiro] = await contaDe(primeiro.establishment.id)
+    const [donoDoSegundo] = await contaDe(segundo.establishment.id)
+    expect(donoDoSegundo).toEqual({ accountId: donoDoPrimeiro?.accountId, isOwner: true })
+
+    // A conta vê os dois para trocar.
+    const lista = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/establishments',
+      headers: { authorization: `Bearer ${segundo.accessToken}` },
+    })
+    expect(
+      lista
+        .json<{ slug: string }[]>()
+        .map((e) => e.slug)
+        .sort(),
+    ).toEqual([primeiro.establishment.slug, segundo.establishment.slug].sort())
+  })
+
+  it('a conta com o e-mail confirmado abre o segundo já publicado, sem link para confirmar', async () => {
+    const { corpo } = await cadastrarComSucesso()
+    expect((await confirmar(tokenDoEmailPara(corpo.email.toLowerCase()))).statusCode).toBe(200)
+    caixaDeSaida().limpar()
+
+    const { corpo: segundo, dados } = await cadastrarComSucesso({ email: corpo.email })
+
+    expect(dados.establishment.status).toBe('ACTIVE')
+    expect(dados.confirmationEmailSent).toBe(false)
+    expect(caixaDeSaida().enviados.filter((m) => m.para === corpo.email.toLowerCase())).toEqual([])
+    expect((await cardapio(segundo.slug)).statusCode).toBe(200)
   })
 
   it('endereço em uso responde 409; endereço reservado, 400 com o motivo', async () => {
@@ -310,7 +375,10 @@ describe('confirmação do e-mail', () => {
 
     const tenantId = dados.establishment.id
     const [dono] = await withTenant(tenantContextFromUser(tenantId), (tx) =>
-      tx.select({ confirmadoEm: users.emailVerifiedAt }).from(users),
+      tx
+        .select({ confirmadoEm: accounts.emailVerifiedAt })
+        .from(users)
+        .innerJoin(accounts, eq(accounts.id, users.accountId)),
     )
     expect(dono?.confirmadoEm).toBeInstanceOf(Date)
 
@@ -439,13 +507,18 @@ describe('reenvio da confirmação', () => {
     const administrador = perfis
       .json<{ id: string; name: string }[]>()
       .find((perfil) => perfil.name === 'Administrador')
-    const criado = await app.inject({
+    const convidado = await app.inject({
       method: 'POST',
-      url: '/api/v1/admin/users',
+      url: '/api/v1/admin/invitations',
       headers: autorizacao,
-      payload: { ...admin, profileId: administrador?.id },
+      payload: { email: admin.email, profileId: administrador?.id },
     })
-    expect(criado.statusCode, criado.body).toBe(201)
+    expect(convidado.statusCode, convidado.body).toBe(201)
+    const aceite = await aceitarConvite(app, tokenDoConvitePara(admin.email), {
+      name: admin.name,
+      password: admin.password,
+    })
+    expect(aceite.statusCode, aceite.body).toBe(200)
 
     const login = await app.inject({
       method: 'POST',

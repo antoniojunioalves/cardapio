@@ -33,6 +33,9 @@ export default defineConfig({
       // sai da máquina. O aviso de novo cadastro vai para um endereço fixo.
       EMAIL_DRIVER: 'memory',
       PLATFORM_NOTIFY_EMAIL: 'plataforma@exemplo.com',
+      // Os testes da equipe convidam muita gente na mesma loja. O teto em si é
+      // testado em `invitations-routes.test.ts`, contra este mesmo valor.
+      INVITATION_EMAILS_PER_HOUR: '200',
     },
     // O pool de conexões é um singleton do módulo; rodar arquivos de teste em
     // processos separados evita que fechar o pool num afete os outros.

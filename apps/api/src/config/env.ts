@@ -87,6 +87,13 @@ export const envSchema = z
 
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
     RATE_LIMIT_WINDOW: z.string().min(1).default('1 minute'),
+    /**
+     * E-mails de convite para a equipe que cada estabelecimento manda por
+     * hora, criando ou reenviando. O convite vai para um endereço digitado por
+     * outra pessoa: sem teto, cancelar e convidar de novo viraria um jeito de
+     * mandar e-mail pelo nosso remetente sem parar.
+     */
+    INVITATION_EMAILS_PER_HOUR: z.coerce.number().int().positive().default(20),
 
     /**
      * Ligue **só** quando a API estiver atrás de um proxy reverso (nginx, load

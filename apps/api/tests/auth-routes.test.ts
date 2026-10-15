@@ -4,14 +4,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../src/app.js'
 import { closeDatabase, db } from '../src/db/index.js'
-import { auditLogs, refreshTokens, tenants } from '../src/db/schema/index.js'
+import { auditLogs, refreshTokens, tenants, users } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import {
   criarTenantComUsuario,
+  removerContaSemVinculo,
   removerTenantDeTeste,
   SENHA_PADRAO,
   sessaoDe,
+  vincularConta,
   type TenantDeTeste,
 } from './helpers/fixtures.js'
 
@@ -143,12 +145,12 @@ describe('conta desativada', () => {
     await removerTenantDeTeste(desativado)
   })
 
-  it('só revela que está desativada depois de a senha conferir', async () => {
+  it('só revela que o acesso está desativado depois de a senha conferir', async () => {
     const comSenhaCerta = await entrar({ email: desativado.email, password: SENHA_PADRAO })
 
     expect(comSenhaCerta.statusCode).toBe(403)
-    expect(comSenhaCerta.json<{ error: { message: string } }>().error.message).toContain(
-      'desativada',
+    expect(comSenhaCerta.json<{ error: { message: string } }>().error.message).toBe(
+      'Seu acesso foi desativado. Fale com o administrador do estabelecimento.',
     )
 
     // Quem não sabe a senha continua recebendo o 401 genérico — a informação
@@ -432,5 +434,214 @@ describe('refresh token em cookie', () => {
       cookies: { refresh_token: sessao.refreshToken },
     })
     expect(depois.statusCode).toBe(401)
+  })
+})
+
+describe('uma conta em mais de um estabelecimento', () => {
+  /** A pessoa é dona da casa e também da equipe do outro, com a mesma conta. */
+  let casa: TenantDeTeste
+  let outro: TenantDeTeste
+  let noOutro: TenantDeTeste
+  /** Um estabelecimento em que a conta não está. */
+  let alheio: TenantDeTeste
+
+  beforeAll(async () => {
+    casa = await criarTenantComUsuario({ dono: true })
+    outro = await criarTenantComUsuario()
+    noOutro = await vincularConta(casa, outro, { permissoes: ['orders:read'] })
+    alheio = await criarTenantComUsuario()
+  })
+
+  afterAll(async () => {
+    for (const f of [outro, alheio, casa]) await removerTenantDeTeste(f)
+  })
+
+  const trocar = (refreshToken: string | undefined, establishmentSlug: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/switch',
+      payload: { establishmentSlug },
+      ...(refreshToken !== undefined && { cookies: { refresh_token: refreshToken } }),
+    })
+
+  const renovar = (refreshToken: string) =>
+    app.inject({ method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken } })
+
+  const estabelecimentos = (accessToken: string) =>
+    app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/establishments',
+      headers: { authorization: `Bearer ${accessToken}` },
+    })
+
+  /** Uma sessão na casa, qualquer que tenha sido o último estabelecimento usado. */
+  async function sessaoNaCasa() {
+    const login = sessaoDe<RespostaSessao>(
+      await entrar({ email: casa.email, password: SENHA_PADRAO }),
+    )
+    if (login.establishment.slug === casa.slug) return login
+    return sessaoDe<RespostaSessao>(await trocar(login.refreshToken, casa.slug))
+  }
+
+  const mudarVinculo = (vinculo: TenantDeTeste, isActive: boolean) =>
+    withTenant(tenantContextFromUser(vinculo.tenantId), (tx) =>
+      tx.update(users).set({ isActive }).where(eq(users.id, vinculo.userId)),
+    )
+
+  it('a senha é uma só, e o login entra no estabelecimento usado por último', async () => {
+    const primeira = sessaoDe<RespostaSessao>(
+      await entrar({ email: casa.email, password: SENHA_PADRAO }),
+    )
+
+    const paraOOutro = await trocar(primeira.refreshToken, outro.slug)
+    expect(paraOOutro.statusCode, paraOOutro.body).toBe(200)
+    const depoisDaTroca = await entrar({ email: casa.email, password: SENHA_PADRAO })
+    expect(sessaoDe<RespostaSessao>(depoisDaTroca).establishment.slug).toBe(outro.slug)
+
+    const paraACasa = await trocar(sessaoDe(depoisDaTroca).refreshToken, casa.slug)
+    expect(paraACasa.statusCode, paraACasa.body).toBe(200)
+    const deNovo = await entrar({ email: casa.email, password: SENHA_PADRAO })
+    expect(sessaoDe<RespostaSessao>(deNovo).establishment.slug).toBe(casa.slug)
+  })
+
+  it('um estabelecimento mandado no corpo do login não escolhe nada', async () => {
+    await sessaoNaCasa()
+
+    const resposta = await entrar({
+      email: casa.email,
+      password: SENHA_PADRAO,
+      establishmentSlug: outro.slug,
+      tenantId: outro.tenantId,
+    })
+    expect(sessaoDe<RespostaSessao>(resposta).establishment.slug).toBe(casa.slug)
+  })
+
+  it('a lista traz os da conta, por nome, com o da sessão marcado — e nenhum alheio', async () => {
+    const sessao = sessaoDe<RespostaSessao>(
+      await entrar({ email: casa.email, password: SENHA_PADRAO }),
+    )
+    const lista = (await estabelecimentos(sessao.accessToken)).json<
+      { slug: string; current: boolean }[]
+    >()
+
+    expect(lista.map((e) => e.slug).sort()).toEqual([casa.slug, outro.slug].sort())
+    expect(lista.filter((e) => e.current).map((e) => e.slug)).toEqual([sessao.establishment.slug])
+  })
+
+  it('a troca abre a sessão no outro, com as permissões de lá, e revoga a anterior', async () => {
+    const naCasa = await sessaoNaCasa()
+    const resposta = await trocar(naCasa.refreshToken, outro.slug)
+    const noOutroEstabelecimento = sessaoDe<RespostaSessao>(resposta)
+
+    expect(noOutroEstabelecimento.establishment).toMatchObject({ id: outro.tenantId })
+    expect(noOutroEstabelecimento.user).toMatchObject({
+      id: noOutro.userId,
+      tenantId: outro.tenantId,
+      email: casa.email,
+      permissions: ['orders:read'],
+    })
+    expect(noOutroEstabelecimento.refreshToken.startsWith(`${outro.tenantId}.`)).toBe(true)
+
+    // A sessão de lá não lê dados da casa: o tenant é o do token.
+    const eu = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${noOutroEstabelecimento.accessToken}` },
+    })
+    expect(eu.json<{ tenantId: string }>().tenantId).toBe(outro.tenantId)
+
+    expect((await renovar(naCasa.refreshToken)).statusCode).toBe(401)
+    expect((await renovar(noOutroEstabelecimento.refreshToken)).statusCode).toBe(200)
+  })
+
+  it('para um estabelecimento em que a conta não está, 403 — e a sessão continua', async () => {
+    const sessao = await sessaoNaCasa()
+    for (const slug of [alheio.slug, 'nao-existe-este-endereco']) {
+      const resposta = await trocar(sessao.refreshToken, slug)
+      expect(resposta.statusCode).toBe(403)
+      expect(resposta.json<{ error: { code: string } }>().error.code).toBe('NO_ACCESS')
+    }
+
+    expect((await renovar(sessao.refreshToken)).statusCode).toBe(200)
+  })
+
+  it('nem para onde a pessoa foi desativada, nem para um estabelecimento suspenso', async () => {
+    const sessao = await sessaoNaCasa()
+
+    await mudarVinculo(noOutro, false)
+    try {
+      expect((await trocar(sessao.refreshToken, outro.slug)).statusCode).toBe(403)
+      // Desativada lá, a pessoa entra na casa, e a lista não oferece o outro.
+      const login = sessaoDe<RespostaSessao>(
+        await entrar({ email: casa.email, password: SENHA_PADRAO }),
+      )
+      expect(login.establishment.slug).toBe(casa.slug)
+      const lista = (await estabelecimentos(login.accessToken)).json<{ slug: string }[]>()
+      expect(lista.map((e) => e.slug)).toEqual([casa.slug])
+    } finally {
+      await mudarVinculo(noOutro, true)
+    }
+
+    await db.update(tenants).set({ status: 'SUSPENDED' }).where(eq(tenants.id, outro.tenantId))
+    try {
+      expect((await trocar(sessao.refreshToken, outro.slug)).statusCode).toBe(403)
+    } finally {
+      await db.update(tenants).set({ status: 'ACTIVE' }).where(eq(tenants.id, outro.tenantId))
+    }
+  })
+
+  it('sem sessão, com sessão inválida ou já revogada, a troca responde 401', async () => {
+    const sessao = sessaoDe<RespostaSessao>(
+      await entrar({ email: casa.email, password: SENHA_PADRAO }),
+    )
+    await trocar(sessao.refreshToken, outro.slug)
+
+    expect((await trocar(undefined, outro.slug)).statusCode).toBe(401)
+    expect((await trocar('lixo', outro.slug)).statusCode).toBe(401)
+    expect((await trocar(`${casa.tenantId}.inventado`, outro.slug)).statusCode).toBe(401)
+    // A anterior foi revogada pela troca.
+    expect((await trocar(sessao.refreshToken, outro.slug)).statusCode).toBe(401)
+  })
+
+  it('valida o endereço antes de tocar no banco', async () => {
+    const resposta = await trocar('qualquer', 'Não É Endereço')
+    expect(resposta.statusCode).toBe(400)
+  })
+
+  it('a entrada fica na auditoria do destino, sem dizer de onde a pessoa veio', async () => {
+    const naCasa = await sessaoNaCasa()
+    await trocar(naCasa.refreshToken, outro.slug)
+
+    const registros = await withTenant(tenantContextFromUser(outro.tenantId), (tx) =>
+      tx
+        .select({ action: auditLogs.action, metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(eq(auditLogs.actorUserId, noOutro.userId)),
+    )
+    const troca = registros.find((r) => r.metadata?.via === 'troca de estabelecimento')
+    expect(troca?.action).toBe('auth.login')
+    expect(JSON.stringify(registros)).not.toContain(casa.slug)
+    expect(JSON.stringify(registros)).not.toContain(casa.tenantId)
+  })
+})
+
+describe('conta sem estabelecimento', () => {
+  it('a senha certa recebe o motivo: a conta não está em equipe nenhuma', async () => {
+    const sozinha = await criarTenantComUsuario()
+    await withTenant(tenantContextFromUser(sozinha.tenantId), (tx) =>
+      tx.delete(users).where(eq(users.id, sozinha.userId)),
+    )
+
+    try {
+      const resposta = await entrar({ email: sozinha.email, password: SENHA_PADRAO })
+      expect(resposta.statusCode).toBe(403)
+      expect(resposta.json<{ error: { message: string } }>().error.message).toBe(
+        'Esta conta não está na equipe de nenhum estabelecimento.',
+      )
+      expect((await entrar({ email: sozinha.email, password: 'chute' })).statusCode).toBe(401)
+    } finally {
+      await removerTenantDeTeste(sozinha)
+      await removerContaSemVinculo(sozinha.accountId)
+    }
   })
 })

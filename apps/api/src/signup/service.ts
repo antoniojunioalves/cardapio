@@ -1,8 +1,14 @@
 import { FUSO_PADRAO, slugReservado, type Cadastro } from '@repo/shared'
 import { sql } from 'drizzle-orm'
 
+import { definirContaPropria, definirEmailDaConta, withAccountEmail } from '../accounts/context.js'
+import {
+  buscarContaPeloEmail,
+  inserirConta,
+  marcarEmailConfirmado,
+} from '../accounts/repository.js'
 import { recordAudit } from '../audit/record.js'
-import { hashPassword } from '../auth/password.js'
+import { hashPassword, verifyPassword } from '../auth/password.js'
 import { emitirSessao, type Session } from '../auth/service.js'
 import { generateTenantToken, hashToken, parseTokenTenant } from '../auth/tokens.js'
 import { env } from '../config/env.js'
@@ -29,11 +35,11 @@ import {
   buscarEstabelecimento,
   buscarPlanoAtivo,
   buscarTokenDeConfirmacao,
+  contaDoVinculo,
   inserirAssinatura,
   inserirDono,
   inserirEstabelecimento,
   inserirTokenDeConfirmacao,
-  marcarEmailConfirmado,
   marcarTokenUsado,
   publicarEstabelecimento,
   ultimoEnvio,
@@ -58,16 +64,29 @@ export async function novoIdDeEstabelecimento(): Promise<string> {
   return id
 }
 
+/**
+ * Quem cadastra o estabelecimento: uma conta nova — a senha já chega como
+ * hash, para o argon2 não segurar uma conexão do pool enquanto calcula — ou a
+ * conta de quem já tem uma, pelo id, depois de a senha dela conferir.
+ */
+export type DonoDoEstabelecimento =
+  { nome: string; email: string; senhaHash: string } | { contaId: string }
+
 export interface NovoEstabelecimento {
   nome: string
   slug: string
   fuso: string
-  /** `PENDING` no cadastro pela página, até o e-mail ser confirmado; `ACTIVE` no seed. */
+  /**
+   * `PENDING` no cadastro pela página, até o e-mail do dono ser confirmado —
+   * ou `ACTIVE`, se a conta dele já tinha o e-mail confirmado; `ACTIVE` no seed.
+   */
   status: 'PENDING' | 'ACTIVE'
   planoCodigo: string
-  /** A senha já chega como hash: o argon2 não segura uma conexão do pool enquanto calcula. */
-  dono: { nome: string; email: string; senhaHash: string }
+  dono: DonoDoEstabelecimento
 }
+
+const MENSAGEM_DA_CONTA_EXISTENTE =
+  'Este e-mail já tem uma conta. Para abrir mais um estabelecimento com ele, use a senha dessa conta.'
 
 /**
  * Cria um estabelecimento: o registro, a assinatura do plano, os perfis prontos
@@ -118,23 +137,8 @@ export async function criarEstabelecimento(
 
   await inserirAssinatura(tx, context.tenantId, plano.id)
 
-  const dono = await inserirDono(tx, {
-    tenantId: context.tenantId,
-    name: dados.dono.nome,
-    email: dados.dono.email.toLowerCase(),
-    passwordHash: dados.dono.senhaHash,
-  }).catch((error: unknown) => {
-    const violacao = violacaoDoBanco(error)
-    if (violacao?.code === UNICIDADE && violacao.constraint === 'users_email') {
-      // O e-mail é o login, único na plataforma. Dizer que ele já existe revela
-      // quem tem conta — o preço de entrar só com e-mail e senha (SECURITY.md).
-      throw new ConflictError(
-        'Este e-mail já tem uma conta. Entre para acessar o painel.',
-        'EMAIL_TAKEN',
-      )
-    }
-    throw error
-  })
+  const accountId = await contaDoDono(tx, dados.dono)
+  const dono = await inserirDono(tx, { tenantId: context.tenantId, accountId })
   await criarPerfisProntos(tx, context.tenantId)
 
   await recordAudit(tx, context, {
@@ -148,12 +152,34 @@ export async function criarEstabelecimento(
   return { donoId: dono.id }
 }
 
+/** A conta do dono: a que ele já tinha, ou uma nova, criada aqui. */
+async function contaDoDono(tx: TenantTransaction, dono: DonoDoEstabelecimento): Promise<string> {
+  if ('contaId' in dono) return dono.contaId
+
+  const email = dono.email.toLowerCase()
+  await definirEmailDaConta(tx, email)
+  try {
+    return await inserirConta(tx, { email, name: dono.nome, passwordHash: dono.senhaHash })
+  } catch (error) {
+    // A conta nasceu por outro caminho entre a consulta e a gravação.
+    const violacao = violacaoDoBanco(error)
+    if (violacao?.code === UNICIDADE && violacao.constraint === 'accounts_email') {
+      throw new ConflictError(MENSAGEM_DA_CONTA_EXISTENTE, 'EMAIL_TAKEN')
+    }
+    throw error
+  }
+}
+
 // --- Cadastro pela página ------------------------------------------------------
 
 export interface ResultadoDoCadastro {
   /** A sessão já traz o estabelecimento criado, como a do login. */
   sessao: Session
-  /** Falso quando o servidor de e-mail falhou: o cadastro vale, e o painel oferece o reenvio. */
+  /**
+   * Falso quando o servidor de e-mail falhou — o cadastro vale, e o painel
+   * oferece o reenvio —, e quando não havia o que confirmar: a conta já tinha o
+   * e-mail confirmado, e o estabelecimento nasceu publicado.
+   */
   emailDeConfirmacaoEnviado: boolean
 }
 
@@ -165,16 +191,37 @@ export interface ResultadoDoCadastro {
  * e-mails saem **depois** do commit: se a transação falhasse, nenhum e-mail
  * teria sido enviado sobre um cadastro que não existe.
  *
- * O cardápio nasce `PENDING` e só fica público quando o dono confirmar o
- * e-mail. Um e-mail que já tem conta é recusado com `EMAIL_TAKEN`: o e-mail é
- * o login, único na plataforma (`criarEstabelecimento`).
+ * O e-mail é o da conta do dono, e a conta é uma por pessoa:
+ * - **sem conta**, nasce uma, com o nome e a senha do formulário, e o cardápio
+ *   nasce `PENDING` — só fica público quando o dono confirmar o e-mail;
+ * - **com conta**, a senha tem de ser a dela: é o jeito de quem já trabalha num
+ *   estabelecimento, ou já é dono de um, abrir mais um. O nome do formulário é
+ *   ignorado — é o da conta. Se ela já tem o e-mail confirmado, o cardápio
+ *   nasce publicado; senão, espera a confirmação, como o de uma conta nova.
+ *
+ * A senha errada responde `EMAIL_TAKEN`, e isso revela que o e-mail tem conta —
+ * o mesmo preço de antes, e o limite de cadastros por IP segura quem tentar
+ * adivinhar a senha por aqui (`routes/public-signup.ts`).
  */
 export async function cadastrarEstabelecimento(
   dados: Cadastro,
   origem: { ip: string },
 ): Promise<ResultadoDoCadastro> {
-  const senhaHash = await hashPassword(dados.password)
   const email = dados.email.toLowerCase()
+  const conta = await withAccountEmail(email, (tx) => buscarContaPeloEmail(tx, email))
+
+  let dono: DonoDoEstabelecimento
+  if (conta) {
+    if (!(await verifyPassword(conta.passwordHash, dados.password))) {
+      throw new ConflictError(MENSAGEM_DA_CONTA_EXISTENTE, 'EMAIL_TAKEN')
+    }
+    dono = { contaId: conta.id }
+  } else {
+    dono = { nome: dados.ownerName, email, senhaHash: await hashPassword(dados.password) }
+  }
+  const nomeDoDono = conta?.name ?? dados.ownerName
+  const status = conta?.emailVerifiedAt ? 'ACTIVE' : 'PENDING'
+
   const tenantId = await novoIdDeEstabelecimento()
   const context = tenantContextFromSignup(tenantId)
 
@@ -183,9 +230,9 @@ export async function cadastrarEstabelecimento(
       nome: dados.establishmentName,
       slug: dados.slug,
       fuso: dados.timezone ?? FUSO_PADRAO,
-      status: 'PENDING',
+      status,
       planoCodigo: PLANO_DO_CADASTRO,
-      dono: { nome: dados.ownerName, email, senhaHash },
+      dono,
     })
 
     await recordAudit(tx, context, {
@@ -196,16 +243,21 @@ export async function cadastrarEstabelecimento(
       metadata: { versao: dados.termsVersion, ip: origem.ip },
     })
 
-    const token = await emitirLinkDeConfirmacao(tx, context, { userId: donoId, email })
-    const sessao = await emitirSessao(tx, context, { id: donoId, name: dados.ownerName, email })
+    const token =
+      status === 'PENDING'
+        ? await emitirLinkDeConfirmacao(tx, context, { userId: donoId, email })
+        : null
+    const sessao = await emitirSessao(tx, context, { id: donoId, name: nomeDoDono, email })
 
     return { sessao, token }
   })
 
-  const emailDeConfirmacaoEnviado = await enviarSemDerrubar(
-    mensagemDeConfirmacao({ para: email, slug: dados.slug, token, webOrigin: env.WEB_ORIGIN }),
-    { motivo: 'confirmação do cadastro', tenantId },
-  )
+  const emailDeConfirmacaoEnviado =
+    token !== null &&
+    (await enviarSemDerrubar(
+      mensagemDeConfirmacao({ para: email, slug: dados.slug, token, webOrigin: env.WEB_ORIGIN }),
+      { motivo: 'confirmação do cadastro', tenantId },
+    ))
 
   if (env.PLATFORM_NOTIFY_EMAIL) {
     await enviarSemDerrubar(
@@ -213,10 +265,11 @@ export async function cadastrarEstabelecimento(
         para: env.PLATFORM_NOTIFY_EMAIL,
         nome: dados.establishmentName,
         slug: dados.slug,
-        donoNome: dados.ownerName,
+        donoNome: nomeDoDono,
         donoEmail: email,
         plano: PLANO_DO_CADASTRO,
         quando: new Date(),
+        publicado: status === 'ACTIVE',
       }),
       { motivo: 'aviso de novo cadastro', tenantId },
     )
@@ -292,8 +345,12 @@ export async function confirmarEmail(token: string): Promise<ResultadoDaConfirma
     }
 
     // O link confirma o e-mail para o qual foi enviado. Se a pessoa trocou de
-    // e-mail depois, ele não prova nada sobre o endereço novo.
-    if (!(await marcarEmailConfirmado(tx, registro.userId, registro.email))) throw invalido()
+    // e-mail depois, ele não prova nada sobre o endereço novo. O e-mail é o da
+    // conta: confirmado aqui, vale para todos os estabelecimentos dela.
+    const accountId = await contaDoVinculo(tx, registro.userId)
+    if (!accountId) throw invalido()
+    await definirContaPropria(tx, accountId)
+    if (!(await marcarEmailConfirmado(tx, accountId, registro.email))) throw invalido()
 
     await marcarTokenUsado(tx, registro.id)
     const publicado = await publicarEstabelecimento(tx, tenantId)

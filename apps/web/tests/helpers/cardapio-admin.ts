@@ -147,7 +147,7 @@ export function plano(
   return {
     plan: { code: 'FREE', name: 'Grátis' },
     orders: { used: 0, limit: 100, ceiling: 110, state: 'LIVRE' },
-    users: { active: 1, limit: 2 },
+    users: { active: 1, invited: 0, limit: 2 },
     products: { used: produtos[0], limit: produtos[1] },
     categories: { used: categorias[0], limit: categorias[1] },
   }

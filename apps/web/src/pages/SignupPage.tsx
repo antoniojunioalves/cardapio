@@ -35,6 +35,8 @@ export function SignupPage() {
 
         <SignupForm
           aoCadastrar={(cadastrado) => {
+            // Publicado de nascença (a conta já tinha o e-mail confirmado), o
+            // estabelecimento não tem aviso de confirmação: o "não saiu" não aparece.
             const chegada: ChegadaDoCadastro = {
               emailNaoEnviado: !cadastrado.confirmationEmailSent,
             }

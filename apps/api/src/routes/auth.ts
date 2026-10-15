@@ -1,9 +1,17 @@
+import { slugSchema } from '@repo/shared'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { currentUser, requireAuth } from '../auth/middleware.js'
-import { login, logout, refreshSession, type Session } from '../auth/service.js'
+import {
+  estabelecimentosDaConta,
+  login,
+  logout,
+  refreshSession,
+  trocarDeEstabelecimento,
+  type Session,
+} from '../auth/service.js'
 import { env, isProduction } from '../config/env.js'
 import { UnauthorizedError } from '../lib/errors.js'
 
@@ -30,7 +38,7 @@ export const sessaoSchema = z.object({
   }),
 })
 
-/** Só e-mail e senha: o estabelecimento é o do e-mail, e o servidor é quem o acha. */
+/** Só e-mail e senha: os da conta. O estabelecimento é o servidor quem escolhe, entre os dela. */
 const loginSchema = z.object({
   email: z.email().max(254),
   password: z.string().min(1).max(256),
@@ -85,8 +93,10 @@ export function authRoutes(instance: FastifyInstance): void {
         tags: ['Autenticação'],
         summary: 'Autentica um usuário administrativo',
         description:
-          'O estabelecimento não é informado: o e-mail é único na plataforma, e a resposta ' +
-          'traz o estabelecimento a que a pessoa pertence, em `establishment`.',
+          'O e-mail e a senha são da conta, uma só em todos os estabelecimentos em que a pessoa ' +
+          'trabalha. Ela entra no que usou por último, que vem em `establishment`; os outros ' +
+          'estão em `GET /auth/establishments`, e a troca é por `POST /auth/switch`. Acesso ' +
+          'desativado ou estabelecimento suspenso respondem 403, só depois de a senha conferir.',
         body: loginSchema,
         response: { 200: sessaoSchema },
       },
@@ -112,6 +122,36 @@ export function authRoutes(instance: FastifyInstance): void {
       const token = tokenDaRequisicao(request)
       if (!token) throw new UnauthorizedError('Sessão inválida.')
       return responderSessao(reply, await refreshSession(token))
+    },
+  )
+
+  typed.post(
+    '/switch',
+    {
+      schema: {
+        tags: ['Autenticação'],
+        summary: 'Troca a sessão para outro estabelecimento da conta',
+        description:
+          'Sem pedir a senha de novo: quem prova a conta é a sessão de agora, pelo cookie, como ' +
+          'na renovação. O endereço só escolhe entre os estabelecimentos da conta — o de quem ' +
+          'não é da equipe, ou foi desativado, responde 403 `NO_ACCESS`. A sessão anterior é ' +
+          'revogada.',
+        body: z.object({
+          establishmentSlug: slugSchema,
+          // Para clientes de API sem cookie, como na renovação.
+          refreshToken: z.string().min(1).optional(),
+        }),
+        response: { 200: sessaoSchema },
+      },
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const token = request.cookies[COOKIE_DE_SESSAO] ?? request.body.refreshToken ?? ''
+      if (!token) throw new UnauthorizedError('Sessão inválida.')
+      return responderSessao(
+        reply,
+        await trocarDeEstabelecimento(token, request.body.establishmentSlug),
+      )
     },
   )
 
@@ -147,5 +187,31 @@ export function authRoutes(instance: FastifyInstance): void {
       onRequest: requireAuth(),
     },
     (request) => currentUser(request),
+  )
+
+  typed.get(
+    '/establishments',
+    {
+      schema: {
+        tags: ['Autenticação'],
+        summary: 'Os estabelecimentos em que a conta da sessão entra',
+        description:
+          'Por nome, com o da sessão marcado em `current`. É a lista da troca de ' +
+          'estabelecimento; os vínculos desativados e os estabelecimentos suspensos não aparecem.',
+        response: {
+          200: z.array(
+            z.object({
+              slug: z.string(),
+              name: z.string(),
+              status: z.enum(['ACTIVE', 'SUSPENDED', 'PENDING']),
+              current: z.boolean(),
+            }),
+          ),
+        },
+        security: [{ bearerAuth: [] }],
+      },
+      onRequest: requireAuth(),
+    },
+    async (request) => estabelecimentosDaConta(currentUser(request)),
   )
 }

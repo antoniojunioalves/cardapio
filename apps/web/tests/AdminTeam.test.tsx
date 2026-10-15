@@ -11,6 +11,7 @@ import {
   marcarPermissao,
   permissoesMudaram,
   porQueNaoExcluirPerfil,
+  prazoDoConvite,
   quantasPessoas,
   resumoDoPerfil,
   ultimoAcesso,
@@ -19,6 +20,7 @@ import { conflito, sessao } from './helpers/cardapio-admin'
 import {
   abrirNaEquipe,
   comoPerfil,
+  convite,
   PERFIS,
   PESSOAS,
   pessoa,
@@ -36,6 +38,9 @@ const escrever = (campo: HTMLElement, valor: string) => {
 /** O cartão de uma pessoa ou de um perfil na lista, pelo nome. */
 const cartao = (nome: string) =>
   within(screen.getByRole('heading', { level: 2, name: nome }).closest('li') as HTMLElement)
+/** O cartão de um convite pendente, pelo e-mail. */
+const cartaoDoConvite = (email: string) =>
+  within(screen.getByText(email).closest('li') as HTMLElement)
 const janelaAberta = async (nome: string | RegExp) =>
   within(await screen.findByRole('dialog', { name: nome }))
 const caixa = (janela: Pick<typeof screen, 'getByRole'>, nome: string) =>
@@ -165,6 +170,14 @@ describe('em palavras', () => {
       texto: '1 de 1 pessoa ativa do plano Grátis.',
       noLimite: true,
     })
+    // Um convite pendente é uma vaga prometida.
+    expect(equipeNoPlano(usoDaEquipe(2, 3, 1))).toEqual({
+      texto: '3 de 3 pessoas ativas do plano Grátis, contando 1 convite pendente.',
+      noLimite: true,
+    })
+    expect(equipeNoPlano(usoDaEquipe(1, 5, 2))?.texto).toBe(
+      '3 de 5 pessoas ativas do plano Grátis, contando 2 convites pendentes.',
+    )
     expect(equipeNoPlano(usoDaEquipe(9, null))).toBeNull()
     expect(equipeNoPlano(undefined)).toBeNull()
   })
@@ -176,6 +189,16 @@ describe('em palavras', () => {
     expect(porQueNaoExcluirPerfil(perfil(0))).toBeNull()
     expect(porQueNaoExcluirPerfil(perfil(1))).toMatch(/^Uma pessoa tem este perfil/)
     expect(porQueNaoExcluirPerfil(perfil(3))).toMatch(/^3 pessoas têm este perfil/)
+  })
+
+  it('o prazo do convite', () => {
+    const agora = new Date('2026-10-14T12:00:00Z').getTime()
+    expect(prazoDoConvite({ expiresAt: '2026-10-21T12:00:00.000Z' }, agora)).toMatch(
+      /^Vale até \d{2}\/\d{2}\/2026$/,
+    )
+    expect(prazoDoConvite({ expiresAt: '2026-10-10T12:00:00.000Z' }, agora)).toMatch(
+      /^Venceu em \d{2}\/\d{2}\/2026$/,
+    )
   })
 
   it('o último acesso', () => {
@@ -230,14 +253,14 @@ describe('as pessoas, para o proprietário', () => {
     expect(ze.getByText('Proprietário')).toBeVisible()
     expect(ze.getByText('Você')).toBeVisible()
     expect(ze.getByText('ze@exemplo.com')).toBeVisible()
-    // O proprietário edita o próprio nome, e ninguém o desativa — nem ele.
-    expect(ze.getByRole('button', { name: 'Editar Zé' })).toBeVisible()
-    expect(ze.queryByRole('button', { name: /Desativar|Reativar/ })).toBeNull()
+    // O proprietário não tem perfil para mudar, e ninguém o desativa — nem ele.
+    expect(ze.queryByRole('button')).toBeNull()
 
     const bia = cartao('Bia')
     expect(bia.getByText('Atendente')).toBeVisible()
     expect(bia.getByText(/^Último acesso em/)).toBeVisible()
     expect(bia.queryByText('Você')).toBeNull()
+    expect(bia.getByRole('button', { name: 'Editar Bia' })).toBeVisible()
     expect(bia.getByRole('button', { name: 'Desativar Bia' })).toBeVisible()
 
     const caio = cartao('Caio')
@@ -247,16 +270,14 @@ describe('as pessoas, para o proprietário', () => {
     expect(caio.queryByRole('button', { name: 'Desativar Caio' })).toBeNull()
   })
 
-  it('cadastra uma pessoa com o perfil e a senha inicial', async () => {
+  it('convida uma pessoa com o e-mail e o perfil, e o convite aparece pendente', async () => {
     const enviados = await abrir()
-    clicar('Nova pessoa')
-    const janela = await janelaAberta('Nova pessoa')
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
 
-    escrever(janela.getByLabelText('Nome'), 'Duda')
-    escrever(janela.getByLabelText('E-mail'), 'duda@exemplo.com')
-    escrever(janela.getByLabelText('Senha inicial'), 'Senha-da-duda')
+    escrever(janela.getByLabelText('E-mail'), 'Duda@Exemplo.com')
     fireEvent.change(janela.getByLabelText('Perfil'), { target: { value: 'pf-cozinha' } })
-    fireEvent.click(janela.getByRole('button', { name: 'Cadastrar pessoa' }))
+    fireEvent.click(janela.getByRole('button', { name: 'Enviar convite' }))
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
@@ -264,107 +285,182 @@ describe('as pessoas, para o proprietário', () => {
     expect(enviados).toEqual([
       {
         metodo: 'POST',
-        caminho: '/users',
-        corpo: {
-          name: 'Duda',
-          email: 'duda@exemplo.com',
-          password: 'Senha-da-duda',
-          profileId: 'pf-cozinha',
-        },
+        caminho: '/invitations',
+        corpo: { email: 'Duda@Exemplo.com', profileId: 'pf-cozinha' },
       },
     ])
-    expect(screen.getByText(/Duda foi cadastrada\. Passe a ela o e-mail e a senha/)).toBeVisible()
-    expect(cartao('Duda').getByText('Cozinha')).toBeVisible()
+    expect(
+      screen.getByText(
+        'Convite enviado para duda@exemplo.com. A pessoa entra pelo link do e-mail.',
+      ),
+    ).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Convites pendentes' })).toBeVisible()
+    const pendente = await screen.findByText('duda@exemplo.com')
+    const doConvite = within(pendente.closest('li') as HTMLElement)
+    expect(doConvite.getByText('Cozinha')).toBeVisible()
+    expect(doConvite.getByText('Aguardando aceite')).toBeVisible()
+    expect(doConvite.getByText(/^Vale até .* · Enviado por Zé$/)).toBeVisible()
   })
 
-  it('a senha inicial fica à vista e mostra as regras, que são as do cadastro', async () => {
+  it('a janela do convite não pede nome nem senha: são da pessoa', async () => {
     await abrir()
-    clicar('Nova pessoa')
-    const janela = await janelaAberta('Nova pessoa')
-    const senha = janela.getByLabelText('Senha inicial')
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
 
-    expect(senha).toHaveAttribute('autocomplete', 'off')
-    expect(senha).not.toHaveAttribute('type', 'password')
-    const regras = within(janela.getByRole('list', { name: 'Regras da senha' }))
-    expect(regras.getByText('Uma letra maiúscula').parentElement).toHaveTextContent(': falta')
-
-    escrever(senha, 'Abc')
-    expect(regras.getByText('Uma letra maiúscula').parentElement).toHaveTextContent(': atendida')
+    expect(janela.queryByLabelText('Nome')).toBeNull()
+    expect(janela.queryByLabelText(/Senha/)).toBeNull()
+    expect(janela.getByText(/entra com a mesma senha de lá/)).toBeVisible()
   })
 
-  it('sem nome, com e-mail torto, senha fraca ou sem perfil, nada é enviado', async () => {
+  it('com e-mail torto ou sem perfil, nada é enviado', async () => {
     const enviados = await abrir()
-    clicar('Nova pessoa')
-    const janela = await janelaAberta('Nova pessoa')
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
 
     escrever(janela.getByLabelText('E-mail'), 'duda-sem-arroba')
-    escrever(janela.getByLabelText('Senha inicial'), 'fraca')
-    fireEvent.click(janela.getByRole('button', { name: 'Cadastrar pessoa' }))
+    fireEvent.click(janela.getByRole('button', { name: 'Enviar convite' }))
 
-    expect(await janela.findByText('Informe o nome.')).toBeVisible()
-    expect(janela.getByText(/Informe um e-mail válido/)).toBeVisible()
-    expect(janela.getByText(/A senha precisa de/)).toBeVisible()
+    expect(await janela.findByText(/Informe um e-mail válido/)).toBeVisible()
     expect(janela.getByText('Escolha um perfil.')).toBeVisible()
     expect(enviados).toEqual([])
   })
 
-  it('e-mail em uso marca o campo, e a janela continua aberta', async () => {
+  it('e-mail que já está na equipe marca o campo, e a janela continua aberta', async () => {
     const enviados = await abrir({
-      forcar: { 'POST /users': conflito('USER_EMAIL_TAKEN', 'Este e-mail já está em uso.') },
+      forcar: {
+        'POST /invitations': conflito('USER_ALREADY_MEMBER', 'Esta pessoa já está na equipe.'),
+      },
     })
-    clicar('Nova pessoa')
-    const janela = await janelaAberta('Nova pessoa')
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
 
-    escrever(janela.getByLabelText('Nome'), 'Duda')
-    escrever(janela.getByLabelText('E-mail'), 'bia@exemplo.com')
-    escrever(janela.getByLabelText('Senha inicial'), 'Senha-da-duda')
+    escrever(janela.getByLabelText('E-mail'), 'p-bia@exemplo.com')
     fireEvent.change(janela.getByLabelText('Perfil'), { target: { value: 'pf-cozinha' } })
-    fireEvent.click(janela.getByRole('button', { name: 'Cadastrar pessoa' }))
+    fireEvent.click(janela.getByRole('button', { name: 'Enviar convite' }))
 
-    expect(await janela.findByText('Este e-mail já está em uso.')).toBeVisible()
+    expect(await janela.findByText('Esta pessoa já está na equipe.')).toBeVisible()
     expect(janela.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true')
     expect(enviados).toHaveLength(1)
   })
 
-  it('no limite do plano, "Nova pessoa" fica desligado e a tela diz por quê', async () => {
-    await abrir({ plano: usoDaEquipe(3, 3) })
+  it('no limite do plano, "Convidar pessoa" fica desligado e a tela diz por quê', async () => {
+    await abrir({ plano: usoDaEquipe(2, 3, 1) })
 
-    expect(screen.getByRole('button', { name: 'Nova pessoa' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Convidar pessoa' })).toBeDisabled()
     expect(screen.getByRole('note')).toHaveTextContent(
-      'A equipe chegou ao limite de pessoas ativas do plano.',
+      'A equipe chegou ao limite de pessoas do plano, contando os convites pendentes.',
     )
   })
 
   it('a recusa do plano, vinda da API, aparece com a mensagem dela', async () => {
     await abrir({
       forcar: {
-        'POST /users': conflito('PLAN_USER_LIMIT', 'O plano Grátis permite 3 usuários ativos.'),
+        'POST /invitations': conflito(
+          'PLAN_USER_LIMIT',
+          'O plano Grátis permite 3 usuários ativos, contando os convites pendentes.',
+        ),
       },
     })
-    clicar('Nova pessoa')
-    const janela = await janelaAberta('Nova pessoa')
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
 
-    escrever(janela.getByLabelText('Nome'), 'Duda')
     escrever(janela.getByLabelText('E-mail'), 'duda@exemplo.com')
-    escrever(janela.getByLabelText('Senha inicial'), 'Senha-da-duda')
     fireEvent.change(janela.getByLabelText('Perfil'), { target: { value: 'pf-cozinha' } })
-    fireEvent.click(janela.getByRole('button', { name: 'Cadastrar pessoa' }))
+    fireEvent.click(janela.getByRole('button', { name: 'Enviar convite' }))
 
     expect(await janela.findByRole('alert')).toHaveTextContent(
-      'O plano Grátis permite 3 usuários ativos.',
+      'O plano Grátis permite 3 usuários ativos, contando os convites pendentes.',
     )
   })
 
-  it('edita o nome e o perfil de uma pessoa', async () => {
+  it('o e-mail que não saiu vira um aviso para reenviar', async () => {
+    await abrir({
+      forcar: {
+        'POST /invitations': {
+          status: 201,
+          corpo: {
+            invitation: convite({ id: 'cv-x', email: 'duda@exemplo.com' }),
+            emailSent: false,
+          },
+        },
+      },
+    })
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
+    escrever(janela.getByLabelText('E-mail'), 'duda@exemplo.com')
+    fireEvent.change(janela.getByLabelText('Perfil'), { target: { value: 'pf-atendente' } })
+    fireEvent.click(janela.getByRole('button', { name: 'Enviar convite' }))
+
+    expect(await screen.findByRole('note')).toHaveTextContent(
+      'O convite para duda@exemplo.com está feito, mas o e-mail não saiu.',
+    )
+  })
+
+  it('reenviar manda um link novo; cancelar pergunta antes e tira o convite da lista', async () => {
+    const enviados = await abrir({
+      convites: [
+        convite({ id: 'cv-1', email: 'duda@exemplo.com' }),
+        convite({ id: 'cv-2', email: 'eva@exemplo.com', expiresAt: '2026-10-01T12:00:00.000Z' }),
+      ],
+    })
+    await screen.findByText('duda@exemplo.com')
+    expect(cartaoDoConvite('eva@exemplo.com').getByText('Vencido')).toBeVisible()
+    expect(cartaoDoConvite('eva@exemplo.com').getByText(/^Venceu em/)).toBeVisible()
+
+    clicar('Reenviar o convite para eva@exemplo.com')
+    expect(
+      await screen.findByText('Convite reenviado para eva@exemplo.com, com um link novo.'),
+    ).toBeVisible()
+
+    clicar('Cancelar o convite para duda@exemplo.com')
+    const janela = await janelaAberta('Cancelar o convite para duda@exemplo.com?')
+    expect(janela.getByText(/O link do e-mail deixa de valer/)).toBeVisible()
+    fireEvent.click(janela.getByRole('button', { name: 'Cancelar convite' }))
+
+    expect(await screen.findByText('O convite para duda@exemplo.com foi cancelado.')).toBeVisible()
+    await waitFor(() => {
+      expect(screen.queryByText('duda@exemplo.com')).toBeNull()
+    })
+    expect(enviados).toEqual([
+      { metodo: 'POST', caminho: '/invitations/cv-2/resend', corpo: undefined },
+      { metodo: 'DELETE', caminho: '/invitations/cv-1', corpo: undefined },
+    ])
+  })
+
+  it('reenviar cedo demais mostra a recusa da API', async () => {
+    await abrir({
+      convites: [convite({ id: 'cv-1', email: 'duda@exemplo.com' })],
+      forcar: {
+        'POST /invitations/cv-1/resend': {
+          status: 429,
+          corpo: {
+            error: {
+              code: 'RESEND_TOO_SOON',
+              message: 'Aguarde 40 segundos para reenviar este convite.',
+            },
+          },
+        },
+      },
+    })
+    await screen.findByText('duda@exemplo.com')
+    clicar('Reenviar o convite para duda@exemplo.com')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Aguarde 40 segundos para reenviar este convite.',
+    )
+  })
+
+  it('muda o perfil de uma pessoa; o nome e o e-mail são da conta dela', async () => {
     const enviados = await abrir()
     clicar('Editar Bia')
-    const janela = await janelaAberta('Editar Bia')
+    const janela = await janelaAberta('Perfil de Bia')
 
     expect(janela.getByText('p-bia@exemplo.com')).toBeVisible()
+    expect(janela.getByText('São da conta da pessoa: só ela os muda.')).toBeVisible()
+    expect(janela.queryByRole('textbox')).toBeNull()
     expect(janela.getByLabelText('Perfil')).toHaveValue('pf-atendente')
     expect(janela.getByRole('button', { name: 'Salvar alterações' })).toBeDisabled()
 
-    escrever(janela.getByLabelText('Nome'), 'Beatriz')
     fireEvent.change(janela.getByLabelText('Perfil'), { target: { value: 'pf-cozinha' } })
     fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
 
@@ -372,30 +468,10 @@ describe('as pessoas, para o proprietário', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })
     expect(enviados).toEqual([
-      {
-        metodo: 'PATCH',
-        caminho: '/users/p-bia',
-        corpo: { name: 'Beatriz', profileId: 'pf-cozinha' },
-      },
+      { metodo: 'PATCH', caminho: '/users/p-bia', corpo: { profileId: 'pf-cozinha' } },
     ])
-    expect(cartao('Beatriz').getByText('Cozinha')).toBeVisible()
-    expect(screen.getByText('Beatriz: alterações salvas.')).toBeVisible()
-  })
-
-  it('o proprietário muda o próprio nome; perfil, ele não tem', async () => {
-    const enviados = await abrir()
-    clicar('Editar Zé')
-    const janela = await janelaAberta('Editar Zé')
-
-    expect(janela.getByText('Proprietário: tem sempre todas as permissões.')).toBeVisible()
-    expect(janela.queryByLabelText('Perfil')).toBeNull()
-
-    escrever(janela.getByLabelText('Nome'), 'José')
-    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
-
-    await waitFor(() => {
-      expect(enviados).toEqual([{ metodo: 'PATCH', caminho: '/users/u', corpo: { name: 'José' } }])
-    })
+    expect(cartao('Bia').getByText('Cozinha')).toBeVisible()
+    expect(screen.getByText('Bia: perfil salvo.')).toBeVisible()
   })
 
   it('quem ficou sem perfil aparece assim, e ganha um pela janela', async () => {
@@ -405,36 +481,17 @@ describe('as pessoas, para o proprietário', () => {
     expect(cartao('Léo').getByText('Entra no painel e não vê nada.')).toBeVisible()
 
     clicar('Editar Léo')
-    const janela = await janelaAberta('Editar Léo')
+    const janela = await janelaAberta('Perfil de Léo')
     expect(janela.getByLabelText('Perfil')).toHaveValue('')
     fireEvent.change(janela.getByLabelText('Perfil'), { target: { value: 'pf-cozinha' } })
     fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
 
     await waitFor(() => {
       expect(enviados).toEqual([
-        {
-          metodo: 'PATCH',
-          caminho: '/users/p-leo',
-          corpo: { name: 'Léo', profileId: 'pf-cozinha' },
-        },
+        { metodo: 'PATCH', caminho: '/users/p-leo', corpo: { profileId: 'pf-cozinha' } },
       ])
     })
     expect(await cartao('Léo').findByText('Cozinha')).toBeVisible()
-  })
-
-  it('mudar só o nome de quem está sem perfil não envia perfil nenhum', async () => {
-    const enviados = await abrir({ pessoas: [...PESSOAS_COM_O_LEO] })
-
-    clicar('Editar Léo')
-    const janela = await janelaAberta('Editar Léo')
-    escrever(janela.getByLabelText('Nome'), 'Leonardo')
-    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
-
-    await waitFor(() => {
-      expect(enviados).toEqual([
-        { metodo: 'PATCH', caminho: '/users/p-leo', corpo: { name: 'Leonardo' } },
-      ])
-    })
   })
 
   it('desativar pergunta antes, e a pessoa passa a aparecer desativada', async () => {
@@ -509,23 +566,14 @@ describe('as pessoas, para o proprietário', () => {
 describe('as pessoas, para quem não é o proprietário', () => {
   it('o administrador não mexe na conta do proprietário, nem muda o próprio perfil', async () => {
     const { sessao: comoAdmin, pessoas } = comoPerfil('pf-admin')
-    const enviados = abrirNaEquipe('', { pessoas }, comoAdmin)
+    abrirNaEquipe('', { pessoas }, comoAdmin)
     await screen.findByRole('heading', { level: 2, name: 'Dona Maria' })
 
     expect(cartao('Dona Maria').queryByRole('button')).toBeNull()
+    expect(cartao('Zé').queryByRole('button')).toBeNull()
+    expect(cartao('Bia').getByRole('button', { name: 'Editar Bia' })).toBeVisible()
     // O perfil pronto do administrador não desativa pessoas.
     expect(screen.queryByRole('button', { name: /Desativar|Reativar/ })).toBeNull()
-
-    clicar('Editar Zé')
-    const janela = await janelaAberta('Editar Zé')
-    expect(janela.getByLabelText('Perfil')).toBeDisabled()
-    expect(janela.getByText(/Você não muda o seu próprio perfil/)).toBeVisible()
-
-    escrever(janela.getByLabelText('Nome'), 'José')
-    fireEvent.click(janela.getByRole('button', { name: 'Salvar alterações' }))
-    await waitFor(() => {
-      expect(enviados).toEqual([{ metodo: 'PATCH', caminho: '/users/u', corpo: { name: 'José' } }])
-    })
   })
 
   it('quem não alcança um perfil não edita quem o tem, nem o oferece a ninguém', async () => {
@@ -536,8 +584,29 @@ describe('as pessoas, para quem não é o proprietário', () => {
       'users:delete',
       ...permissoesDe('pf-atendente'),
     ])
-    abrirNaEquipe('', { pessoas: comoPerfil('pf-atendente').pessoas }, recepcao)
+    abrirNaEquipe(
+      '',
+      {
+        pessoas: comoPerfil('pf-atendente').pessoas,
+        convites: [
+          convite({
+            id: 'cv-a',
+            email: 'admin@exemplo.com',
+            profile: { id: 'pf-admin', name: 'Administrador' },
+          }),
+          convite({ id: 'cv-b', email: 'atende@exemplo.com' }),
+        ],
+      },
+      recepcao,
+    )
     await screen.findByRole('heading', { level: 2, name: 'Ana' })
+    await screen.findByText('admin@exemplo.com')
+
+    // O convite para administrador está acima de quem está logado: nem reenvia, nem cancela.
+    expect(cartaoDoConvite('admin@exemplo.com').queryByRole('button')).toBeNull()
+    expect(
+      cartaoDoConvite('atende@exemplo.com').getByRole('button', { name: /^Reenviar/ }),
+    ).toBeVisible()
 
     // A Ana é administradora: tem mais do que quem está logado.
     expect(cartao('Ana').queryByRole('button')).toBeNull()
@@ -546,8 +615,8 @@ describe('as pessoas, para quem não é o proprietário', () => {
     // Ninguém se desativa.
     expect(cartao('Zé').queryByRole('button', { name: /Desativar/ })).toBeNull()
 
-    clicar('Nova pessoa')
-    const janela = await janelaAberta('Nova pessoa')
+    clicar('Convidar pessoa')
+    const janela = await janelaAberta('Convidar pessoa')
     expect(
       within(janela.getByLabelText('Perfil'))
         .getAllByRole('option')
@@ -555,12 +624,19 @@ describe('as pessoas, para quem não é o proprietário', () => {
     ).toEqual(['Escolha um perfil', 'Atendente', 'Cozinha'])
   })
 
-  it('quem só vê a equipe não cadastra, não edita nem desativa', async () => {
-    abrirNaEquipe('', {}, sessao(['users:read']))
+  it('quem só vê a equipe vê os convites, mas não convida, não edita nem desativa', async () => {
+    abrirNaEquipe(
+      '',
+      { convites: [convite({ id: 'cv-1', email: 'duda@exemplo.com' })] },
+      sessao(['users:read']),
+    )
     await screen.findByRole('heading', { level: 2, name: 'Ana' })
+    expect(await screen.findByText('duda@exemplo.com')).toBeVisible()
 
     expect(
-      screen.queryByRole('button', { name: /Nova pessoa|^Editar|Desativar|Reativar/ }),
+      screen.queryByRole('button', {
+        name: /Convidar pessoa|^Editar|Desativar|Reativar|^Reenviar|^Cancelar/,
+      }),
     ).toBeNull()
   })
 })

@@ -8,6 +8,7 @@ import {
 import { recordAudit } from '../audit/record.js'
 import type { Ator } from '../auth/permissions.js'
 import { UNICIDADE, violacaoDoBanco } from '../lib/db-errors.js'
+import { contarConvitesDoPerfil } from '../invitations/repository.js'
 import { AppError, ConflictError, NotFoundError } from '../lib/errors.js'
 import { avisarPedido } from '../realtime/notify.js'
 import type { TenantContext } from '../tenant/context.js'
@@ -35,7 +36,7 @@ import {
  *   está acima também é passar por cima do dono;
  * - ninguém altera o perfil que tem — tirar de si a permissão de alterar
  *   perfis deixaria a pessoa trancada, e ninguém faz isso de propósito;
- * - perfil com alguém dentro não se exclui.
+ * - perfil com alguém dentro não se exclui, nem com um convite pendente para ele.
  *
  * O proprietário tem todas as permissões e não tem perfil: nenhuma dessas
  * regras o segura.
@@ -197,6 +198,15 @@ export async function excluirPerfil(context: TenantContext, ator: Ator, id: stri
         perfil.users === 1
           ? 'Uma pessoa tem este perfil. Dê outro perfil a ela antes de excluí-lo.'
           : `${String(perfil.users)} pessoas têm este perfil. Dê outro perfil a elas antes de excluí-lo.`,
+        'PROFILE_IN_USE',
+      )
+    }
+    const convites = await contarConvitesDoPerfil(tx, id)
+    if (convites > 0) {
+      throw new ConflictError(
+        convites === 1
+          ? 'Há um convite para a equipe com este perfil. Cancele-o antes de excluir o perfil.'
+          : `Há ${String(convites)} convites para a equipe com este perfil. Cancele-os antes de excluir o perfil.`,
         'PROFILE_IN_USE',
       )
     }

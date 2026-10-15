@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1d2c9e-8a47-4b5e-9c3d-2e7f41a0b8d5",
     "name": "API — Cardápio Online",
-    "description": "Gerada por `pnpm postman` a partir das rotas da API — **não edite à mão**: a próxima geração\ndesfaz. Corpos de exemplo e scripts ficam em `apps/api/src/postman/exemplos.ts`.\n\n**Para começar:** `pnpm db:up` e `pnpm dev`, e rode **Autenticação → Autentica um usuário\nadministrativo**. O login usa só `email` e `password` das variáveis da coleção — por padrão,\no dono da Lanchonete do Zé, do seed. Ele guarda o token em `accessToken`, que as rotas do\npainel já usam, e o endereço do estabelecimento em `tenantSlug`.\n\n**Ids:** as listagens guardam o primeiro id (`categoryId`, `productId`…) e as criações guardam\no id criado. As rotas seguintes já apontam para ele.\n\n**Pedido público:** rode antes o cardápio do estabelecimento, que escolhe um produto e calcula\no total. O estabelecimento precisa estar aberto — a `padaria-pao-quente` abre das 08:00 às 18:00.\n\n**Cadastro:** cadastrar troca `tenantSlug`, `email`, `password` e `accessToken` para o\nestabelecimento criado; confirmar o e-mail busca o link no Mailpit sozinho.\n\n**Tempo real** não cabe numa coleção: no Postman, New → WebSocket, conecte em\n`ws://localhost:3333/api/v1/admin/orders/stream` e envie\n`{\"type\": \"auth\", \"token\": \"<accessToken>\"}`.",
+    "description": "Gerada por `pnpm postman` a partir das rotas da API — **não edite à mão**: a próxima geração\ndesfaz. Corpos de exemplo e scripts ficam em `apps/api/src/postman/exemplos.ts`.\n\n**Para começar:** `pnpm db:up` e `pnpm dev`, e rode **Autenticação → Autentica um usuário\nadministrativo**. O login usa só `email` e `password` das variáveis da coleção — por padrão,\no Zé do seed, dono da Lanchonete do Zé e também da equipe da pizzaria. Ele guarda o token em\n`accessToken`, que as rotas do painel já usam, e o endereço do estabelecimento em `tenantSlug`.\n\"Troca a sessão para outro estabelecimento\" leva para o de `switchSlug`.\n\n**Ids:** as listagens guardam o primeiro id (`categoryId`, `productId`…) e as criações guardam\no id criado. As rotas seguintes já apontam para ele.\n\n**Pedido público:** rode antes o cardápio do estabelecimento, que escolhe um produto e calcula\no total. O estabelecimento precisa estar aberto — a `padaria-pao-quente` abre das 08:00 às 18:00.\n\n**Cadastro:** cadastrar troca `tenantSlug`, `email`, `password` e `accessToken` para o\nestabelecimento criado; confirmar o e-mail busca o link no Mailpit sozinho.\n\n**Convite:** convidar guarda o e-mail em `invitationEmail`; a consulta e o aceite buscam o link\nno Mailpit sozinhos. Aceitar troca a sessão para a pessoa convidada.\n\n**Tempo real** não cabe numa coleção: no Postman, New → WebSocket, conecte em\n`ws://localhost:3333/api/v1/admin/orders/stream` e envie\n`{\"type\": \"auth\", \"token\": \"<accessToken>\"}`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -50,6 +50,26 @@
       "key": "confirmationToken",
       "value": "",
       "description": "Preenchido do Mailpit pelo \"Confirmar e-mail\"."
+    },
+    {
+      "key": "switchSlug",
+      "value": "pizzaria-da-esquina",
+      "description": "Para onde a troca de estabelecimento leva. O Zé do seed também é da pizzaria."
+    },
+    {
+      "key": "invitationId",
+      "value": "",
+      "description": "O convite criado, ou o primeiro listado."
+    },
+    {
+      "key": "invitationEmail",
+      "value": "",
+      "description": "O e-mail do último convite criado: a consulta e o aceite buscam o link dele."
+    },
+    {
+      "key": "invitationToken",
+      "value": "",
+      "description": "Preenchido do Mailpit pela consulta e pelo aceite do convite."
     },
     {
       "key": "categoryId",
@@ -237,7 +257,7 @@
                 "login"
               ]
             },
-            "description": "O estabelecimento não é informado: o e-mail é único na plataforma, e a resposta traz o estabelecimento a que a pessoa pertence, em `establishment`.\n\nSó e-mail e senha: a resposta diz de qual estabelecimento a pessoa é. Guarda o token em `accessToken` e o endereço em `tenantSlug`; o refresh token fica no cookie, que o Postman guarda sozinho."
+            "description": "O e-mail e a senha são da conta, uma só em todos os estabelecimentos em que a pessoa trabalha. Ela entra no que usou por último, que vem em `establishment`; os outros estão em `GET /auth/establishments`, e a troca é por `POST /auth/switch`. Acesso desativado ou estabelecimento suspenso respondem 403, só depois de a senha conferir.\n\nSó e-mail e senha, os da conta: a pessoa entra no estabelecimento que usou por último, e a resposta diz qual. Guarda o token em `accessToken` e o endereço em `tenantSlug`; o refresh token fica no cookie, que o Postman guarda sozinho."
           }
         },
         {
@@ -276,6 +296,58 @@
               ]
             },
             "description": "Sem corpo: o refresh token vai no cookie guardado pelo login."
+          }
+        },
+        {
+          "name": "Troca a sessão para outro estabelecimento da conta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sessao = pm.response.json();",
+                  "if (pm.response.code < 300 && sessao.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', sessao.accessToken);",
+                  "  pm.collectionVariables.set('tenantSlug', sessao.establishment.slug);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"establishmentSlug\": \"{{switchSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/switch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "switch"
+              ]
+            },
+            "description": "Sem pedir a senha de novo: quem prova a conta é a sessão de agora, pelo cookie, como na renovação. O endereço só escolhe entre os estabelecimentos da conta — o de quem não é da equipe, ou foi desativado, responde 403 `NO_ACCESS`. A sessão anterior é revogada.\n\nSem senha: quem prova a conta é o refresh token do cookie. Rode antes o login. Guarda a sessão nova, como o login; para voltar, troque `switchSlug` por `lanchonete-do-ze`."
           }
         },
         {
@@ -330,6 +402,164 @@
               ]
             },
             "description": ""
+          }
+        },
+        {
+          "name": "Os estabelecimentos em que a conta da sessão entra",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/establishments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "establishments"
+              ]
+            },
+            "description": "Por nome, com o da sessão marcado em `current`. É a lista da troca de estabelecimento; os vínculos desativados e os estabelecimentos suspensos não aparecem.\n\nOs estabelecimentos da conta logada, com o da sessão em `current`."
+          }
+        },
+        {
+          "name": "O convite do link, para a página de aceite",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const mailpit = pm.collectionVariables.get('mailpitUrl');",
+                  "const para = pm.collectionVariables.get('invitationEmail');",
+                  "pm.sendRequest(mailpit + '/api/v1/messages', (erro, resposta) => {",
+                  "  if (erro) return console.warn('Mailpit fora do ar: cole o token do link em invitationToken.');",
+                  "  const mensagem = resposta.json().messages.find(",
+                  "    (m) => m.To.some((t) => t.Address === para) && m.Subject.startsWith('Convite'),",
+                  "  );",
+                  "  if (!mensagem) return console.warn('Nenhum convite para ' + para + ' no Mailpit.');",
+                  "  pm.sendRequest(mailpit + '/api/v1/message/' + mensagem.ID, (erro2, detalhe) => {",
+                  "    const achado = !erro2 && /convite#token=(\\S+)/.exec(detalhe.json().Text);",
+                  "    if (achado) pm.collectionVariables.set('invitationToken', achado[1]);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invitationToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/invitation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "invitation"
+              ]
+            },
+            "description": "O estabelecimento, o perfil, quem convidou e se o e-mail já tem conta — nesse caso, o aceite pede a senha dela; senão, o nome e uma senha nova. Convite cancelado, já aceito ou de link trocado responde 400 `INVITATION_INVALID`; vencido, 400 `INVITATION_EXPIRED`.\n\nBusca sozinho, no Mailpit, o último convite enviado para `invitationEmail`. Sem o Mailpit, cole em `invitationToken` o que vem depois de `#token=` no link."
+          }
+        },
+        {
+          "name": "Aceita o convite e entra no painel do estabelecimento",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const mailpit = pm.collectionVariables.get('mailpitUrl');",
+                  "const para = pm.collectionVariables.get('invitationEmail');",
+                  "pm.sendRequest(mailpit + '/api/v1/messages', (erro, resposta) => {",
+                  "  if (erro) return console.warn('Mailpit fora do ar: cole o token do link em invitationToken.');",
+                  "  const mensagem = resposta.json().messages.find(",
+                  "    (m) => m.To.some((t) => t.Address === para) && m.Subject.startsWith('Convite'),",
+                  "  );",
+                  "  if (!mensagem) return console.warn('Nenhum convite para ' + para + ' no Mailpit.');",
+                  "  pm.sendRequest(mailpit + '/api/v1/message/' + mensagem.ID, (erro2, detalhe) => {",
+                  "    const achado = !erro2 && /convite#token=(\\S+)/.exec(detalhe.json().Text);",
+                  "    if (achado) pm.collectionVariables.set('invitationToken', achado[1]);",
+                  "  });",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sessao = pm.response.json();",
+                  "if (pm.response.code < 300 && sessao.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', sessao.accessToken);",
+                  "  pm.collectionVariables.set('tenantSlug', sessao.establishment.slug);",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set('email', pm.collectionVariables.get('invitationEmail'));",
+                  "  pm.collectionVariables.set('password', 'Senha-do-teste-123');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invitationToken}}\",\n  \"name\": \"Pessoa Convidada\",\n  \"password\": \"Senha-do-teste-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/invitation/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "invitation",
+                "accept"
+              ]
+            },
+            "description": "Com conta: a senha dela (401 se não conferir), e o `name` é ignorado. Sem conta: `name` e uma senha nas regras do cadastro — a conta nasce com o e-mail confirmado. Devolve a sessão, como o login, já no estabelecimento do convite; uma sessão que o navegador tinha é encerrada.\n\nConta nova: `name` e `password`, nas regras do cadastro. Se o e-mail já tem conta, `password` é a dela, e `name` é ignorado. Troca a sessão, `email` e `password` para a pessoa convidada — para voltar ao Zé, restaure os valores iniciais das variáveis."
           }
         }
       ]
@@ -430,7 +660,7 @@
                 "signup"
               ]
             },
-            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). O cardápio nasce `PENDING`: responde 404 até o dono confirmar o e-mail pelo link enviado. Endereço em uso responde 409 `SLUG_TAKEN`; e-mail que já tem conta, 409 `EMAIL_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
+            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). E-mail sem conta: a conta nasce com o nome e a senha do formulário, e o cardápio nasce `PENDING` — responde 404 até o dono confirmar o e-mail pelo link enviado. E-mail com conta: a senha tem de ser a dela (senão, 409 `EMAIL_TAKEN`), o nome do formulário é ignorado, e o cardápio nasce `ACTIVE` se a conta já tem o e-mail confirmado. Endereço em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
           }
         },
         {
@@ -1947,52 +2177,7 @@
           }
         },
         {
-          "name": "Cria um usuário",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) pm.collectionVariables.set('userId', pm.response.json().id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Atendente de Teste\",\n  \"email\": \"atendente-{{$timestamp}}@exemplo.com\",\n  \"password\": \"Senha-do-atendente\",\n  \"profileId\": \"{{profileId}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/admin/users",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "admin",
-                "users"
-              ]
-            },
-            "description": "Com o perfil dele e uma senha inicial, que quem cadastra repassa à pessoa — ainda não há envio de convite por e-mail. Respeita o limite de usuários ativos do plano (409 `PLAN_USER_LIMIT`). Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`).\n\nRode antes \"Perfis do estabelecimento\", que guarda o `profileId`. O plano gratuito permite 2 usuários ativos."
-          }
-        },
-        {
-          "name": "Altera o nome ou o perfil de um usuário",
+          "name": "Muda o perfil de um usuário",
           "request": {
             "method": "PATCH",
             "header": [
@@ -2029,7 +2214,7 @@
                 }
               ]
             },
-            "description": "Ninguém muda o próprio perfil (409 `CANNOT_CHANGE_OWN_PROFILE`), e o proprietário não tem perfil (409 `OWNER_HAS_NO_PROFILE`). Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`)."
+            "description": "O nome e o e-mail são da conta da pessoa, e não se mudam por aqui. Ninguém muda o próprio perfil (409 `CANNOT_CHANGE_OWN_PROFILE`), e o proprietário não tem perfil (409 `OWNER_HAS_NO_PROFILE`). Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`)."
           }
         },
         {
@@ -2086,6 +2271,142 @@
               ]
             },
             "description": "Quem não tem todas as permissões de um perfil não o dá a ninguém, e não altera quem o tem (403 `PROFILE_OUT_OF_REACH`)."
+          }
+        },
+        {
+          "name": "Convites pendentes para a equipe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const lista = pm.response.json();",
+                  "if (Array.isArray(lista) && lista.length > 0) pm.collectionVariables.set('invitationId', lista[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/invitations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "invitations"
+              ]
+            },
+            "description": "Do mais novo para o mais antigo, vencidos inclusive."
+          }
+        },
+        {
+          "name": "Convida uma pessoa para a equipe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const envio = pm.response.json();",
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('invitationId', envio.invitation.id);",
+                  "  pm.collectionVariables.set('invitationEmail', envio.invitation.email);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"convidado-{{$timestamp}}@exemplo.com\",\n  \"profileId\": \"{{profileId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/invitations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "invitations"
+              ]
+            },
+            "description": "Manda ao e-mail um link que vale 7 dias. Quem já tem conta — em outro estabelecimento — aceita com a senha dela; quem não tem, cria a conta ao aceitar. A resposta não diz qual dos dois é. Um convite pendente ocupa vaga do plano (409 `PLAN_USER_LIMIT`). E-mail que já está na equipe responde 409 `USER_ALREADY_MEMBER`; com convite pendente, 409 `INVITATION_PENDING`. Quem não tem todas as permissões do perfil do convite não convida para ele, nem reenvia ou cancela o convite (403 `PROFILE_OUT_OF_REACH`).\n\nRode antes \"Perfis do estabelecimento\", que guarda o `profileId`. O e-mail chega no Mailpit (http://localhost:8025). No plano gratuito cabem 2 pessoas ativas, contando os convites pendentes."
+          }
+        },
+        {
+          "name": "Reenvia um convite, com um link novo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/invitations/:id/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "invitations",
+                ":id",
+                "resend"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{invitationId}}"
+                }
+              ]
+            },
+            "description": "O link anterior deixa de valer, e o prazo de 7 dias recomeça. Um minuto entre os envios do mesmo convite (429 `RESEND_TOO_SOON`). Quem não tem todas as permissões do perfil do convite não convida para ele, nem reenvia ou cancela o convite (403 `PROFILE_OUT_OF_REACH`).\n\nUm minuto entre os envios do mesmo convite. O link anterior deixa de valer."
+          }
+        },
+        {
+          "name": "Cancela um convite",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/invitations/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "invitations",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{invitationId}}"
+                }
+              ]
+            },
+            "description": "O link deixa de valer, e a vaga do plano fica livre. Quem não tem todas as permissões do perfil do convite não convida para ele, nem reenvia ou cancela o convite (403 `PROFILE_OUT_OF_REACH`)."
           }
         }
       ]

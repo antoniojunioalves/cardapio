@@ -144,19 +144,48 @@ Comportamento verificado em execução real (PostgreSQL 18.6, role `cardapio_app
 | Tenant A, `UPDATE` mirando linha de B   | `UPDATE 0`                  |
 | Tenant A, `INSERT` com `tenant_id` de B | rejeitado pelo `WITH CHECK` |
 
-**Uma tabela tem uma segunda policy: `users`.** O login pede só e-mail e senha (6.9), então precisa
-achar o estabelecimento de um e-mail antes de existir contexto de tenant:
+**Uma tabela global tem RLS assim mesmo: `accounts`** (Fase 25d). A conta é a pessoa — o e-mail, a
+senha e o nome —, a mesma em todos os estabelecimentos em que ela trabalha, e por isso não tem
+`tenant_id`. O que a protege são duas variáveis da transação, definidas só em
+`accounts/context.ts`:
 
 ```sql
-CREATE POLICY login_por_email ON users FOR SELECT
-  USING (email = nullif(current_setting('app.login_email', true), ''));
+-- O e-mail que se procura: o login, o cadastro e o aceite de um convite.
+CREATE POLICY conta_por_email ON accounts FOR SELECT
+  USING (email = nullif(current_setting('app.account_email', true), ''));
+CREATE POLICY conta_nova ON accounts FOR INSERT
+  WITH CHECK (email = nullif(current_setting('app.account_email', true), ''));
+
+-- A conta de quem já provou quem é: pela senha, pela sessão, ou pelo link de um e-mail.
+CREATE POLICY conta_propria ON accounts FOR ALL
+  USING      (id = nullif(current_setting('app.account_id', true), '')::uuid)
+  WITH CHECK (id = nullif(current_setting('app.account_id', true), '')::uuid);
+
+-- As contas da equipe do estabelecimento do contexto: users já vem filtrado pelo RLS dele.
+CREATE POLICY contas_da_equipe ON accounts FOR SELECT
+  USING (exists (select 1 from users where users.account_id = accounts.id));
 ```
 
-Policies permissivas se somam, então esta é uma porta a mais — do tamanho exato de uma linha. Quem
-define `app.login_email` lê a linha daquele e-mail e nenhuma outra; não lista, não altera, não
-apaga, e não enxerga nenhuma outra tabela. Sem a variável, nada muda. `tests/rls-guard.test.ts`
-lista as policies que não filtram por `app.tenant_id` (`POLICIES_FORA_DO_TENANT`): uma nova, ou esta
-deixando de ser só de leitura, falha no teste.
+Nenhuma delas lista contas: sem uma das variáveis, ou sem estabelecimento, `accounts` não mostra
+nada. E `users` — o vínculo da conta com cada estabelecimento — ganhou uma segunda policy:
+
+```sql
+CREATE POLICY vinculos_da_conta ON users FOR SELECT
+  USING (account_id = nullif(current_setting('app.account_id', true), '')::uuid
+         AND nullif(current_setting('app.tenant_id', true), '') IS NULL);
+```
+
+São os vínculos da conta em todos os estabelecimentos — o login e a troca de estabelecimento
+precisam deles antes de existir um no contexto. A segunda condição é a que importa: **dentro** de
+um estabelecimento, definir a conta (para confirmar o e-mail dela, por exemplo) não mostra a equipe
+de outro. As policies de `accounts` olham para `users`, e as de `users` não olham para `accounts`:
+não há recursão.
+
+Policies permissivas se somam, então cada uma é uma porta a mais, do tamanho exato do que diz.
+`tests/rls-guard.test.ts` lista as que não filtram por `tenant_id = app.tenant_id`
+(`POLICIES_FORA_DO_TENANT`) — mencionar a variável não basta, e `vinculos_da_conta` a menciona para
+exigir o contrário. Uma policy nova fora do tenant, ou uma destas mudando de comando, falha no
+teste. A policy `login_por_email` da Fase 18b, que lia `users.email`, saiu com a 25d.
 
 ### 2.5 Onde fica a fronteira da transação
 
@@ -181,7 +210,7 @@ Requisição
    ├─ TenantContext ....... qual tenant? NUNCA vindo do corpo ou da query
    │                         · área admin:    do usuário autenticado
    │                         · área pública:  do tenantSlug da URL, resolvido no backend
-   │                         · login:         do e-mail de quem entra, resolvido no backend
+   │                         · login e troca: de um vínculo da conta, lido do banco
    │
    ├─ Autorização ......... este usuário pode fazer isto neste tenant? (o perfil dele)
    │
@@ -204,14 +233,16 @@ tenantContextFromUser(tenantId) // área administrativa: do vínculo do usuário
 tenantContextFromPublicSlug(tenantId) // área pública: do tenantSlug da URL, já resolvido
 tenantContextFromToken(tenantId) // refresh token e link de confirmação: do prefixo do token
 tenantContextFromSignup(tenantId) // cadastro: o estabelecimento que está sendo criado
-tenantContextFromLoginEmail(tenantId) // login: o estabelecimento do e-mail de quem entra
+tenantContextFromAccount(tenantId) // login e troca: de um vínculo da conta, lido do banco
 tenantContextFromPlatform(tenantId) // comando da plataforma: o estabelecimento escolhido no servidor
 ```
 
 A de token e a de cadastro entraram na Fase 17. A de token nomeia o que a renovação de sessão já
 fazia (ela usava a de slug público); a de cadastro existe porque ali não há tenant anterior de onde
 tirar o contexto — o id é gerado pelo banco antes da transação que cria o estabelecimento (6.8). A
-de login entrou na Fase 18b, quando o login deixou de receber o slug (6.9). A da plataforma, na
+de login entrou na Fase 18b, quando o login deixou de receber o slug, e na 25d passou a ser a da
+conta: o estabelecimento sai dos vínculos dela, lidos do banco — no login, o usado por último; na
+troca, o pedido, mas só se a conta tiver um vínculo que entra nele (6.9). A da plataforma, na
 Fase 19, para os comandos do Super Admin (6.6) — nenhuma rota HTTP a usa.
 
 A ausência de um `tenantContextFrom(qualquerCoisa)` é o ponto. Para usar um `tenantId` vindo do
@@ -657,7 +688,8 @@ Aberto, no plano gratuito, sem pagamento (Fase 17). É o primeiro passo da visã
 page, escolher o plano, assinar, cadastrar-se e usar na hora —, e a parte paga fica no ROADMAP.
 
 **Uma transação só.** `criarEstabelecimento` (`signup/service.ts`) grava o estabelecimento, a
-assinatura do FREE, o dono — marcado como proprietário — e os quatro perfis prontos; o cadastro
+assinatura do FREE, o vínculo do dono — marcado como proprietário, com a conta nova ou com a que ele
+já tinha — e os quatro perfis prontos; o cadastro
 acrescenta, na mesma transação, o aceite
 dos termos, o link de confirmação e a sessão. Para isso o id do estabelecimento é pedido ao banco
 (`select uuidv7()`) **antes** da transação: o contexto nasce dele, e a tabela `tenants` — sem RLS —
@@ -686,39 +718,90 @@ produção, memória nos testes.
 mesmo nível das páginas do produto (`/cadastro`, `/termos`), e a API pública tem `/signup` ao lado de
 `/:tenantSlug`. Um estabelecimento num desses endereços ficaria inacessível.
 
-**E-mail que já tem conta é recusado** (409 `EMAIL_TAKEN`): o e-mail é o login, único na plataforma
-(6.9). A recusa vem da restrição do banco, dentro da transação — nada é criado e nenhum e-mail sai.
+**O e-mail é o da conta do dono** (6.9). Sem conta, ela nasce com o nome e a senha do formulário.
+Com conta, a senha tem de ser a dela — é como quem já trabalha num estabelecimento, ou já é dono de
+um, abre mais um —, e o nome do formulário é ignorado; se a conta já tem o e-mail confirmado, o
+estabelecimento nasce `ACTIVE`, sem link. Senha errada responde 409 `EMAIL_TAKEN`, sem criar nada e
+sem e-mail; isso revela que o e-mail tem conta — como antes da 25d —, e o limite de cadastros por IP
+(10 por hora) segura quem tentar adivinhar a senha por ali. A confirmação marca a **conta**
+(`accounts.email_verified_at`) e publica o estabelecimento do link.
 
-### 6.9 Entrar só com e-mail e senha
+### 6.9 A conta, os vínculos e o login
 
 O login não recebe o estabelecimento (Fase 18b): o dono pode não saber o endereço do próprio
-cardápio. `POST /api/v1/auth/login` recebe `email` e `password`, e a resposta — como a da renovação
-e a do cadastro — traz `establishment: { id, slug, name, status }`, de onde o painel tira o endereço.
+cardápio. `POST /api/v1/auth/login` recebe `email` e `password`, e a resposta — como a da renovação,
+a da troca, a do aceite de um convite e a do cadastro — traz `establishment: { id, slug, name,
+status }`, de onde o painel tira o endereço.
 
-**O e-mail é único na plataforma inteira**, e sempre em minúsculas (`users_email` e
-`users_email_minusculo`, no banco). É ele que diz de qual estabelecimento a pessoa é. Cada
-estabelecimento continua com vários usuários — o dono e os funcionários, cada um com o seu e-mail e
-a sua senha —, mas o mesmo e-mail não existe em dois estabelecimentos: quem tem dois usa um e-mail
-em cada. Uma pessoa em vários estabelecimentos com uma conta só está no ROADMAP.
+**A pessoa é a conta; o que ela é em cada estabelecimento, o vínculo** (Fase 25d). `accounts` guarda
+o e-mail — único na plataforma, sempre em minúsculas —, a senha e o nome. `users` é o vínculo: a
+conta, o perfil, se é a proprietária, se está ativa e o último acesso **naquele** estabelecimento.
+Uma conta tem um vínculo por estabelecimento (`users_conta_por_tenant`), e pode ter vários. O nome
+`users` ficou de antes: o que aponta para `users.id` — sessões, auditoria, quem fez o quê — aponta
+para a pessoa neste estabelecimento, que é o que o vínculo é. As policies estão em 2.4.
 
-**O custo dessa escolha apareceu na Fase 25a**, com a tela da equipe: quem já tem conta num
-estabelecimento não é cadastrado em outro — nem depois de desativado no primeiro, porque a conta
-desativada continua com o e-mail. Para um funcionário que troca de emprego, é um bloqueio. Resolver
-isso é a Fase 25d (PROJECT_PLAN.md), e os caminhos mexem justamente nesta seção: soltar o e-mail de
-quem saiu, a conta deixar de pertencer a um estabelecimento só, ou o login voltar a distinguir o
-estabelecimento.
+Até a 25d o e-mail morava em `users`, único na plataforma, e era ele que dizia de qual
+estabelecimento a pessoa era. A tela da equipe mostrou o custo (Fase 25a): quem já tinha conta num
+estabelecimento não entrava na equipe de outro, nem depois de desativado no primeiro.
 
-**Como o tenant é achado.** `users` está sob RLS, e nenhuma role ignora RLS. `tenantDoEmail`
-(`auth/login-lookup.ts`) abre uma transação, define `app.login_email` e lê só o `tenant_id` da linha
-que a policy `login_por_email` libera (2.4). É a segunda consulta do sistema que roda fora de
-contexto de tenant, pelo mesmo motivo da resolução do slug (2.8): é ela que estabelece o contexto.
-Não há tabela global de e-mails — seria uma lista de dados pessoais legível sem contexto.
+**O login confere a senha uma vez, na conta**, fora de transação (o argon2 não segura conexão do
+pool). Depois lê os vínculos da conta (`withAccount`, 2.4) e decide sem banco
+(`auth/login-decision.ts`): entra no vínculo **usado por último** entre os que servem — ativos, em
+estabelecimento não suspenso. A sessão é aberta dentro do estabelecimento escolhido, conferindo de
+novo, já ali, que o vínculo segue de pé.
 
-**A ordem das verificações** é a mesma de antes, com uma a mais no fim: e-mail inexistente e senha
-errada respondem o mesmo 401, gastando o mesmo tempo de argon2; só **depois** de a senha conferir a
-conta desativada e o estabelecimento suspenso recebem um 403 com o motivo. Antes da Fase 18b a
-suspensão era respondida antes da senha, porque o slug já era público; agora diria a qualquer um
-que aquele e-mail tem conta.
+**A ordem das verificações** continua a mesma: e-mail inexistente e senha errada respondem o mesmo
+401, gastando o mesmo tempo de argon2; só **depois** de a senha conferir vem o 403 com o motivo —
+"Este estabelecimento está suspenso", se a pessoa está ativa só em estabelecimentos suspensos;
+"Seu acesso foi desativado", se todos os vínculos estão desativados; "Esta conta não está na equipe
+de nenhum estabelecimento", sem vínculo. Desativada num, a pessoa entra no outro.
+
+**A troca de estabelecimento não pede a senha.** `POST /auth/switch { establishmentSlug }` usa o
+refresh token do cookie, como a renovação: ele prova a conta. O endereço só **escolhe** entre os
+estabelecimentos em que a conta tem um vínculo que entra — o de outro, ou o de um vínculo
+desativado, responde 403 `NO_ACCESS` —, e o tenant da sessão nova sai dos vínculos lidos do banco
+(`tenantContextFromAccount`, 2.7). A sessão nova abre antes de a anterior ser revogada; revogada, e
+não apagada, como numa rotação (6.3). `GET /auth/establishments` dá a lista para o menu.
+
+**A auditoria fica em cada estabelecimento, e não diz de onde a pessoa veio**: a troca registra
+`auth.login` no destino, com `via: troca de estabelecimento`, sem citar o outro. Quem lê a auditoria
+de um não fica sabendo onde mais a pessoa trabalha.
+
+**Não há tabela global de e-mails legível sem contexto.** `accounts` é global, mas sem uma das duas
+variáveis da transação não mostra nada (2.4) — seria uma lista de dados pessoais.
+
+### 6.10 A equipe entra por convite
+
+Desde a 25d, o dono não digita mais o nome nem a senha de ninguém: convida pelo e-mail, com o
+perfil, e a pessoa aceita pelo link. Com conta, entra com a senha de sempre; sem conta, cria a dela.
+O dono nunca conhece a senha de ninguém — e por isso a 25b não tem "o dono redefine a senha".
+
+**O convite** (`invitations`, com RLS do estabelecimento) segue o desenho do link de confirmação
+(6.8): `{tenantId}.{256 bits}`, só o hash no banco, o token no fragmento (`/convite#token=…`).
+Vale 7 dias; reenviar troca o hash — o link anterior deixa de valer — e recomeça o prazo. Aceito
+ou cancelado, a linha sai: o que aconteceu fica na auditoria (`invitation.created`, `.resent`,
+`.cancelled`, `.accepted`).
+
+**O aceite** (`POST /auth/invitation/accept`) roda em duas transações, com a senha no meio: a
+primeira lê o convite e a conta do e-mail; a senha é conferida (conta que existe) ou calculada
+(conta nova) fora de transação; a segunda **trava o convite** (`FOR UPDATE`), confere tudo de novo,
+cria a conta se for o caso — já com o e-mail confirmado, porque o link chegou a ele —, apaga o
+convite, confere a vaga do plano e grava o vínculo. Dois aceites ao mesmo tempo: o segundo espera e
+encontra o convite já usado. As rotas do aceite ficam sob `/auth` para receber o cookie: a sessão
+que o navegador tinha é revogada.
+
+**A vaga do plano conta os convites**: um pendente no prazo é uma vaga prometida (`usoDeUsuarios`),
+e quem aceita não pode dar com o plano cheio. O vencido não conta; reenviá-lo confere a vaga.
+
+**O e-mail não repete texto livre** — nem o nome do estabelecimento, nem o de quem convidou, nem o
+do perfil —, pela regra da confirmação (6.8): o endereço foi digitado por outra pessoa. Contra
+abuso: 20 pendentes por estabelecimento, um minuto entre envios do mesmo convite e
+`INVITATION_EMAILS_PER_HOUR` envios por hora em cada estabelecimento, contados pela auditoria — que
+guarda até os envios de convites já cancelados.
+
+**O cliente não tem conta aqui** (8.9). Quando a conta de cliente existir, é outra tabela, do
+estabelecimento; o mesmo e-mail pode ser equipe e cliente, no mesmo estabelecimento ou em outro, e
+as duas nunca dividem unicidade.
 
 ### 6.7 Auditoria
 
@@ -998,6 +1081,12 @@ Correios vai preencher o resto. A coluna é anulável só para os endereços gra
 salvas por substituição do conjunto e mudam de id. O cliente nasce no primeiro pedido (Fase 11);
 não há conta com senha no MVP.
 
+**O cliente nunca divide unicidade com a equipe** (decisão do Junio, Fase 25d). A conta da equipe
+(`accounts`, 6.9) é global e da pessoa; o cliente é do estabelecimento. Um funcionário pede em
+qualquer cardápio — inclusive no do próprio trabalho — como qualquer cliente, e quando a conta de
+cliente existir (ROADMAP) ela será outra tabela, do estabelecimento: o mesmo e-mail poderá ser
+equipe e cliente, no mesmo estabelecimento ou em outro.
+
 `POST /api/v1/public/{tenantSlug}/customers/identify` reconhece quem já pediu. Como telefone não
 prova identidade (SECURITY.md, seção 5), a resposta é deliberadamente pobre: primeiro nome e, de
 cada endereço, rua, bairro e número mascarado — o CEP não sai. **O endereço completo nunca volta ao navegador** —
@@ -1106,6 +1195,7 @@ src/
 | `/cadastro`                        | cadastro do estabelecimento                  |
 | `/entrar`                          | login do painel, com e-mail e senha          |
 | `/confirmar-email`                 | confirmação do e-mail pelo link (`#token=…`) |
+| `/convite`                         | aceite do convite para a equipe (`#token=…`) |
 | `/termos`, `/privacidade`          | termos de uso e política de privacidade      |
 | `/:tenantSlug`                     | cardápio público                             |
 | `/:tenantSlug/checkout`            | finalizar pedido                             |
@@ -1180,7 +1270,9 @@ carrinho do Zustand, e monta o formulário com React Hook Form + Zod.
 no cookie `httpOnly` da API, e as chamadas de autenticação o enviam (`credentials: 'include'`).
 No `localStorage` ficam só o slug e quem está logado — a sessão é de um estabelecimento, e o slug vem
 da resposta da API (`establishment.slug`), nunca digitado. O login é um só, em `/entrar`: quem já
-tem sessão é levado ao painel do seu estabelecimento, e o painel sem sessão volta para lá. `comSessao` chama a
+tem sessão é levado ao painel do seu estabelecimento, e o painel sem sessão volta para lá. **O
+painel segue a sessão** (Fase 25d): no endereço de outro estabelecimento — a troca pelo menu, ou um
+endereço digitado —, a moldura vai direto para o painel da sessão, sem passar pelo login. `comSessao` chama a
 API com o token e, num 401, renova uma vez e repete; a renovação é única mesmo com várias
 chamadas simultâneas, porque duas apresentariam o mesmo refresh token e o servidor as trataria
 como roubo.
@@ -1192,9 +1284,14 @@ de status saem de `proximosStatus`, a regra de `packages/shared` que a API tamb�
 uma rota filha, desenhada no `Outlet`. O que vale para o painel inteiro mora nela, e não em cada
 tela:
 
-- a **conferência da sessão** — sem sessão daquele estabelecimento, vai para `/entrar`;
+- a **conferência da sessão** — sem sessão, vai para `/entrar`; com a de outro estabelecimento,
+  para o painel dele;
 - a **conexão ao vivo**, uma só: manda reler a lista, o resumo e o uso do plano, e não cai ao
-  trocar de tela;
+  trocar de tela — mas reabre ao trocar de estabelecimento, porque autentica com o token de um só;
+- a **troca de estabelecimento** (Fase 25d): para quem está na equipe de mais de um
+  (`GET /auth/establishments`), o menu mostra "Trocar de estabelecimento", que abre
+  `SwitchEstablishmentSheet`. Ela só troca a sessão (`trocarDeEstabelecimento`); o painel a segue.
+  Todas as consultas do painel levam o slug na chave, e não se misturam entre estabelecimentos;
 - o **alerta sonoro** e o número de pedidos novos no título da aba (`useTituloDoPainel`) — o
   pedido novo é percebido em qualquer tela, não só na de pedidos;
 - o indicador "Ao vivo" e o botão do som, na barra do topo.
@@ -1385,9 +1482,16 @@ perguntam por elas — nunca pelo nome do perfil, que é do estabelecimento e po
 
 **A equipe** (`features/admin/team.ts`, `AdminTeamPage` e `AdminProfilesPage`) segue o desenho das
 Configurações: um item no menu, abas com endereço próprio (`TeamTabs`) e janelas `FormSheet`
-(`PersonSheet`, `ProfileSheet`). As regras de alcance da API estão espelhadas em funções sem tela —
-`alcanca`, `alcancaAPessoa`, `marcarPermissao`, `desmarcarPermissao` —, para a tela não oferecer o
-que seria recusado. A janela do perfil desenha as caixas a partir de `permissoesPorGrupo()`, do
+(`InviteSheet`, `PersonSheet`, `ProfileSheet`). Desde a 25d, "Convidar pessoa" pede o e-mail e o
+perfil; os convites pendentes aparecem embaixo da lista, com "Reenviar" e "Cancelar"; e a ficha de
+uma pessoa só muda o perfil — o nome e o e-mail são da conta dela. As regras de alcance da API estão
+espelhadas em funções sem tela — `alcanca`, `alcancaAPessoa`, `marcarPermissao`,
+`desmarcarPermissao` —, para a tela não oferecer o que seria recusado.
+
+**A página do convite** (`AcceptInvitationPage`, em `/convite`) segue a da confirmação: o token
+sai do fragmento e do endereço na hora, e vai à API no corpo de um POST. Mostra quem convidou, para
+onde e com que perfil; com conta, pede só a senha; sem conta, o nome e uma senha nas regras do
+cadastro, com `PasswordRules`. Aceito, a sessão já está aberta, e a pessoa cai no painel. A janela do perfil desenha as caixas a partir de `permissoesPorGrupo()`, do
 `packages/shared`: permissão nova no catálogo aparece na tela sem mexer nela.
 
 ### 9.7 Temas
@@ -1427,8 +1531,9 @@ parâmetro, e é por isso que esses endereços estão em `SLUGS_RESERVADOS` (6.8
 termos e o fuso, que a tela preenche. O endereço do cardápio é sugerido pelo nome até a pessoa
 editá-lo, e conferido na API 400 ms depois da última tecla. A chamada leva `credentials`, como o
 login: o refresh token vem num cookie. Deu certo, a sessão já está aberta, e a pessoa cai no
-painel — com o recado de que o e-mail não saiu, se for o caso, no estado da navegação. E-mail que
-já tem conta (`EMAIL_TAKEN`) vira erro no próprio campo, com o atalho para `/entrar`.
+painel — com o recado de que o e-mail não saiu, se for o caso, no estado da navegação. Com o e-mail
+de uma conta que existe, vale a senha dela (6.8); com outra senha, a recusa (`EMAIL_TAKEN`) vira
+erro no próprio campo, com o atalho para `/entrar`.
 
 **A confirmação** lê o token do fragmento e o tira do endereço na hora; o POST sai uma vez por
 token (chave do React Query). **O painel** mostra o aviso de confirmação a quem tem
@@ -1589,8 +1694,9 @@ início do mês no fuso vem de `src/lib/timezone.ts`:
   tolerância de 10%; passada ela, o cardápio público passa a `NAO_RECEBENDO` e, como o pedido é
   calculado sobre a mesma montagem, é recusado pela mesma regra. Cancelados contam. O mês é o do
   calendário no fuso do estabelecimento, pelo `Intl`.
-- **Usuários ativos** (`maxUsers`): limite exato, conferido ao criar e ao reativar — com a mesma
-  trava dos produtos, abaixo.
+- **Usuários ativos** (`maxUsers`): limite exato, conferido ao convidar, ao reenviar um convite
+  vencido, ao aceitar e ao reativar — com a mesma trava dos produtos, abaixo. Desde a 25d contam
+  também os convites pendentes no prazo: cada um é uma vaga prometida (`exigirVagaNaEquipe`).
 - **Produtos e categorias** (`maxProducts`, `maxCategories`, Fase 20): limite exato, conferido ao
   criar. No plano gratuito, 20 produtos e 10 categorias — contra o abuso do cadastro aberto, já
   que cada um guarda uma imagem. Todo produto conta: combo, indisponível, sem foto. Excluir abre

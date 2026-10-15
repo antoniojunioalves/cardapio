@@ -34,10 +34,12 @@ export function publicSignupRoutes(instance: FastifyInstance): void {
         summary: 'Cadastra um estabelecimento no plano gratuito',
         description:
           'Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, ' +
-          'e já devolve a sessão (refresh token no cookie, como no login). O cardápio nasce ' +
-          '`PENDING`: responde 404 até o dono confirmar o e-mail pelo link enviado. Endereço ' +
-          'em uso responde 409 `SLUG_TAKEN`; e-mail que já tem conta, 409 `EMAIL_TAKEN`. ' +
-          'Limite próprio por IP.',
+          'e já devolve a sessão (refresh token no cookie, como no login). E-mail sem conta: a ' +
+          'conta nasce com o nome e a senha do formulário, e o cardápio nasce `PENDING` — ' +
+          'responde 404 até o dono confirmar o e-mail pelo link enviado. E-mail com conta: a ' +
+          'senha tem de ser a dela (senão, 409 `EMAIL_TAKEN`), o nome do formulário é ignorado, e ' +
+          'o cardápio nasce `ACTIVE` se a conta já tem o e-mail confirmado. Endereço em uso ' +
+          'responde 409 `SLUG_TAKEN`. Limite próprio por IP.',
         body: cadastroSchema,
         response: {
           201: sessaoSchema.extend({ confirmationEmailSent: z.boolean() }),

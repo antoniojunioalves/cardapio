@@ -30,12 +30,15 @@ const ROTAS_ABERTAS: Record<string, string> = {
   'POST /api/v1/auth/login': 'login, com limite',
   'POST /api/v1/auth/refresh': 'renovação pelo refresh token',
   'POST /api/v1/auth/logout': 'logout pelo refresh token',
+  'POST /api/v1/auth/switch': 'troca de estabelecimento pelo refresh token, com limite',
+  'POST /api/v1/auth/invitation': 'o convite pelo token do link, com limite',
+  'POST /api/v1/auth/invitation/accept': 'aceite do convite pelo token do link, com limite',
   'GET /uploads/*': 'imagens públicas',
   'OPTIONS *': 'pré-verificação de CORS, respondida pelo plugin',
 }
 
 /** Fora do prefixo do painel, mas protegidas: precisam responder 401 sem login. */
-const PROTEGIDAS_FORA_DO_ADMIN = new Set(['GET /api/v1/auth/me'])
+const PROTEGIDAS_FORA_DO_ADMIN = new Set(['GET /api/v1/auth/me', 'GET /api/v1/auth/establishments'])
 
 const protegida = (r: { metodo: string; url: string }) =>
   r.url.startsWith('/api/v1/admin') || PROTEGIDAS_FORA_DO_ADMIN.has(`${r.metodo} ${r.url}`)

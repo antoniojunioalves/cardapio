@@ -2,13 +2,13 @@ import { PERFIS_PRONTOS, TODAS_AS_PERMISSOES } from '@repo/shared'
 
 import type { UsoDoPlano } from '../../src/features/admin/plan'
 import { useSessaoStore } from '../../src/features/admin/session'
-import type { Perfil, Pessoa } from '../../src/features/admin/team'
+import type { Convite, Perfil, Pessoa } from '../../src/features/admin/team'
 import { ADMIN, sessao } from './cardapio-admin'
 import { abrirComLocal, mockarRotas, type Resposta } from './pagina'
 
 /**
- * A equipe do painel nos testes: os perfis prontos, quatro pessoas e uma API
- * simulada que guarda o que recebe. Quem está logado é sempre o Zé (`id: 'u'`);
+ * A equipe do painel nos testes: os perfis prontos, quatro pessoas, os convites
+ * e uma API simulada que guarda o que recebe. Quem está logado é sempre o Zé (`id: 'u'`);
  * o que muda de um teste para o outro é o que ele é — o proprietário, ou
  * alguém com um dos perfis.
  */
@@ -41,6 +41,16 @@ export const pessoa = (dados: Partial<Pessoa> & Pick<Pessoa, 'id' | 'name'>): Pe
   isActive: true,
   lastLoginAt: null,
   createdAt: '2026-09-01T12:00:00.000Z',
+  ...dados,
+})
+
+/** Um convite pendente, no prazo, enviado pelo Zé. */
+export const convite = (dados: Partial<Convite> & Pick<Convite, 'id' | 'email'>): Convite => ({
+  profile: { id: 'pf-atendente', name: 'Atendente' },
+  invitedBy: 'Zé',
+  expiresAt: '2099-10-21T12:00:00.000Z',
+  sentAt: '2026-10-14T12:00:00.000Z',
+  createdAt: '2026-10-14T12:00:00.000Z',
   ...dados,
 })
 
@@ -80,11 +90,11 @@ export function comoPerfil(perfilId: string) {
   }
 }
 
-export function usoDaEquipe(ativas: number, limite: number | null): UsoDoPlano {
+export function usoDaEquipe(ativas: number, limite: number | null, convites = 0): UsoDoPlano {
   return {
     plan: { code: 'FREE', name: 'Grátis' },
     orders: { used: 0, limit: 100, ceiling: 110, state: 'LIVRE' },
-    users: { active: ativas, limit: limite },
+    users: { active: ativas, invited: convites, limit: limite },
     products: { used: 0, limit: null },
     categories: { used: 0, limit: null },
   }
@@ -93,8 +103,9 @@ export function usoDaEquipe(ativas: number, limite: number | null): UsoDoPlano {
 export interface ApiDaEquipe {
   pessoas?: Pessoa[]
   perfis?: PerfilGuardado[]
+  convites?: Convite[]
   plano?: UsoDoPlano
-  /** Respostas forçadas, por `MÉTODO /caminho` depois de `/admin`: `'POST /users'`. */
+  /** Respostas forçadas, por `MÉTODO /caminho` depois de `/admin`: `'POST /invitations'`. */
   forcar?: Record<string, Resposta>
 }
 
@@ -105,13 +116,14 @@ export interface Envio {
 }
 
 /**
- * Uma API da equipe que guarda o que recebe: cadastrar, alterar, desativar e
- * excluir mudam o que as leituras seguintes devolvem. Devolve o que foi
- * enviado, sem as leituras.
+ * Uma API da equipe que guarda o que recebe: convidar, alterar, desativar,
+ * cancelar e excluir mudam o que as leituras seguintes devolvem. Devolve o que
+ * foi enviado, sem as leituras.
  */
 export function simularEquipe(api: ApiDaEquipe = {}) {
   let pessoas = structuredClone(api.pessoas ?? PESSOAS)
   let perfis = structuredClone(api.perfis ?? PERFIS)
+  let convites = structuredClone(api.convites ?? [])
   let novos = 0
   const enviados: Envio[] = []
   const ok = (corpo: unknown): Resposta => ({ status: 200, corpo })
@@ -137,27 +149,35 @@ export function simularEquipe(api: ApiDaEquipe = {}) {
     if (caminho === '/setup-checklist') return ok({ ready: true, steps: [] })
     if (caminho === '/orders/summary') return ok({ new: 0, inProgress: 0, completedToday: 0 })
 
+    if (recurso === 'invitations') {
+      if (metodo === 'GET') return ok(convites)
+      if (metodo === 'POST' && !id) {
+        const perfil = doPerfil(dados.profileId)
+        const criado = convite({
+          id: `cv-novo-${String(++novos)}`,
+          email: (dados.email as string).toLowerCase(),
+          ...(perfil && { profile: perfil }),
+        })
+        convites = [criado, ...convites]
+        return { status: 201, corpo: { invitation: criado, emailSent: true } }
+      }
+      if (metodo === 'POST' && acao === 'resend') {
+        convites = convites.map((c) =>
+          c.id === id ? { ...c, expiresAt: '2099-10-28T12:00:00.000Z' } : c,
+        )
+        return ok({ invitation: convites.find((c) => c.id === id), emailSent: true })
+      }
+      if (metodo === 'DELETE') {
+        convites = convites.filter((c) => c.id !== id)
+        return { status: 204, corpo: undefined }
+      }
+    }
+
     if (recurso === 'users') {
       if (metodo === 'GET') return ok(pessoas)
-      if (metodo === 'POST' && !id) {
-        const criada = pessoa({
-          id: `p-nova-${String(++novos)}`,
-          name: dados.name as string,
-          email: dados.email as string,
-          profile: doPerfil(dados.profileId),
-        })
-        pessoas.push(criada)
-        return { status: 201, corpo: criada }
-      }
       if (metodo === 'PATCH') {
         pessoas = pessoas.map((p) =>
-          p.id === id
-            ? {
-                ...p,
-                ...(typeof dados.name === 'string' && { name: dados.name }),
-                ...(dados.profileId !== undefined && { profile: doPerfil(dados.profileId) }),
-              }
-            : p,
+          p.id === id ? { ...p, profile: doPerfil(dados.profileId) } : p,
         )
         return ok(pessoas.find((p) => p.id === id))
       }

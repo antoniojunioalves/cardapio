@@ -1,8 +1,8 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-07
-**Fase atual:** 25a — concluída, aguardando validação
-**Próxima:** 25b — senhas: trocar a própria, o dono redefinir a de outra pessoa. As fases 25 a 28
+**Atualizado em:** 2026-10-14
+**Fase atual:** 25d — concluída, aguardando validação
+**Próxima:** 25b — "Minha conta": trocar a própria senha e o próprio nome. As fases 25 a 28
 fecham o MVP (ver "O que falta para o MVP")
 
 ---
@@ -66,9 +66,10 @@ e-mail abre `/confirmar-email`, que publica o cardápio. `/termos` e `/privacida
 (provisório) que o cadastro aceita. O
 checkout avisa para onde vão os dados do cliente.
 
-**Entra-se só com e-mail e senha (Fase 18b).** `/entrar` não pergunta o estabelecimento: o
-e-mail é único na plataforma, a API acha de qual estabelecimento a pessoa é e a tela segue para o
-painel dele. Vale para o dono e para os funcionários, cada um com o seu e-mail e a sua senha.
+**Entra-se só com e-mail e senha (Fase 18b), os da conta (Fase 25d).** `/entrar` não pergunta o
+estabelecimento: a pessoa entra no que usou por último. Desde a 25d a conta é da pessoa — um
+e-mail, uma senha —, e ela pode estar na equipe de mais de um estabelecimento; troca de um para
+outro pelo menu do painel, sem digitar a senha de novo.
 
 **O painel tem moldura e menu (Fase 18c).** `/{tenantSlug}/admin` abre o Início, com o resumo dos
 pedidos de hoje e os avisos do estabelecimento; o menu lateral — gaveta no celular, fixo em tela
@@ -109,16 +110,22 @@ cadastro — a mesma janela da aba Opcionais; a categoria também se cria e se e
 sobre a lista.
 
 **A equipe e o que cada um pode fazer também (Fase 25a).** A tela Equipe tem duas abas. Em
-"Pessoas", o dono cadastra quem trabalha com ele, dá a cada um um perfil, e desativa ou reativa. Em
+"Pessoas", o dono convida quem trabalha com ele (desde a 25d, por e-mail), dá a cada um um perfil,
+e desativa ou reativa. Em
 "Perfis", monta os perfis — conjuntos de permissões com nome —, a partir de quatro prontos:
 Administrador, Gerente do cardápio, Atendente e Cozinha. As permissões ficaram mais finas: marcar o
 que esgotou, mexer em preço e alterar o resto do produto são três; cancelar um pedido é separado de
 mudar o status; pausar o recebimento de pedidos é separado das configurações. O painel inteiro
 passou a ligar só o que o perfil de quem está logado alcança.
 
-**Ainda não existe:** trocar a própria senha, redefinir a de outra pessoa e o "esqueci minha senha"
-(Fases 25b e 25c), cadastrar num estabelecimento o e-mail de quem já trabalhou em outro (Fase 25d),
-e a tela de clientes (Fase 26). As fases 25 a 28 fecham o MVP; ver "O que falta para o MVP".
+**Uma conta por pessoa, e o convite para a equipe (Fase 25d).** Quem entra na equipe entra por
+um link no e-mail: com conta, aceita com a senha de sempre; sem conta, cria a dela ali. O mesmo
+e-mail serve em quantos estabelecimentos a pessoa trabalhar — e quem já tem conta abre mais um
+estabelecimento com ela, pela página de cadastro.
+
+**Ainda não existe:** trocar a própria senha e o próprio nome (Fase 25b), o "esqueci minha senha"
+(Fase 25c) e a tela de clientes (Fase 26). As fases 25 a 28 fecham o MVP; ver "O que falta para
+o MVP".
 
 ---
 
@@ -157,9 +164,9 @@ e a tela de clientes (Fase 26). As fases 25 a 28 fecham o MVP; ver "O que falta 
 | 23  | Categorias e produtos                                                                                               | ✅ Concluída |
 | 24  | Grupos de opção, adicionais e combos                                                                                | ✅ Concluída |
 | 25a | Equipe e permissões: perfis do estabelecimento, permissões mais finas, as telas Pessoas e Perfis                    | ✅ Concluída |
-| 25b | Senhas: trocar a própria, o dono redefinir a de outra pessoa                                                        | ⬜ Próxima   |
+| 25d | Uma conta por pessoa, com um vínculo em cada estabelecimento, e o convite para a equipe — _antes da 25b_            | ✅ Concluída |
+| 25b | "Minha conta": trocar a própria senha e o próprio nome                                                              | ⬜ Próxima   |
 | 25c | "Esqueci minha senha", por e-mail                                                                                   | ⬜           |
-| 25d | O mesmo e-mail em mais de um estabelecimento — _achado do Junio na validação da 25a; antes da 26_                   | ⬜           |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
 | 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
 | 28  | Colocar no ar — religa antes o CI guardado na Fase 16                                                               | ⬜           |
@@ -168,6 +175,194 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 25d — concluída
+
+A resposta ao achado do Junio na validação da 25a: o e-mail de quem trabalhou num estabelecimento
+não entrava na equipe de outro. Feita **antes da 25b**, porque mexe no que as senhas vão usar. Mudou
+o banco (a conta saiu de `users`), o login, o cadastro, a equipe e três telas. **Duas migrations
+novas**, que convertem os dados: rode `pnpm db:migrate`. A coleção do Postman mudou: importe de novo.
+
+### Decisões do Junio (2026-10-14)
+
+- **O modelo de mercado:** uma **conta por pessoa** (um e-mail, uma senha, o nome), com um
+  **vínculo** em cada estabelecimento — o perfil, se é a proprietária, se está ativa. A pessoa entra
+  na equipe **por convite no e-mail** e **troca de estabelecimento** sem sair.
+- **O cliente fica separado**, por estabelecimento (`customers`), e nunca divide unicidade com a
+  conta da equipe: o mesmo e-mail pode ser equipe e cliente, no mesmo estabelecimento ou em outro.
+  Nesta fase, só a regra escrita; a conta de cliente continua no ROADMAP.
+- **Sem senha e provedor de identidade pronto: depois** (ROADMAP).
+- **As nove escolhas do plano**, aprovadas como estavam (abaixo, "O que foi decidido").
+
+### Microtasks
+
+| #   | Tarefa                                                                                                  | Status |
+| --- | ------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | `accounts` e `invitations`; `users` vira o vínculo; as migrations 0026 e 0027, com os dados convertidos | ✅     |
+| 2   | O contexto da conta no banco (`withAccount`, `app.account_id`, `app.account_email`) e as policies       | ✅     |
+| 3   | Login pela conta, entrando no estabelecimento usado por último; renovação; a lista e a troca            | ✅     |
+| 4   | Cadastro com conta nova ou com a conta que já existe; a confirmação marca a conta                       | ✅     |
+| 5   | Convites: convidar, reenviar e cancelar no painel; o e-mail; consultar e aceitar pelo link              | ✅     |
+| 6   | Equipe: sem criar com senha nem mudar nome; o plano conta os convites; perfil com convite não se exclui | ✅     |
+| 7   | Painel: a troca no menu, a página `/convite`, a equipe com convites, o cadastro com conta existente     | ✅     |
+| 8   | Seed (o Zé também na pizzaria), coleção do Postman (73 requisições) e os comandos da plataforma         | ✅     |
+
+### O que foi decidido
+
+**A pessoa é a conta; o que ela é em cada estabelecimento, o vínculo.** `accounts` guarda o e-mail
+(único na plataforma, em minúsculas), a senha e o nome. `users` continua com esse nome e passou a
+ser o vínculo: `account_id`, o perfil, `is_owner`, `is_active` e o último acesso **naquele**
+estabelecimento — e a mesma conta não entra duas vezes no mesmo (`users_conta_por_tenant`). Saíram
+de `users` o e-mail, a senha, o nome, o `email_verified_at`, a unicidade do e-mail e a policy
+`login_por_email`. Não renomear `users` foi de propósito: as sessões, a auditoria e o `Ator`
+continuam apontando para "a pessoa neste estabelecimento", que é o que o vínculo é.
+
+**A conta é global, e o RLS dela é outro.** Sem `tenant_id`, ela é protegida por duas variáveis da
+transação, e nenhuma policy deixa listar contas:
+
+| Policy                       | O que libera                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| `conta_por_email` (leitura)  | a conta do e-mail em `app.account_email` — o login, o cadastro e o convite procuram por ele     |
+| `conta_nova` (inserção)      | criar só a conta desse mesmo e-mail                                                             |
+| `conta_propria` (tudo)       | a conta de `app.account_id`, que só se define depois de a pessoa provar quem é                  |
+| `contas_da_equipe` (leitura) | as contas com vínculo no estabelecimento do contexto — a lista da equipe, a sessão, a auditoria |
+| `users.vinculos_da_conta`    | os vínculos da conta em todos os estabelecimentos, para o login e a troca — **só sem tenant**   |
+
+A última é a que exigiu cuidado: dentro de um estabelecimento, definir a conta (para confirmar o
+e-mail dela, por exemplo) não mostra a equipe de outro. O código fica em `accounts/context.ts`.
+
+**O login confere a senha uma vez, na conta, e entra no estabelecimento usado por último.** A
+regra de qual vínculo serve mora sem banco (`auth/login-decision.ts`): ativo, num estabelecimento
+não suspenso; o mais recente primeiro. Sem nenhum que sirva, o 403 diz o motivo — "Este
+estabelecimento está suspenso", "Seu acesso foi desativado. Fale com o administrador do
+estabelecimento." ou "Esta conta não está na equipe de nenhum estabelecimento." —, sempre só depois
+de a senha conferir. Desativada num, a pessoa entra no outro.
+
+**Trocar de estabelecimento não pede a senha.** `POST /auth/switch` usa o cookie da sessão, como a
+renovação: o endereço pedido só escolhe entre os estabelecimentos em que a conta tem um vínculo que
+entra — o de quem não é da equipe responde 403 `NO_ACCESS`, e a sessão de antes continua. A sessão
+nova abre antes de a anterior ser revogada. O menu do painel mostra "Trocar de estabelecimento" só
+para quem está em mais de um (`GET /auth/establishments`), com o atual marcado. A auditoria do
+destino registra a entrada sem dizer de onde a pessoa veio: quem lê a de um não fica sabendo onde
+mais ela trabalha. É um estabelecimento por vez em cada navegador: as abas dividem o cookie.
+
+**Quem entra na equipe entra por convite.** "Convidar pessoa" pede o e-mail e o perfil; saíram o
+nome e a senha que o dono digitava. O link (`/convite#token=…`) vale 7 dias, segue o desenho do
+link de confirmação (tenant no token, só o hash no banco, no fragmento) e leva à página do aceite:
+
+- **sem conta**, a pessoa escolhe o nome e a senha, nas regras do cadastro, e a conta nasce com o
+  e-mail confirmado — o link chegou a ele;
+- **com conta** (trabalha em outro estabelecimento, ou é dona de um), digita a senha de sempre; o
+  nome que vier é ignorado.
+
+Nos dois casos ela cai no painel de quem convidou, e uma sessão que o navegador tinha acaba. A tela
+da equipe nunca diz se o e-mail tem conta em outro lugar; só a página do link diz, a quem o abriu.
+
+**As regras do convite:**
+
+- ninguém convida para um perfil que não alcança, nem reenvia ou cancela um convite assim (a regra
+  da 25a);
+- um convite pendente no prazo **ocupa vaga do plano**, como uma pessoa ativa — vale também para a
+  reativação; o vencido não ocupa, e reenviá-lo confere a vaga de novo;
+- e-mail que já está na equipe: 409 `USER_ALREADY_MEMBER` ("reative-a", se desativada); convite
+  repetido: 409 `INVITATION_PENDING`;
+- reenviar troca o link — o anterior deixa de valer — e recomeça o prazo, com um minuto entre os
+  envios do mesmo convite;
+- contra abuso: no máximo 20 pendentes e `INVITATION_EMAILS_PER_HOUR` envios por hora em cada
+  estabelecimento (20 por padrão), contados pela auditoria, inclusive os de convites já cancelados;
+- o e-mail **não repete texto livre** — nem o nome do estabelecimento, nem o de quem convidou, nem
+  o do perfil —, pela regra do e-mail de confirmação: o endereço foi digitado por outra pessoa;
+- aceito ou cancelado, o convite sai da tabela (fica na auditoria); um perfil com convite pendente
+  não se exclui;
+- o aceite trava o convite: dois aceites ao mesmo tempo não viram dois vínculos.
+
+**A ficha de uma pessoa mostra o nome e o e-mail como texto**: são da conta dela. O dono muda o
+perfil e o acesso; o proprietário e a própria pessoa logada não têm o que mudar ali. Editar o
+próprio nome e a própria senha é a 25b, em "Minha conta".
+
+**O cadastro de um estabelecimento novo aceita o e-mail de quem já tem conta — com a senha dela.**
+O estabelecimento nasce ligado à conta, e o nome do formulário é ignorado. Se a conta já tem o
+e-mail confirmado, o cardápio nasce publicado, sem link para confirmar; senão, espera a
+confirmação, como o de uma conta nova. Senha errada: 409 `EMAIL_TAKEN`, "Este e-mail já tem uma
+conta. Para abrir mais um estabelecimento com ele, use a senha dessa conta." — o limite de cadastros
+por IP segura quem tentar adivinhar a senha por ali. A confirmação do e-mail passou a marcar a
+conta, e publica o estabelecimento do link.
+
+**Os dados que existiam viraram contas** (migration `0026`), estabelecimento por estabelecimento,
+sob as mesmas policies da aplicação: cada usuário virou uma conta com o **mesmo id**, sem nada a
+fundir — o e-mail já era único. A `0027` tira de `users` o que foi para a conta. As duas foram
+geradas em passos separados (só adições, depois só remoções), para o `drizzle-kit` não perguntar
+"renomeou?".
+
+**`convite` e `convites` entraram nos endereços reservados**: `/convite` é a página do aceite.
+
+### A validar com o Junio
+
+Escolhas feitas sem perguntar, fáceis de mudar:
+
+1. **O limite de convites por hora ficou configurável** (`INVITATION_EMAILS_PER_HOUR`, 20 por
+   padrão) — os testes da equipe convidam mais que isso na mesma loja.
+2. **O e-mail do convite não traz nomes**, só o endereço do cardápio; os nomes aparecem na página
+   do link.
+3. **O seed põe o Zé na pizzaria com o perfil "Gerente do cardápio"** — o nome do perfil pronto.
+4. **A ficha da pessoa abre só para mudar o perfil**: sem o lápis no proprietário e na própria
+   pessoa logada.
+
+### Verificação executada
+
+| Verificação                                                                                                                                                                          | Resultado                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm verify`                                                                                                                                                                        | ****TOTAL** testes** (**API** API + **WEB** web + 65 shared); formatação, typecheck, lint e build                                                                    |
+| Clone limpo, `--frozen-lockfile`                                                                                                                                                     | os mesmos **TOTAL** testes                                                                                                                                           |
+| As duas migrations numa cópia do banco de desenvolvimento, com os dados de verdade                                                                                                   | 28 migrations aplicadas; os 8 usuários viraram 8 contas com o mesmo id, cada uma com o seu vínculo; RLS forçado em `accounts` e `invitations`; o seed rodou por cima |
+| As policies da conta, alteradas direto no banco de testes e restauradas: `conta_por_email` listando tudo, `vinculos_da_conta` valendo com tenant, `contas_da_equipe` mostrando todas | 3 quebras, pegas em `auth-isolation`                                                                                                                                 |
+| Login e troca: vínculo desativado entrando, o último usado ignorado, troca sem conferir o vínculo, com sessão revogada ou sem revogar a anterior, lista oferecendo desativados       | 6 quebras, pegas em `login-decision` e `auth-routes`                                                                                                                 |
+| Convites: aceite sem conferir a senha ou sem travar o convite, convidar ou cancelar fora do alcance, vaga sem contar convites, e-mail da equipe convidado, tetos e intervalo         | 9 quebras, pegas em `invitations-routes` e `users-routes`                                                                                                            |
+| Cadastro: conta que existe sem conferir a senha, conta não confirmada nascendo publicada, confirmação sem marcar a conta                                                             | 3 quebras, pegas em `signup-routes`                                                                                                                                  |
+| Painel: troca oferecida com um estabelecimento só, convite fora do alcance com botões, aceite mandando nome com conta, plano sem contar convites                                     | 4 quebras, pegas em `AdminPanel`, `AdminTeam` e `AcceptInvitationPage`                                                                                               |
+| Ao todo                                                                                                                                                                              | 25 quebras propositais, todas pegas                                                                                                                                  |
+| Navegador de verdade, em 390 e 1280 px                                                                                                                                               | 50 conferências; sem erro no console fora dos 401, 409 e 429 provocados, e sem rolagem lateral                                                                       |
+| Validação do Junio                                                                                                                                                                   | a fazer                                                                                                                                                              |
+
+**Duas quebras escaparam na primeira rodada, e o que se fez com cada uma.** "Aceite sem travar o
+convite": o teste dos dois aceites ao mesmo tempo não garantia que eles se sobrepusessem — ganhou
+um irmão que segura o convite numa transação aberta e confere que o aceite espera. "Aviso de
+e-mail para conta confirmada": a linha mudada no painel não tinha efeito — o aviso de confirmação
+só aparece com o estabelecimento aguardando —, e voltou ao que era.
+
+**Visto num navegador de verdade**, contra uma cópia migrada do banco de desenvolvimento, com a API
+e o painel temporários (3334 e 5174) e os e-mails no Mailpit:
+
+- **o seu caso:** o Zé convida para a lanchonete quem já é dona da pizzaria; ela recebe o link,
+  erra a senha, acerta, cai no painel da lanchonete e troca para a pizzaria pelo menu;
+- uma conta nova pelo convite, criando o nome e a senha;
+- a troca vai e volta sem senha, com o menu de cada perfil, e a conexão ao vivo reabre no
+  estabelecimento novo;
+- um estabelecimento novo aberto pela página de cadastro com a conta que já existe: outra senha é
+  recusada com a mensagem nova; com a dela, ele nasce publicado, porque o e-mail já estava
+  confirmado;
+- desativada na lanchonete, a pessoa entra na pizzaria, e a troca não oferece a lanchonete.
+
+A cópia do banco foi apagada no fim, e as mensagens do Mailpit — as três, todas do percurso —,
+apagadas pelos ids. O banco de desenvolvimento não foi tocado: as migrations ficam para o
+`pnpm db:migrate` do Junio.
+
+**Achados no navegador, corrigidos:**
+
+- **a troca passava pelo `/entrar`**: a sessão nova chegava antes do endereço novo, e o painel
+  desviava para o login, que o mandava ao estabelecimento certo. Agora o painel segue a sessão — com
+  a de outro estabelecimento, vai direto ao painel dele —, e a conexão ao vivo, que antes só reabria
+  por causa do desvio, passou a depender do estabelecimento;
+- **o campo de e-mail do convite**, só de leitura, tinha a cara de um campo editável: os campos só
+  de leitura ganharam o fundo dos desligados.
+
+**Achado, e deixado para decidir:** a página de cadastro confere as regras de senha **nova** antes
+de enviar. Quem tem conta com uma senha fora das regras de hoje não consegue abrir outro
+estabelecimento por ela. Hoje isso só acontece com as contas do seed (`cardapio123`): o cadastro, o
+convite e o "Nova pessoa" da 25a sempre exigiram as regras. No percurso, o estabelecimento novo foi
+aberto com a conta criada pelo convite.
 
 ---
 
@@ -1381,7 +1576,9 @@ painel do dela.
 **Saiu código que só servia a versões anteriores:** a tela de login por estabelecimento, a leitura
 do endereço digitado em `/entrar` e a limpeza da chave antiga do `localStorage`.
 
-**Para a Fase 25:** o "esqueci minha senha" acha a conta pelo e-mail com `tenantDoEmail`.
+**Para a Fase 25:** o "esqueci minha senha" acha a conta pelo e-mail com `tenantDoEmail`. _(Desde a
+25d, `tenantDoEmail` não existe mais: o e-mail é da conta, achada pelo contexto `app.account_email`
+— `accounts/context.ts`.)_
 
 **Banco de desenvolvimento com e-mail repetido:** a migration 22 falha num banco que tenha o mesmo
 e-mail em dois estabelecimentos. O DEVELOPMENT.md diz como achar e resolver.
@@ -1486,10 +1683,10 @@ Os exemplos de senha da coleção do Postman mudaram — importe de novo.
 
 ## O que falta para o MVP
 
-As fases 1 a 25a estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de pronto
-(MVP.md, "Como saber que acabou"). Os passos 1 a 7 já funcionam de ponta a ponta pela tela; falta
-o sistema estar no ar, as senhas (trocar, redefinir, recuperar) e a tela de clientes. As fases 25b
-a 28 fecham essa distância.
+As fases 1 a 25a e a 25d estão feitas, mas o MVP **ainda não cumpre** o seu próprio critério de
+pronto (MVP.md, "Como saber que acabou"). Os passos 1 a 7 já funcionam de ponta a ponta pela tela;
+falta o sistema estar no ar, as senhas (trocar e recuperar) e a tela de clientes. As fases 25b a 28
+fecham essa distância.
 
 ### Decisões do Junio (2026-09-30)
 
@@ -1535,47 +1732,26 @@ vazio**, como faria alguém que nunca viu o sistema.
 ### Fase 25 — Equipe, permissões e senhas
 
 Em três entregas (decisão do Junio, 2026-10-06), e uma quarta, achada por ele na validação da
-primeira (2026-10-07).
+primeira (2026-10-07) e feita antes da segunda (2026-10-14).
 
 - **25a (concluída):** a tela Equipe, com as abas Pessoas e Perfis. Os três papéis globais deram
   lugar a **perfis do estabelecimento** — o dono monta, cada pessoa tem um —, com quatro prontos, e
   as permissões ficaram mais finas no cardápio e no dia a dia. Ver "Fase 25a — concluída".
-- **25b — senhas:**
-  - Cada pessoa troca a própria senha, informando a atual.
-  - O dono — ou quem tiver a permissão — redefine a senha de outra pessoa. A decidir no começo da
-    fase: se quem recebeu uma senha de outra pessoa (a inicial ou a redefinida) é obrigado a
-    trocá-la ao entrar.
-  - Trocar ou redefinir encerra as outras sessões da pessoa.
-  - As regras de senha do cadastro (`REGRAS_DA_SENHA`, Fase 18) em toda senha do painel. A senha
-    inicial de uma pessoa já as segue desde a 25a.
+- **25d (concluída, antes da 25b):** uma conta por pessoa, com um vínculo em cada estabelecimento,
+  o convite por e-mail e a troca de estabelecimento pelo menu. Ver "Fase 25d — concluída".
+- **25b — "Minha conta":**
+  - A pessoa troca a própria senha, informando a atual, e o próprio nome. Vale em todos os
+    estabelecimentos dela: a conta é uma só.
+  - Trocar a senha encerra as outras sessões da conta, em todos os estabelecimentos.
+  - Saíram da 25b, com a 25d: o dono redefinir a senha de alguém e a troca obrigatória no
+    primeiro acesso — o dono não conhece mais a senha de ninguém. Quem esqueceu usa a 25c.
+  - A decidir no começo da fase: se a página de cadastro passa a aceitar, para uma conta que já
+    existe, a senha dela mesmo fora das regras de hoje (ver "Fase 25d", achado no navegador).
 - **25c — "esqueci minha senha"**, por e-mail, com o envio da Fase 17 — e o mesmo desenho do link
-  de confirmação: token com o tenant embutido, só o hash no banco, no fragmento do link. A conta é
-  achada pelo e-mail com `tenantDoEmail` (Fase 18b), e a resposta é a mesma exista o e-mail ou não.
-- **25d — o mesmo e-mail em mais de um estabelecimento** (pedido do Junio, 2026-10-07; **antes da
-  Fase 26**).
-  - **O problema:** quem já tem conta num estabelecimento não é cadastrado na equipe de outro —
-    "Este e-mail já está em uso". Vale para quem saiu do primeiro (desativar não solta o e-mail, e
-    não há como excluir uma pessoa) e para quem trabalha nos dois.
-  - **A causa:** desde a Fase 18b o e-mail é único na plataforma (`users_email`), e é ele que diz
-    de qual estabelecimento a pessoa é — por isso o login não pergunta o estabelecimento. Uma
-    conta pertence a um estabelecimento só (ARCHITECTURE.md, 6.9).
-  - **A decidir com o Junio no começo da fase**, entre três caminhos:
-    1. **Soltar o e-mail de quem saiu:** excluir a pessoa da equipe (ou anonimizar o e-mail dela)
-       libera o endereço. É a menor mudança, e resolve "trabalhou num, agora trabalha em outro";
-       não resolve quem trabalha nos dois ao mesmo tempo. Precisa preservar a auditoria e os
-       pedidos que a pessoa atualizou.
-    2. **Uma conta, vários estabelecimentos:** a conta passa a ser da pessoa, com um vínculo — e
-       um perfil — em cada estabelecimento; depois de entrar, quem tem mais de um escolhe em qual.
-       Resolve tudo, inclusive o dono com duas lojas, e é a maior mudança: `users` deixa de ser de
-       um tenant só, e mudam o login, o token e o cadastro de uma pessoa (que vira "acrescentar à
-       equipe", sem senha inicial, quando a conta já existe).
-    3. **O login volta a distinguir o estabelecimento** quando o e-mail existe em mais de um, com
-       uma conta (e uma senha) em cada. É o modelo de antes da Fase 18b, só para quem precisa.
-  - **Cuidado com a ordem das fases:** a 25b ("o dono redefine a senha de outra pessoa") e a 25c
-    ("esqueci minha senha") são feitas antes, sobre o modelo de hoje. No caminho 2, a senha deixa
-    de ser de um estabelecimento: um dono não pode redefinir uma senha que também abre o painel de
-    outro. A decidir no começo da 25b se a redefinição pelo dono já nasce de um jeito que
-    sobreviva — por exemplo, o dono dispara o e-mail de redefinição, em vez de escolher a senha.
+  de confirmação: só o hash no banco, no fragmento do link. É por **conta**: um e-mail só, achado
+  pelo contexto `app.account_email` (`accounts/context.ts`), e a resposta é a mesma exista o e-mail
+  ou não. Resolve também o e-mail "ocupado" por um cadastro nunca confirmado: a pessoa dona do e-mail
+  redefine a senha e fica com a conta.
 
 ### Fase 26 — Clientes e histórico de pedidos
 
@@ -1613,8 +1789,8 @@ Pode virar duas fases.
 - **Seed essencial de produção** — formas de pagamento e planos, sem os estabelecimentos de
   demonstração. Hoje o plano FREE só existe porque o seed de demonstração o cria. (Os perfis não
   entram: nascem com cada estabelecimento, desde a Fase 25a.)
-- SMTP de produção com SPF e DKIM; rate limit compartilhado, se houver mais de uma instância; os
-  textos jurídicos finais.
+- SMTP de produção com SPF e DKIM — sem ele não há convite para a equipe (Fase 25d) —; rate limit
+  compartilhado, se houver mais de uma instância; os textos jurídicos finais.
 
 ---
 
@@ -1758,6 +1934,10 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | Token de confirmação no fragmento do link           | O fragmento não chega ao servidor nem vaza por `Referer`                  |
 | E-mails só depois do commit                         | Rollback não desfaz e-mail enviado                                        |
 | Coleção do Postman gerada da OpenAPI                | Rota nova entra sozinha; o teste cobra exemplo e arquivo em dia           |
+| Conta por pessoa, vínculo por estabelecimento       | Uma senha só, e o mesmo e-mail em quantas equipes a pessoa estiver        |
+| Conta global protegida por variável da transação    | Sem `tenant_id` e sem listagem: só o e-mail ou a conta do contexto        |
+| A equipe entra por convite                          | O dono nunca conhece a senha de ninguém                                   |
+| Cliente separado da conta da equipe                 | O mesmo e-mail pode ser os dois, sem dividir unicidade                    |
 
 ---
 
@@ -1765,11 +1945,12 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                  | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Trocar a própria senha e o dono redefinir a de outra pessoa — hoje a senha inicial, dada pelo dono, é a que fica                                      | Fase 25b                                 |
-| "Esqueci minha senha", por e-mail                                                                                                                     | Fase 25c                                 |
-| O e-mail de quem tem conta num estabelecimento não é aceito na equipe de outro — nem depois de a pessoa ser desativada no primeiro                    | Fase 25d (antes da 26; pedido do Junio)  |
+| Trocar a própria senha e o próprio nome ("Minha conta") — hoje ninguém muda o nome pelo painel, nem o dono o dele                                     | Fase 25b                                 |
+| Conta com senha fora das regras de hoje (só as do seed) não abre outro estabelecimento pela página de cadastro                                        | A decidir no começo da 25b               |
+| "Esqueci minha senha", por e-mail — e, com ele, o e-mail "ocupado" por um cadastro nunca confirmado                                                   | Fase 25c                                 |
+| O convite depende de um servidor de e-mail de verdade em produção                                                                                     | Fase 28 (SMTP de produção)               |
 | `customers:read` e `audit:read` valem num perfil, mas a tela de perfis ainda não as oferece: não há tela que as use                                   | Fase 26 (clientes); ROADMAP (auditoria)  |
-| O e-mail de uma pessoa da equipe não se altera, e o proprietário não se transfere                                                                     | ROADMAP                                  |
+| O e-mail da conta não se altera, e o proprietário não se transfere                                                                                    | ROADMAP                                  |
 | Sair de um formulário do painel (aba das configurações, página de produto ou categoria) com alterações não salvas perde o que foi digitado, sem aviso | A decidir; ver ROADMAP                   |
 | Quadro de pedidos em colunas, como na referência do Junio — a tela de Pedidos ainda é uma lista                                                       | Fase própria, a encaixar                 |
 | Histórico e Perfil, no menu de baixo do cardápio, ainda sem função — só o visual existe                                                               | A definir pelo Junio                     |

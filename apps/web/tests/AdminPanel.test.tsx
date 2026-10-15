@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Checklist } from '../src/features/admin/checklist'
+import type { EstabelecimentoDaConta } from '../src/features/admin/establishments'
 import { itensDoMenu } from '../src/features/admin/menu'
 import { acoesDoPedido } from '../src/features/admin/orders'
 import { avisoDoPlano, type UsoDoPlano } from '../src/features/admin/plan'
@@ -105,7 +106,7 @@ function plano(extra: Partial<UsoDoPlano['orders']>): UsoDoPlano {
   return {
     plan: { code: 'FREE', name: 'Gratuito' },
     orders: { used: 10, limit: 100, ceiling: 110, state: 'LIVRE', ...extra },
-    users: { active: 1, limit: 2 },
+    users: { active: 1, invited: 0, limit: 2 },
     products: { used: 3, limit: 20 },
     categories: { used: 1, limit: 10 },
   }
@@ -145,6 +146,32 @@ interface Api {
   resumos?: { status: number; corpo: unknown }[]
   /** A lista "o que falta para receber pedidos". Sem ela, está tudo feito. */
   checklist?: Checklist
+  /** Os estabelecimentos da conta. Sem eles, só o da sessão. */
+  estabelecimentos?: EstabelecimentoDaConta[]
+  /** A resposta da troca de estabelecimento. */
+  troca?: { status: number; corpo: unknown }
+}
+
+const SO_A_LANCHONETE: EstabelecimentoDaConta[] = [
+  { slug: 'lanchonete-do-ze', name: 'Lanchonete do Zé', status: 'ACTIVE', current: true },
+]
+
+/** O Zé também é da equipe da pizzaria, com a mesma conta. */
+const NA_PIZZARIA = {
+  accessToken: 'token-da-pizzaria',
+  user: {
+    id: 'u-pizzaria',
+    tenantId: 't-pizzaria',
+    name: 'Zé',
+    email: 'ze@exemplo.com',
+    permissions: ['orders:read'],
+  },
+  establishment: {
+    id: 't-pizzaria',
+    slug: 'pizzaria-da-esquina',
+    name: 'Pizzaria da Esquina',
+    status: 'ACTIVE',
+  },
 }
 
 const TUDO_FEITO: Checklist = { ready: true, steps: [] }
@@ -161,7 +188,11 @@ function mockarApi(api: Api) {
     let resposta: { status: number; corpo: unknown } = { status: 200, corpo: cardapioDoZe() }
     if (url.endsWith('/auth/login')) resposta = api.login ?? { status: 200, corpo: SESSAO }
     else if (url.endsWith('/auth/refresh')) resposta = { status: 200, corpo: SESSAO }
-    else if (url.endsWith('/admin/plan')) resposta = { status: 200, corpo: api.plano ?? LIVRE }
+    else if (url.endsWith('/auth/establishments')) {
+      resposta = { status: 200, corpo: api.estabelecimentos ?? SO_A_LANCHONETE }
+    } else if (url.endsWith('/auth/switch')) {
+      resposta = api.troca ?? { status: 200, corpo: NA_PIZZARIA }
+    } else if (url.endsWith('/admin/plan')) resposta = { status: 200, corpo: api.plano ?? LIVRE }
     else if (url.endsWith('/admin/setup-checklist')) {
       resposta = { status: 200, corpo: api.checklist ?? TUDO_FEITO }
     } else if (url.endsWith(RESUMO)) {
@@ -357,6 +388,90 @@ describe('menu do painel', () => {
     expect(cardapio).toHaveAttribute('target', '_blank')
     expect(screen.getAllByText('Lanchonete do Zé').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Sair' })).toBeVisible()
+  })
+
+  it('com um estabelecimento só, o menu não oferece a troca', async () => {
+    const fetch = await abrirInicio({ pedidos: [] })
+
+    await waitFor(() => {
+      expect(chamadas(fetch, '/auth/establishments')).toHaveLength(1)
+    })
+    expect(screen.queryByRole('button', { name: 'Trocar de estabelecimento' })).toBeNull()
+  })
+
+  it('quem está em mais de um troca pelo menu, sem senha, e o painel vai para o outro', async () => {
+    const fetch = await abrirInicio({
+      pedidos: [],
+      estabelecimentos: [
+        ...SO_A_LANCHONETE,
+        {
+          slug: 'pizzaria-da-esquina',
+          name: 'Pizzaria da Esquina',
+          status: 'ACTIVE',
+          current: false,
+        },
+      ],
+    })
+
+    const conexaoDaLanchonete = await ultimoSocket()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Trocar de estabelecimento' }))
+    const janela = within(await screen.findByRole('dialog', { name: 'Trocar de estabelecimento' }))
+    expect(janela.getByText('Você está aqui')).toBeVisible()
+    fireEvent.click(janela.getByRole('button', { name: /Pizzaria da Esquina/ }))
+
+    await waitFor(() => {
+      expect(localAtual()).toBe('/pizzaria-da-esquina/admin')
+    })
+    // A conexão ao vivo era da lanchonete: fecha, e a da pizzaria abre com o token novo.
+    expect(conexaoDaLanchonete.fechadoPeloPainel).toBe(true)
+    const conexaoDaPizzaria = await ultimoSocket()
+    expect(conexaoDaPizzaria).not.toBe(conexaoDaLanchonete)
+    conexaoDaPizzaria.abrir()
+    expect(conexaoDaPizzaria.enviados).toEqual([
+      JSON.stringify({ type: 'auth', token: 'token-da-pizzaria' }),
+    ])
+    const [troca] = chamadas(fetch, '/auth/switch', 'POST')
+    expect(troca?.[1]?.credentials).toBe('include')
+    expect(JSON.parse(typeof troca?.[1]?.body === 'string' ? troca[1].body : '')).toEqual({
+      establishmentSlug: 'pizzaria-da-esquina',
+    })
+    expect(useSessaoStore.getState()).toMatchObject({
+      slug: 'pizzaria-da-esquina',
+      estabelecimento: 'Pizzaria da Esquina',
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a troca recusada diz o motivo, e a pessoa continua onde estava', async () => {
+    await abrirInicio({
+      pedidos: [],
+      estabelecimentos: [
+        ...SO_A_LANCHONETE,
+        {
+          slug: 'pizzaria-da-esquina',
+          name: 'Pizzaria da Esquina',
+          status: 'ACTIVE',
+          current: false,
+        },
+      ],
+      troca: {
+        status: 403,
+        corpo: {
+          error: { code: 'NO_ACCESS', message: 'Você não tem acesso a este estabelecimento.' },
+        },
+      },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Trocar de estabelecimento' }))
+    const janela = within(await screen.findByRole('dialog', { name: 'Trocar de estabelecimento' }))
+    fireEvent.click(janela.getByRole('button', { name: /Pizzaria da Esquina/ }))
+
+    expect(await janela.findByRole('alert')).toHaveTextContent(
+      'Você não tem acesso a este estabelecimento.',
+    )
+    expect(localAtual()).toBe('/lanchonete-do-ze/admin')
+    expect(useSessaoStore.getState().slug).toBe('lanchonete-do-ze')
   })
 
   it('o número de pedidos novos aparece ao lado de "Pedidos" e no botão do menu', async () => {

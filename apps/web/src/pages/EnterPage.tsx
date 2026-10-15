@@ -18,9 +18,9 @@ function mensagemDaFalha(erro: unknown): string {
 }
 
 /**
- * O login do painel, em `/entrar`: só e-mail e senha, para o dono e para os
- * funcionários. A pessoa não informa o estabelecimento — a API responde de
- * qual ela é, e a tela segue para o painel dele.
+ * O login do painel, em `/entrar`: só o e-mail e a senha da conta, para o dono
+ * e para os funcionários. A pessoa não informa o estabelecimento — a API entra
+ * no que ela usou por último, e a tela segue para o painel dele.
  */
 export function EnterPage() {
   const navigate = useNavigate()
@@ -59,7 +59,8 @@ export function EnterPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-heading text-content">Entrar no painel</h1>
           <p className="text-body text-content-muted">
-            Use o e-mail e a senha do seu cadastro no estabelecimento.
+            Use o e-mail e a senha da sua conta. Se você trabalha em mais de um estabelecimento,
+            troca de um para outro pelo menu do painel.
           </p>
         </div>
 

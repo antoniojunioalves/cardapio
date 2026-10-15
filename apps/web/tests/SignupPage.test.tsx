@@ -14,13 +14,13 @@ const DONO = {
   permissions: ['orders:read', 'orders:update', 'settings:read', 'settings:update'],
 }
 
-function cadastrado(slug: string, emailEnviado = true) {
+function cadastrado(slug: string, emailEnviado = true, status = 'PENDING') {
   return {
     status: 201,
     corpo: {
       accessToken: 'token-de-acesso',
       user: DONO,
-      establishment: { id: DONO.tenantId, slug, name: 'Lanchonete da Maria', status: 'PENDING' },
+      establishment: { id: DONO.tenantId, slug, name: 'Lanchonete da Maria', status },
       confirmationEmailSent: emailEnviado,
     },
   }
@@ -30,6 +30,8 @@ interface Api {
   /** Endereços já em uso, para a consulta de disponibilidade. */
   emUso?: string[]
   cadastro?: Resposta
+  /** Como a confirmação do cadastro está no painel. */
+  confirmacao?: 'PENDING' | 'CONFIRMED'
 }
 
 function mockarApi(api: Api = {}) {
@@ -50,7 +52,7 @@ function mockarApi(api: Api = {}) {
       return api.cadastro ?? cadastrado('lanchonete-da-maria')
     }
     if (url.endsWith('/admin/email-confirmation')) {
-      return { status: 200, corpo: { status: 'PENDING', email: DONO.email } }
+      return { status: 200, corpo: { status: api.confirmacao ?? 'PENDING', email: DONO.email } }
     }
     if (url.endsWith('/admin/plan')) {
       return {
@@ -58,7 +60,7 @@ function mockarApi(api: Api = {}) {
         corpo: {
           plan: { code: 'FREE', name: 'Gratuito' },
           orders: { used: 0, limit: 100, ceiling: 110, state: 'LIVRE' },
-          users: { active: 1, limit: 2 },
+          users: { active: 1, invited: 0, limit: 2 },
         },
       }
     }
@@ -241,6 +243,22 @@ describe('cadastro', () => {
     expect(screen.getByRole('button', { name: 'Reenviar e-mail' })).toBeEnabled()
   })
 
+  it('quem já tinha conta confirmada abre o estabelecimento publicado, sem aviso de e-mail', async () => {
+    // Não havia link a mandar: `confirmationEmailSent` falso não é falha de envio.
+    mockarApi({
+      cadastro: cadastrado('lanchonete-da-maria', false, 'ACTIVE'),
+      confirmacao: 'CONFIRMED',
+    })
+    abrir('/cadastro')
+    preencher()
+
+    enviar()
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Olá, Maria' })).toBeInTheDocument()
+    expect(screen.queryByText(/Não conseguimos enviar o e-mail no cadastro/)).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Seu cardápio ainda não está no ar' })).toBeNull()
+  })
+
   it('endereço tomado no instante do envio vira erro no próprio campo', async () => {
     mockarApi({
       cadastro: {
@@ -262,14 +280,16 @@ describe('cadastro', () => {
     expect(useSessaoStore.getState().slug).toBeNull()
   })
 
-  it('e-mail que já tem conta vira erro no próprio campo, com o caminho para entrar', async () => {
+  it('e-mail que já tem conta, com outra senha, vira erro no campo, com o caminho para entrar', async () => {
     mockarApi({
       cadastro: {
         status: 409,
         corpo: {
           error: {
             code: 'EMAIL_TAKEN',
-            message: 'Este e-mail já tem uma conta. Entre para acessar o painel.',
+            message:
+              'Este e-mail já tem uma conta. Para abrir mais um estabelecimento com ele, use a ' +
+              'senha dessa conta.',
           },
         },
       },
@@ -282,9 +302,7 @@ describe('cadastro', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true')
     })
-    expect(
-      screen.getByText('Este e-mail já tem uma conta. Entre para acessar o painel.'),
-    ).toBeVisible()
+    expect(screen.getByText(/^Este e-mail já tem uma conta\. Para abrir mais um/)).toBeVisible()
     expect(screen.getByRole('link', { name: 'Entrar no painel' })).toHaveAttribute(
       'href',
       '/entrar',

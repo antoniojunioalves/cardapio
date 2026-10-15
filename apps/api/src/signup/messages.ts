@@ -69,6 +69,8 @@ export function avisoDeNovoCadastro(dados: {
   donoEmail: string
   plano: string
   quando: Date
+  /** A conta do responsável já tinha o e-mail confirmado, e o cardápio nasceu publicado. */
+  publicado?: boolean
 }): MensagemDeEmail {
   return {
     para: dados.para,
@@ -82,7 +84,9 @@ export function avisoDeNovoCadastro(dados: {
       `Responsável: ${dados.donoNome} <${dados.donoEmail}>`,
       `Quando: ${dataEHora.format(dados.quando)} (Brasília)`,
       '',
-      'O cardápio só fica público depois que o responsável confirmar o e-mail.',
+      dados.publicado
+        ? 'O cardápio já está publicado: a conta do responsável tinha o e-mail confirmado.'
+        : 'O cardápio só fica público depois que o responsável confirmar o e-mail.',
     ].join('\n'),
   }
 }

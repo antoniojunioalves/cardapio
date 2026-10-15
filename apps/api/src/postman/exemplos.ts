@@ -64,6 +64,22 @@ export const VARIAVEIS: VariavelDaColecao[] = [
     valor: '',
     descricao: 'Preenchido do Mailpit pelo "Confirmar e-mail".',
   },
+  {
+    chave: 'switchSlug',
+    valor: 'pizzaria-da-esquina',
+    descricao: 'Para onde a troca de estabelecimento leva. O Zé do seed também é da pizzaria.',
+  },
+  { chave: 'invitationId', valor: '', descricao: 'O convite criado, ou o primeiro listado.' },
+  {
+    chave: 'invitationEmail',
+    valor: '',
+    descricao: 'O e-mail do último convite criado: a consulta e o aceite buscam o link dele.',
+  },
+  {
+    chave: 'invitationToken',
+    valor: '',
+    descricao: 'Preenchido do Mailpit pela consulta e pelo aceite do convite.',
+  },
   { chave: 'categoryId', valor: '', descricao: 'Primeira categoria listada, ou a criada.' },
   { chave: 'categoryIdsJson', valor: '[]', descricao: 'Todas as categorias, para reordenar.' },
   { chave: 'productId', valor: '', descricao: 'Primeiro produto listado, ou o criado.' },
@@ -106,6 +122,8 @@ export const VALORES_PARA_VALIDAR: Record<string, string> = {
   email: 'ze@exemplo.com',
   password: 'cardapio123',
   confirmationToken: '01900000-0000-7000-8000-000000000001.segredo',
+  switchSlug: 'pizzaria-da-esquina',
+  invitationToken: '01900000-0000-7000-8000-000000000001.convite',
   categoryId: '01900000-0000-7000-8000-000000000002',
   categoryIdsJson: '["01900000-0000-7000-8000-000000000002"]',
   productId: '01900000-0000-7000-8000-000000000003',
@@ -137,6 +155,26 @@ const guardarSessao = [
   '}',
 ]
 
+/**
+ * Acha no Mailpit o último convite enviado para `invitationEmail` e guarda o
+ * token do link em `invitationToken`.
+ */
+const buscarConviteNoMailpit = [
+  "const mailpit = pm.collectionVariables.get('mailpitUrl');",
+  "const para = pm.collectionVariables.get('invitationEmail');",
+  "pm.sendRequest(mailpit + '/api/v1/messages', (erro, resposta) => {",
+  "  if (erro) return console.warn('Mailpit fora do ar: cole o token do link em invitationToken.');",
+  '  const mensagem = resposta.json().messages.find(',
+  "    (m) => m.To.some((t) => t.Address === para) && m.Subject.startsWith('Convite'),",
+  '  );',
+  "  if (!mensagem) return console.warn('Nenhum convite para ' + para + ' no Mailpit.');",
+  "  pm.sendRequest(mailpit + '/api/v1/message/' + mensagem.ID, (erro2, detalhe) => {",
+  '    const achado = !erro2 && /convite#token=(\\S+)/.exec(detalhe.json().Text);',
+  "    if (achado) pm.collectionVariables.set('invitationToken', achado[1]);",
+  '  });',
+  '});',
+]
+
 const guardarIdCriado = (variavel: string) => [
   `if (pm.response.code === 201) pm.collectionVariables.set('${variavel}', pm.response.json().id);`,
 ]
@@ -166,9 +204,45 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
     corpo: { email: '{{email}}', password: '{{password}}' },
     depois: guardarSessao,
     nota:
-      'Só e-mail e senha: a resposta diz de qual estabelecimento a pessoa é. Guarda o token em ' +
-      '`accessToken` e o endereço em `tenantSlug`; o refresh token fica no cookie, que o Postman ' +
-      'guarda sozinho.',
+      'Só e-mail e senha, os da conta: a pessoa entra no estabelecimento que usou por último, e a ' +
+      'resposta diz qual. Guarda o token em `accessToken` e o endereço em `tenantSlug`; o refresh ' +
+      'token fica no cookie, que o Postman guarda sozinho.',
+  },
+  'POST /api/v1/auth/switch': {
+    corpo: { establishmentSlug: '{{switchSlug}}' },
+    depois: guardarSessao,
+    nota:
+      'Sem senha: quem prova a conta é o refresh token do cookie. Rode antes o login. Guarda a ' +
+      'sessão nova, como o login; para voltar, troque `switchSlug` por `lanchonete-do-ze`.',
+  },
+  'GET /api/v1/auth/establishments': {
+    nota: 'Os estabelecimentos da conta logada, com o da sessão em `current`.',
+  },
+  'POST /api/v1/auth/invitation': {
+    corpo: { token: '{{invitationToken}}' },
+    antes: buscarConviteNoMailpit,
+    nota:
+      'Busca sozinho, no Mailpit, o último convite enviado para `invitationEmail`. Sem o ' +
+      'Mailpit, cole em `invitationToken` o que vem depois de `#token=` no link.',
+  },
+  'POST /api/v1/auth/invitation/accept': {
+    corpo: {
+      token: '{{invitationToken}}',
+      name: 'Pessoa Convidada',
+      password: SENHA_DO_CADASTRO,
+    },
+    antes: buscarConviteNoMailpit,
+    depois: [
+      ...guardarSessao,
+      'if (pm.response.code === 200) {',
+      "  pm.collectionVariables.set('email', pm.collectionVariables.get('invitationEmail'));",
+      `  pm.collectionVariables.set('password', '${SENHA_DO_CADASTRO}');`,
+      '}',
+    ],
+    nota:
+      'Conta nova: `name` e `password`, nas regras do cadastro. Se o e-mail já tem conta, ' +
+      '`password` é a dela, e `name` é ignorado. Troca a sessão, `email` e `password` para a ' +
+      'pessoa convidada — para voltar ao Zé, restaure os valores iniciais das variáveis.',
   },
   'POST /api/v1/auth/refresh': {
     depois: guardarSessao,
@@ -399,18 +473,28 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
       "if (outro) pm.collectionVariables.set('userId', outro.id);",
     ],
   },
-  'POST /api/v1/admin/users': {
-    corpo: {
-      name: 'Atendente de Teste',
-      email: 'atendente-{{$timestamp}}@exemplo.com',
-      password: 'Senha-do-atendente',
-      profileId: '{{profileId}}',
-    },
-    depois: guardarIdCriado('userId'),
-    nota: 'Rode antes "Perfis do estabelecimento", que guarda o `profileId`. O plano gratuito permite 2 usuários ativos.',
-  },
   'PATCH /api/v1/admin/users/:id': {
     corpo: { profileId: '{{profileId}}' },
+  },
+  'GET /api/v1/admin/invitations': {
+    depois: guardarPrimeiroId('invitationId'),
+  },
+  'POST /api/v1/admin/invitations': {
+    corpo: { email: 'convidado-{{$timestamp}}@exemplo.com', profileId: '{{profileId}}' },
+    depois: [
+      'const envio = pm.response.json();',
+      'if (pm.response.code === 201) {',
+      "  pm.collectionVariables.set('invitationId', envio.invitation.id);",
+      "  pm.collectionVariables.set('invitationEmail', envio.invitation.email);",
+      '}',
+    ],
+    nota:
+      'Rode antes "Perfis do estabelecimento", que guarda o `profileId`. O e-mail chega no ' +
+      'Mailpit (http://localhost:8025). No plano gratuito cabem 2 pessoas ativas, contando os ' +
+      'convites pendentes.',
+  },
+  'POST /api/v1/admin/invitations/:id/resend': {
+    nota: 'Um minuto entre os envios do mesmo convite. O link anterior deixa de valer.',
   },
 
   // Perfis

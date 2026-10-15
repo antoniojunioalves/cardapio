@@ -5,13 +5,16 @@ import { Navigate, Outlet, useParams } from 'react-router'
 import { IconeMenu } from '@/components/icons'
 
 import { chaveDosPedidos } from '../api'
+import { useEstabelecimentosDaConta } from '../establishments'
 import { usePedidosAoVivo, type EstadoDaConexao } from '../live'
 import type { ContextoDoPainel } from '../panel'
 import { chaveDoPlano } from '../plan'
 import { sair, useSessaoStore } from '../session'
 import { criarAlerta, type Alerta } from '../sound'
 import { chaveDoResumo, useResumoDosPedidos } from '../summary'
+import { caminhoDoPainel } from '../menu'
 import { AdminNav } from './AdminNav'
+import { SwitchEstablishmentSheet } from './SwitchEstablishmentSheet'
 
 const INDICADOR: Record<EstadoDaConexao, { texto: string; classe: string }> = {
   conectando: { texto: 'Conectando…', classe: 'bg-neutral-100 text-neutral-700' },
@@ -30,6 +33,7 @@ const SEM_PERMISSOES: readonly string[] = []
  * O que vale para o painel inteiro mora aqui, e não em cada tela:
  * - a conferência da sessão — sem ela, volta ao login;
  * - a conexão ao vivo, uma só, que manda reler a lista, o resumo e o plano;
+ * - a troca de estabelecimento, para quem está na equipe de mais de um;
  * - o alerta sonoro: pedido novo toca em qualquer tela, não só na de pedidos.
  *
  * Mobile-first: o menu é uma gaveta aberta pelo botão "Menu"; a partir de `lg`
@@ -49,7 +53,7 @@ export function AdminLayout() {
   const alerta = useRef<Alerta | null>(null)
   const [somLigado, setSomLigado] = useState(false)
 
-  const conexao = usePedidosAoVivo(logado, (aviso) => {
+  const conexao = usePedidosAoVivo(logado ? tenantSlug : null, (aviso) => {
     void queryClient.invalidateQueries({ queryKey: chaveDosPedidos(tenantSlug) })
     void queryClient.invalidateQueries({ queryKey: chaveDoResumo(tenantSlug) })
     if (aviso.type === 'order.created') {
@@ -61,6 +65,10 @@ export function AdminLayout() {
 
   const [menuAberto, setMenuAberto] = useState(false)
   const botaoDoMenu = useRef<HTMLButtonElement>(null)
+
+  const daConta = useEstabelecimentosDaConta(logado)
+  const [trocando, setTrocando] = useState(false)
+  const temOutros = (daConta.data?.length ?? 0) > 1
 
   useEffect(() => {
     if (!menuAberto) return
@@ -75,8 +83,13 @@ export function AdminLayout() {
     }
   }, [menuAberto])
 
-  // Sessão que não renova mais (refresh revogado ou vencido) volta ao login.
-  if (!usuario) return <Navigate to="/entrar" replace />
+  // O painel segue a sessão. Sem sessão — refresh revogado ou vencido —, volta ao
+  // login; com a de outro estabelecimento — a troca pelo menu, ou o endereço de
+  // outro digitado —, vai para o painel dela. A conexão ao vivo fecha no meio
+  // do caminho: ela é de um estabelecimento só.
+  if (!usuario) {
+    return <Navigate to={sessao.slug ? caminhoDoPainel(sessao.slug) : '/entrar'} replace />
+  }
 
   const estabelecimento = sessao.estabelecimento ?? tenantSlug
   const indicador = INDICADOR[conexao]
@@ -116,7 +129,23 @@ export function AdminLayout() {
           setMenuAberto(false)
         }}
         aoSair={() => void sair()}
+        aoTrocarDeEstabelecimento={
+          temOutros
+            ? () => {
+                setMenuAberto(false)
+                setTrocando(true)
+              }
+            : undefined
+        }
       />
+      {trocando && daConta.data && (
+        <SwitchEstablishmentSheet
+          estabelecimentos={daConta.data}
+          aoFechar={() => {
+            setTrocando(false)
+          }}
+        />
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b border-border bg-surface px-page-x py-2">

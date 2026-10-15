@@ -1,8 +1,10 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 25a**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 25d**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
-cookie `httpOnly`, autorização por permissão — com perfis montados por cada estabelecimento —,
+cookie `httpOnly` — com uma conta por pessoa, protegida por RLS próprio, e o convite por e-mail
+para entrar numa equipe —, autorização por permissão — com perfis montados por cada
+estabelecimento —,
 auditoria append-only, headers de segurança, CORS
 restrito, limites de requisição, validação de ambiente e o cadastro aberto de estabelecimento,
 com confirmação de e-mail. O CI está pronto, mas desligado até a Fase 28 (seção 12). Cada seção
@@ -31,8 +33,8 @@ valem como norma do projeto:
 
 1. **`tenantId` vindo do cliente é ignorado.** Não existe rota que aceite tenant por query,
    corpo ou header. O tenant vem do usuário autenticado (área administrativa), do `tenantSlug`
-   da URL resolvido no servidor (área pública) ou, no login, do e-mail de quem entra, também
-   resolvido no servidor.
+   da URL resolvido no servidor (área pública) ou, no login e na troca de estabelecimento, dos
+   vínculos da conta, lidos do banco — o endereço pedido na troca só escolhe entre eles.
 2. **A aplicação conecta ao banco com role sem `SUPERUSER` e sem `BYPASSRLS`.** Sem isso, toda
    policy de RLS é ignorada em silêncio e o isolamento existe apenas no papel.
 3. **A aplicação não é dona das tabelas e não tem DDL.** O dono de uma tabela pode remover o RLS
@@ -40,9 +42,10 @@ valem como norma do projeto:
    conectasse como dona, uma injeção de SQL derrubaria o isolamento de todos os tenants de uma
    vez. Por isso são duas roles: `cardapio_migrator` (dona, DDL, usada só em migrations) e
    `cardapio_app` (somente DML). **Já em vigor**, com testes que falham se alguém afrouxar.
-4. **Toda tabela com `tenant_id` tem RLS habilitado e forçado.** Um teste-guarda consulta o
-   catálogo do PostgreSQL e falha o CI se alguma tabela escapar. O mesmo teste lista as policies
-   que não filtram pelo tenant: hoje, uma só — a leitura por e-mail do login (seção 3).
+4. **Toda tabela com `tenant_id` tem RLS habilitado e forçado** — e a conta (`accounts`), que é
+   global, também. Um teste-guarda consulta o catálogo do PostgreSQL e falha o CI se alguma tabela
+   escapar. O mesmo teste lista as policies que não filtram pelo tenant: hoje, as cinco da conta e
+   dos vínculos dela (seção 3).
 5. **Repositório de dado com escopo de tenant só é acessível via `withTenant(ctx, …)`.**
 6. **Toda chave estrangeira entre tabelas tenant-scoped inclui o `tenant_id` dos dois lados.** A
    checagem de FK do PostgreSQL roda por fora do RLS: com uma FK simples, o Tenant A cria um
@@ -106,45 +109,73 @@ mesmos testes se repetem. Recurso sem eles não é considerado pronto.
   acusava um roubo falso e derrubava as sessões novas da pessoa.
 - **Lista de algoritmos fixa** na verificação do JWT — fecha a família de ataques de confusão de
   algoritmo, inclusive `alg: none`. Há um teste que apresenta esse token e exige a recusa.
-- **Entra só com e-mail e senha** (Fase 18b): a pessoa não informa o estabelecimento, e a API
-  não aceita nenhum. O e-mail é único na plataforma — é ele que diz de qual estabelecimento a
-  pessoa é — e o banco o exige em minúsculas, para `Ze@…` e `ze@…` não virarem duas contas.
+- **Entra só com e-mail e senha** (Fase 18b), os da **conta** (Fase 25d): a pessoa não informa o
+  estabelecimento, e a API não aceita nenhum — entra no que usou por último. O e-mail é único na
+  plataforma, em `accounts`, e o banco o exige em minúsculas, para `Ze@…` e `ze@…` não virarem
+  duas contas. A mesma conta pode estar na equipe de vários estabelecimentos, com um vínculo em
+  cada.
+- **Trocar de estabelecimento não pede a senha**, e não alarga nada: quem prova a conta é o
+  refresh token do cookie, e o endereço pedido só escolhe entre os vínculos dela que entram (ativos,
+  em estabelecimento não suspenso). O de outro responde 403. A sessão anterior é revogada.
 - **Tempo de resposta equalizado** para e-mail inexistente, para o login não virar oráculo de
   quais endereços estão cadastrados.
-- **Conta desativada e estabelecimento suspenso só são ditos depois de a senha conferir.** Antes
+- **Acesso desativado e estabelecimento suspenso só são ditos depois de a senha conferir.** Antes
   disso a resposta é sempre o mesmo 401. Com o login por estabelecimento, a suspensão era
   respondida antes da senha, porque o endereço já era público; sem o endereço, responder antes
-  diria a qualquer um que aquele e-mail tem conta.
+  diria a qualquer um que aquele e-mail tem conta. Desativada num estabelecimento, a pessoa
+  continua entrando nos outros.
 - **Limite dedicado de 5 tentativas por minuto** no login, bem abaixo do limite global.
 - Segredos exclusivamente por variável de ambiente, com mínimo de 32 caracteres validado na
   inicialização. Nunca no código, nunca no repositório.
 
-**A leitura por e-mail, e o tamanho dela.** `users` está sob RLS, e para achar o estabelecimento
-de um e-mail o login precisa ler antes de existir contexto de tenant. Não há role que ignore RLS
-nem tabela global de e-mails: há uma segunda policy em `users`, `login_por_email`, só de
-`SELECT`, que libera a linha cujo e-mail é igual a `app.login_email`. Quem define a variável com
-o e-mail de quem está entrando lê aquela linha e nenhuma outra. Há teste para cada limite: não
-lista, não altera, não apaga, não abre outra tabela, e a variável não sobrevive à transação.
+**A conta é global, e o que a protege.** `accounts` não tem `tenant_id`, e por isso não tem a
+policy de isolamento de todas as tabelas. Tem RLS forçado com quatro policies, e nenhuma lista
+contas: a leitura e a criação da conta do e-mail em `app.account_email` (login, cadastro, convite);
+a conta de `app.account_id`, definido só depois de a pessoa provar quem é — pela senha, pela sessão
+ou pelo link de um e-mail —; e as contas que têm vínculo no estabelecimento do contexto. Em `users`,
+`vinculos_da_conta` mostra os vínculos da conta em todos os estabelecimentos, **só sem
+estabelecimento no contexto**. Há teste para cada limite (`auth-isolation.test.ts`): o e-mail no
+contexto não lista, não altera, não apaga e não abre outra tabela; só se cria a conta do e-mail do
+contexto; a própria conta não alcança a de outra pessoa; o estabelecimento vê só as contas da
+equipe dele, e **nem a própria equipe troca a senha de alguém** — a conta é da pessoa; dentro de
+um estabelecimento, definir a conta não mostra a equipe de outro. As três policies foram quebradas
+de propósito no banco de testes, e os testes pegaram.
 
-**O que o e-mail único custa.** Entrar só com e-mail e senha exige que o e-mail identifique uma
-conta — e por isso dois lugares passam a dizer que um e-mail já existe:
+**Onde o e-mail ainda revela que tem conta:**
 
-- **o cadastro** responde 409 `EMAIL_TAKEN` (antes, o mesmo e-mail podia cadastrar outro
-  estabelecimento, e a resposta nunca revelava quem tinha conta). Mitigação: o limite de 10
-  cadastros por hora por IP. É o que a maioria dos produtos faz; a alternativa — responder igual e
+- **o cadastro**, com o e-mail de uma conta que existe e outra senha, responde 409 `EMAIL_TAKEN`.
+  Mitigação: o limite de 10 cadastros por hora por IP — que também segura quem tentar adivinhar a
+  senha da conta por ali. É o que a maioria dos produtos faz; a alternativa — responder igual e
   avisar só por e-mail — não cabe num cadastro que já entra logado.
-- **a criação de usuário no painel** responde 409 `USER_EMAIL_TAKEN` também quando o e-mail é de
-  outro estabelecimento, sem dizer de qual. Só quem tem `users:create` chega a essa resposta.
+- **a página do convite** diz se o e-mail do convite já tem conta — mas só a quem tem o link, que
+  chegou àquele e-mail.
+
+A tela da equipe **não** revela mais nada: convidar o e-mail de quem trabalha em outro
+estabelecimento funciona como convidar qualquer um. A recusa `USER_EMAIL_TAKEN` da 25a, que dizia
+"este e-mail já está em uso" também para o de outro estabelecimento, não existe mais.
 
 O login continua sem revelar nada.
 
-O que **não** está implementado: 2FA, bloqueio de conta após N falhas e histórico de senhas.
-Estão no ROADMAP.
+**O convite é a porta de entrada numa equipe.** O dono não digita nem conhece a senha de ninguém
+(até a 25a, ele escolhia a senha inicial e a repassava). O link vale 7 dias, segue o desenho do link
+de confirmação — só o hash SHA-256 no banco, o token no fragmento —, e o aceite trava o convite,
+para dois aceites não virarem dois vínculos. Com conta, o aceite exige a senha dela (limite de 5 por
+minuto, como o login); sem conta, a conta nasce com o e-mail confirmado, porque o link chegou a ele.
+
+**Um e-mail "ocupado" por um cadastro nunca confirmado** continua possível, como antes da 25d:
+alguém cadastra um estabelecimento com o e-mail de outra pessoa, e a conta fica com a senha que ele
+escolheu. A pessoa dona do e-mail só a recupera com o "esqueci minha senha" (Fase 25c). Até lá, o cardápio
+desse estabelecimento não vai ao ar — a confirmação vai para o e-mail dela.
+
+O que **não** está implementado: 2FA, bloqueio de conta após N falhas, histórico de senhas e entrar
+sem senha (link ou código). Estão no ROADMAP.
 
 ### Clientes finais — **em vigor**
 
 Não há conta de cliente no MVP: o cliente pede sem cadastro e é reconhecido pelo telefone (seção
-5). Conta com senha, OTP, WhatsApp, Google e Apple estão no ROADMAP.
+5). Conta com senha, OTP, WhatsApp, Google e Apple estão no ROADMAP. **Quando existir, será
+separada da conta da equipe** (decisão do Junio, Fase 25d): do estabelecimento, e sem dividir
+unicidade com `accounts` — o mesmo e-mail pode ser das duas.
 
 ---
 
@@ -355,14 +386,15 @@ estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por i
 - **Confirmar só sai de `PENDING`:** um link guardado não desfaz uma suspensão da plataforma.
 - **O reenvio vai sempre para o e-mail do dono**, seja quem for que peça, com um minuto entre
   envios contado no banco — um atendente não publica o cardápio com o próprio e-mail.
-- **E-mail que já tem conta é recusado** (409 `EMAIL_TAKEN`), sem criar nada e sem enviar e-mail.
-  Isso revela que o e-mail tem conta — o custo de entrar só com e-mail e senha, explicado na
-  seção 3.
+- **E-mail que já tem conta exige a senha dela** (Fase 25d): com a senha certa, o estabelecimento
+  nasce ligado à conta — publicado na hora se o e-mail dela já foi confirmado —; com outra, 409
+  `EMAIL_TAKEN`, sem criar nada e sem enviar e-mail. Isso revela que o e-mail tem conta (seção 3), e
+  o limite de 10 cadastros por hora por IP segura quem tentar adivinhar a senha por aqui.
 - **Limites:** 10 cadastros por hora por IP, um campo-armadilha que só robô preenche, endereços
   reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
 - **Senha forte no cadastro:** pelo menos 8 caracteres, com letra maiúscula, minúscula e caractere
   especial (`REGRAS_DA_SENHA`, a mesma lista na API e na tela). Guardada com argon2id, como
-  sempre. A senha inicial de uma pessoa da equipe segue a mesma regra desde a Fase 25a.
+  sempre. A senha de quem cria a conta pelo convite segue a mesma regra.
 - **O aceite dos termos vai para a auditoria**, com a versão aceita e o IP. Versão diferente da
   atual é recusada: ninguém aceita um texto que não viu.
 - **Tudo numa transação**, e os e-mails só depois do commit. Sem o plano gratuito no banco, o
@@ -391,9 +423,12 @@ comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
 
 ### Equipe e perfis — **em vigor**
 
-- Pessoas: listar, criar, alterar, desativar e reativar (`/api/v1/admin/users`), com
-  `users:read`, `users:create`, `users:update` e `users:delete`. Desativar e reativar pedem
-  `users:delete`, que o perfil pronto "Administrador" não tem.
+- Pessoas: listar, mudar o perfil, desativar e reativar (`/api/v1/admin/users`), com
+  `users:read`, `users:update` e `users:delete`. Desativar e reativar pedem `users:delete`, que o
+  perfil pronto "Administrador" não tem. O nome e o e-mail são da conta da pessoa: ninguém do
+  estabelecimento os muda (Fase 25d).
+- Convites (`/api/v1/admin/invitations`, Fase 25d): listar com `users:read`; convidar, reenviar e
+  cancelar com `users:create` — e só para um perfil ao alcance de quem convida (seção 4).
 - Perfis: listar com `users:read`; criar, alterar e excluir com `profiles:manage`
   (`/api/v1/admin/profiles`), dentro das regras de alcance da seção 4.
 - Ninguém troca o próprio perfil nem se desativa; só o proprietário altera a conta do
@@ -402,15 +437,24 @@ comando (Fase 19). A plataforma recebe um e-mail a cada cadastro novo.
   (o usuário é recarregado a cada uma), todas as sessões abertas dele são apagadas e a conexão
   ao vivo dele fecha na hora. Quem tenta entrar lê que a conta está desativada — dito só depois de
   a senha conferir.
-- **Senha inicial definida por quem cadastra**, com as regras do cadastro (`REGRAS_DA_SENHA`) e
-  argon2id; a resposta nunca traz o hash. A tela mostra a senha enquanto ela é digitada, porque
-  quem cadastra precisa passá-la adiante. **Enquanto a Fase 25b não chega, a pessoa não consegue
-  trocá-la**: quem cadastrou conhece a senha dela. É a principal pendência desta área.
-- E-mail já em uso — neste estabelecimento ou em outro — é recusado, sem dizer onde.
+- **Ninguém do estabelecimento conhece a senha de ninguém** (Fase 25d): a pessoa entra por
+  convite e escolhe a senha — ou usa a da conta que já tinha. A senha inicial que o dono escolhia na
+  25a, e que ele conhecia, não existe mais.
+- **O convite:** 7 dias, uso único, só o hash no banco, o token no fragmento; reenviar troca o
+  link. Um pendente ocupa vaga do plano. O e-mail não repete texto livre — nem o nome do
+  estabelecimento, nem o de quem convidou —, pela mesma regra do e-mail de confirmação, porque vai
+  para um endereço digitado por outra pessoa. Contra abuso: 20 pendentes por estabelecimento, um
+  minuto entre envios do mesmo convite e um teto de envios por hora em cada estabelecimento
+  (`INVITATION_EMAILS_PER_HOUR`, 20 por padrão), contado pela auditoria, inclusive os de convites
+  cancelados — senão cancelar e convidar de novo mandaria e-mail sem parar.
+- E-mail que já está na equipe é recusado (409 `USER_ALREADY_MEMBER`); o de quem trabalha em
+  outro estabelecimento é aceito, sem que a resposta diga que ele tem conta.
 - Pessoa ou perfil de outro estabelecimento responde 404.
 - Perfil com alguém dentro não se exclui: ninguém fica sem acesso por tabela.
 - **Na auditoria:** criação, alteração e exclusão de perfil — a alteração com as permissões dadas
-  e as tiradas —, além de criação, alteração, desativação e reativação de pessoa.
+  e as tiradas —, o convite (criado, reenviado, cancelado, aceito), a mudança de perfil, a
+  desativação e a reativação de pessoa. A entrada pela troca de estabelecimento fica no destino,
+  sem dizer de onde a pessoa veio.
 - **Uma pessoa sem perfil entra e não alcança nada.** Só acontece com quem não tinha papel antes
   da Fase 25a; a tela a mostra como "Sem perfil", para o dono resolver.
 

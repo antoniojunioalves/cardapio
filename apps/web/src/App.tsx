@@ -6,6 +6,7 @@ import { AdminLayout } from '@/features/admin/components/AdminLayout'
 import { CardapioTabs } from '@/features/admin/components/CardapioTabs'
 import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
 import { TeamTabs } from '@/features/admin/components/TeamTabs'
+import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage'
 import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminHoursPage } from '@/pages/AdminHoursPage'
@@ -70,6 +71,7 @@ export function AppRoutes() {
       <Route path="/cadastro" element={<SignupPage />} />
       <Route path="/entrar" element={<EnterPage />} />
       <Route path="/confirmar-email" element={<ConfirmEmailPage />} />
+      <Route path="/convite" element={<AcceptInvitationPage />} />
       <Route path="/termos" element={<TermsPage />} />
       <Route path="/privacidade" element={<PrivacyPage />} />
       <Route path="/:tenantSlug" element={<MenuPage />} />

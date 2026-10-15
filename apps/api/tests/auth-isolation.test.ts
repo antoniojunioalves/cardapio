@@ -1,19 +1,26 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import {
+  definirContaPropria,
+  definirEmailDaConta,
+  withAccount,
+  withAccountEmail,
+} from '../src/accounts/context.js'
+import { inserirConta } from '../src/accounts/repository.js'
 import { buildApp } from '../src/app.js'
 import { recordAudit } from '../src/audit/record.js'
-import { tenantDoEmail } from '../src/auth/login-lookup.js'
 import { closeDatabase, db } from '../src/db/index.js'
-import { auditLogs, profiles, refreshTokens, users } from '../src/db/schema/index.js'
+import { accounts, auditLogs, profiles, refreshTokens, users } from '../src/db/schema/index.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
-import { withTenant, type TenantTransaction } from '../src/tenant/with-tenant.js'
+import { withTenant } from '../src/tenant/with-tenant.js'
 import { hashPassword } from '../src/auth/password.js'
 import {
   criarTenantComUsuario,
   removerTenantDeTeste,
   SENHA_PADRAO,
+  vincularConta,
   type TenantDeTeste,
 } from './helpers/fixtures.js'
 
@@ -21,7 +28,7 @@ import {
  * Isolamento das tabelas da Fase 4.
  *
  * As mesmas garantias já provadas para `subscriptions`, agora sobre os dados
- * mais sensíveis do sistema: usuários, seus papéis, suas sessões e o registro
+ * mais sensíveis do sistema: as contas, os vínculos, as sessões e o registro
  * de auditoria. Um vazamento aqui não expõe um preço — expõe credenciais e o
  * histórico de quem fez o quê.
  */
@@ -29,16 +36,23 @@ import {
 let app: FastifyInstance
 let tenantA: TenantDeTeste
 let tenantB: TenantDeTeste
+/** Um terceiro estabelecimento, com a pessoa do Tenant A também na equipe. */
+let tenantC: TenantDeTeste
+/** O vínculo da conta do Tenant A no Tenant C. */
+let aEmC: TenantDeTeste
 
 beforeAll(async () => {
   app = await buildApp({ rateLimit: false })
   await app.ready()
   tenantA = await criarTenantComUsuario()
   tenantB = await criarTenantComUsuario()
+  tenantC = await criarTenantComUsuario()
+  aEmC = await vincularConta(tenantA, tenantC)
 })
 
 afterAll(async () => {
   await app.close()
+  await removerTenantDeTeste(tenantC)
   await removerTenantDeTeste(tenantA)
   await removerTenantDeTeste(tenantB)
   await closeDatabase()
@@ -59,9 +73,12 @@ describe('usuários', () => {
     expect(deB).toEqual([{ id: tenantB.userId }])
   })
 
-  it('o Tenant A não lê o hash de senha de um usuário do Tenant B', async () => {
+  it('o Tenant A não lê a conta — nem o hash da senha — de quem é do Tenant B', async () => {
     const encontrado = await withTenant(contextoDe(tenantA), (tx) =>
-      tx.select({ hash: users.passwordHash }).from(users).where(eq(users.id, tenantB.userId)),
+      tx
+        .select({ hash: accounts.passwordHash })
+        .from(accounts)
+        .where(eq(accounts.id, tenantB.accountId)),
     )
 
     expect(encontrado).toEqual([])
@@ -84,125 +101,184 @@ describe('usuários', () => {
     expect(aindaAtivo?.isActive).toBe(true)
   })
 
-  it('o Tenant A não troca a senha de um usuário do Tenant B', async () => {
+  it('o Tenant A não troca a senha de quem é do Tenant B', async () => {
     const alterados = await withTenant(contextoDe(tenantA), (tx) =>
       tx
-        .update(users)
+        .update(accounts)
         .set({ passwordHash: 'hash-plantado-pelo-invasor' })
-        .where(eq(users.id, tenantB.userId))
-        .returning({ id: users.id }),
+        .where(eq(accounts.id, tenantB.accountId))
+        .returning({ id: accounts.id }),
     )
 
     expect(alterados).toEqual([])
   })
 
-  it('fora de contexto não se enxerga usuário nenhum', async () => {
+  it('nem a própria equipe troca a senha de alguém: a conta é da pessoa', async () => {
+    const alterados = await withTenant(contextoDe(tenantA), (tx) =>
+      tx
+        .update(accounts)
+        .set({ passwordHash: 'hash-plantado-pelo-dono' })
+        .where(eq(accounts.id, tenantA.accountId))
+        .returning({ id: accounts.id }),
+    )
+
+    expect(alterados).toEqual([])
+  })
+
+  it('fora de contexto não se enxerga usuário nem conta nenhuma', async () => {
     expect(await db.select().from(users)).toEqual([])
+    expect(await db.select().from(accounts)).toEqual([])
   })
 })
 
 /**
- * O login pede só e-mail e senha: o estabelecimento é achado pelo e-mail, antes
- * de existir contexto de tenant. Quem permite isso é a policy `login_por_email`
- * — e estes testes provam o tamanho exato da abertura: ler a linha do e-mail
- * que está entrando, e mais nada.
+ * A conta é global, sem `tenant_id`: o que a protege são as variáveis da
+ * transação (`accounts/context.ts`). Estes testes provam o tamanho exato de
+ * cada abertura.
  */
-describe('login por e-mail', () => {
-  /** Uma transação com o e-mail em login definido, como `tenantDoEmail` faz. */
-  function comEmailEmLogin<T>(email: string, work: (tx: TenantTransaction) => Promise<T>) {
-    return db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.login_email', ${email}, true)`)
-      return work(tx)
-    })
-  }
+describe('contas', () => {
+  it('com o e-mail no contexto, aparece a conta dele, e nenhuma outra', async () => {
+    const visiveis = await withAccountEmail(tenantA.email, (tx) =>
+      tx.select({ id: accounts.id }).from(accounts),
+    )
+    expect(visiveis).toEqual([{ id: tenantA.accountId }])
 
-  it('acha o estabelecimento de cada e-mail', async () => {
-    expect(await tenantDoEmail(tenantA.email)).toBe(tenantA.tenantId)
-    expect(await tenantDoEmail(tenantB.email)).toBe(tenantB.tenantId)
-    expect(await tenantDoEmail('ninguem@exemplo.com')).toBeNull()
+    const ninguem = await withAccountEmail('ninguem@exemplo.com', (tx) =>
+      tx.select({ id: accounts.id }).from(accounts),
+    )
+    expect(ninguem).toEqual([])
   })
 
-  it('só a linha do e-mail que está entrando aparece', async () => {
-    const visiveis = await comEmailEmLogin(tenantA.email, (tx) =>
+  it('o e-mail no contexto não mostra os vínculos, nem outra tabela', async () => {
+    const [vinculos, perfis] = await withAccountEmail(tenantA.email, async (tx) => [
+      await tx.select({ id: users.id }).from(users),
+      await tx.select({ id: profiles.id }).from(profiles),
+    ])
+
+    expect(vinculos).toEqual([])
+    expect(perfis).toEqual([])
+  })
+
+  it('o e-mail no contexto só lê: não troca a senha nem apaga a conta', async () => {
+    const [alteradas, apagadas] = await withAccountEmail(tenantA.email, async (tx) => [
+      await tx
+        .update(accounts)
+        .set({ passwordHash: 'hash-plantado-pelo-invasor' })
+        .where(eq(accounts.email, tenantA.email))
+        .returning({ id: accounts.id }),
+      await tx
+        .delete(accounts)
+        .where(eq(accounts.email, tenantA.email))
+        .returning({ id: accounts.id }),
+    ])
+
+    expect(alteradas).toEqual([])
+    expect(apagadas).toEqual([])
+  })
+
+  it('o e-mail no contexto não sobrevive ao fim da transação', async () => {
+    await withAccountEmail(tenantA.email, (tx) => tx.select().from(accounts))
+
+    // A conexão volta ao pool sem o e-mail: o `set_config` é local à transação.
+    expect(await db.select().from(accounts)).toEqual([])
+  })
+
+  it('só se cria a conta do e-mail que está no contexto', async () => {
+    const hash = await hashPassword('qualquer-senha-123')
+
+    await expect(
+      withAccountEmail('quem-pediu@exemplo.com', (tx) =>
+        inserirConta(tx, { email: 'outra-pessoa@exemplo.com', name: 'Outra', passwordHash: hash }),
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('o banco recusa duas contas com o mesmo e-mail', async () => {
+    await expect(
+      withAccountEmail(tenantA.email, async (tx) =>
+        inserirConta(tx, {
+          email: tenantA.email,
+          name: 'Mesmo e-mail',
+          passwordHash: await hashPassword('qualquer-senha-123'),
+        }),
+      ),
+    ).rejects.toMatchObject({ cause: { constraint: 'accounts_email' } })
+  })
+
+  it('o banco recusa e-mail com maiúsculas, que viraria uma segunda conta', async () => {
+    const email = tenantA.email.toUpperCase()
+    await expect(
+      withAccountEmail(email, async (tx) =>
+        inserirConta(tx, {
+          email,
+          name: 'Maiúsculas',
+          passwordHash: await hashPassword('qualquer-senha-123'),
+        }),
+      ),
+    ).rejects.toMatchObject({ cause: { constraint: 'accounts_email_minusculo' } })
+  })
+
+  it('a própria conta aparece e se altera; a de outra pessoa, não', async () => {
+    const [visiveis, alteradas] = await withAccount(tenantA.accountId, async (tx) => [
+      await tx.select({ id: accounts.id }).from(accounts),
+      await tx
+        .update(accounts)
+        .set({ name: 'Tomada' })
+        .where(eq(accounts.id, tenantB.accountId))
+        .returning({ id: accounts.id }),
+    ])
+
+    expect(visiveis).toEqual([{ id: tenantA.accountId }])
+    expect(alteradas).toEqual([])
+  })
+
+  it('sem estabelecimento, a conta vê os próprios vínculos em todos — e só eles', async () => {
+    const vinculos = await withAccount(tenantA.accountId, (tx) =>
       tx.select({ id: users.id }).from(users),
     )
 
-    expect(visiveis).toEqual([{ id: tenantA.userId }])
+    expect(vinculos.map((v) => v.id).sort()).toEqual([tenantA.userId, aEmC.userId].sort())
   })
 
-  it('um e-mail que não existe não mostra linha nenhuma', async () => {
-    const visiveis = await comEmailEmLogin('ninguem@exemplo.com', (tx) =>
-      tx.select({ id: users.id }).from(users),
-    )
-
-    expect(visiveis).toEqual([])
-  })
-
-  it('a leitura não deixa trocar a senha nem desativar a conta', async () => {
-    const alterados = await comEmailEmLogin(tenantA.email, (tx) =>
+  it('os vínculos aparecem, mas não se alteram, sem o estabelecimento deles', async () => {
+    const alterados = await withAccount(tenantA.accountId, (tx) =>
       tx
         .update(users)
-        .set({ passwordHash: 'hash-plantado-pelo-invasor', isActive: false })
-        .where(eq(users.email, tenantA.email))
+        .set({ isActive: false })
+        .where(eq(users.accountId, tenantA.accountId))
         .returning({ id: users.id }),
     )
 
     expect(alterados).toEqual([])
-
-    const [intacto] = await withTenant(contextoDe(tenantA), (tx) =>
-      tx.select({ hash: users.passwordHash, isActive: users.isActive }).from(users),
-    )
-    expect(intacto?.hash).not.toBe('hash-plantado-pelo-invasor')
-    expect(intacto?.isActive).toBe(true)
   })
 
-  it('a leitura não deixa apagar a conta', async () => {
-    const apagados = await comEmailEmLogin(tenantA.email, (tx) =>
-      tx.delete(users).where(eq(users.email, tenantA.email)).returning({ id: users.id }),
-    )
+  it('dentro de um estabelecimento, definir a conta não mostra a equipe de outro', async () => {
+    const vinculos = await withTenant(contextoDe(tenantA), async (tx) => {
+      await definirContaPropria(tx, tenantA.accountId)
+      return tx.select({ id: users.id }).from(users)
+    })
 
-    expect(apagados).toEqual([])
+    expect(vinculos).toEqual([{ id: tenantA.userId }])
   })
 
-  it('não abre nenhuma outra tabela', async () => {
-    const perfis = await comEmailEmLogin(tenantA.email, (tx) =>
-      tx.select({ id: profiles.id }).from(profiles),
+  it('o estabelecimento vê as contas da própria equipe, e só elas', async () => {
+    const deA = await withTenant(contextoDe(tenantA), (tx) =>
+      tx.select({ id: accounts.id }).from(accounts),
+    )
+    const deC = await withTenant(contextoDe(tenantC), (tx) =>
+      tx.select({ id: accounts.id }).from(accounts),
     )
 
-    expect(perfis).toEqual([])
+    expect(deA).toEqual([{ id: tenantA.accountId }])
+    expect(deC.map((c) => c.id).sort()).toEqual([tenantC.accountId, tenantA.accountId].sort())
   })
 
-  it('o e-mail em login não sobrevive ao fim da transação', async () => {
-    await tenantDoEmail(tenantA.email)
-
-    // A conexão volta ao pool sem o e-mail: o `set_config` é local à transação.
-    expect(await db.select().from(users)).toEqual([])
-  })
-
-  it('o banco recusa o mesmo e-mail em dois estabelecimentos', async () => {
+  it('a mesma conta não entra duas vezes no mesmo estabelecimento', async () => {
     await expect(
-      withTenant(contextoDe(tenantB), async (tx) =>
-        tx.insert(users).values({
-          tenantId: tenantB.tenantId,
-          name: 'Mesmo e-mail',
-          email: tenantA.email,
-          passwordHash: await hashPassword('qualquer-senha-123'),
-        }),
+      withTenant(contextoDe(tenantA), (tx) =>
+        tx.insert(users).values({ tenantId: tenantA.tenantId, accountId: tenantA.accountId }),
       ),
-    ).rejects.toMatchObject({ cause: { constraint: 'users_email' } })
-  })
-
-  it('o banco recusa e-mail com maiúsculas, que viraria uma segunda conta', async () => {
-    await expect(
-      withTenant(contextoDe(tenantB), async (tx) =>
-        tx.insert(users).values({
-          tenantId: tenantB.tenantId,
-          name: 'Maiúsculas',
-          email: tenantA.email.toUpperCase(),
-          passwordHash: await hashPassword('qualquer-senha-123'),
-        }),
-      ),
-    ).rejects.toMatchObject({ cause: { constraint: 'users_email_minusculo' } })
+    ).rejects.toMatchObject({ cause: { constraint: 'users_conta_por_tenant' } })
   })
 })
 
@@ -256,24 +332,24 @@ describe('sessões', () => {
   })
 
   it('o token de acesso de um estabelecimento não alcança dados do outro', async () => {
-    const sessaoDeA = (
+    const sessaoDeB = (
       await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
-        payload: { email: tenantA.email, password: SENHA_PADRAO },
+        payload: { email: tenantB.email, password: SENHA_PADRAO },
       })
     ).json<{ accessToken: string; user: { tenantId: string } }>()
 
     const eu = await app.inject({
       method: 'GET',
       url: '/api/v1/auth/me',
-      headers: { authorization: `Bearer ${sessaoDeA.accessToken}` },
+      headers: { authorization: `Bearer ${sessaoDeB.accessToken}` },
     })
 
     // O tenant vem do token assinado pelo servidor, e o RLS o aplica no banco.
     // Não há cabeçalho, corpo ou query capaz de apontá-lo para outro lugar.
-    expect(eu.json<{ tenantId: string }>().tenantId).toBe(tenantA.tenantId)
-    expect(sessaoDeA.user.tenantId).not.toBe(tenantB.tenantId)
+    expect(eu.json<{ tenantId: string }>().tenantId).toBe(tenantB.tenantId)
+    expect(sessaoDeB.user.tenantId).not.toBe(tenantA.tenantId)
   })
 })
 
@@ -383,16 +459,18 @@ describe('referências a usuário de outro estabelecimento', () => {
     // do usuário falharia.
     const contexto = contextoDe(tenantA)
     const passwordHash = await hashPassword('temporaria')
+    const email = `desligado-${String(Date.now())}@exemplo.com`
 
     const idDoRegistro = await withTenant(contexto, async (tx) => {
+      await definirEmailDaConta(tx, email)
+      const accountId = await inserirConta(tx, {
+        email,
+        name: 'Funcionário desligado',
+        passwordHash,
+      })
       const [temporario] = await tx
         .insert(users)
-        .values({
-          tenantId: tenantA.tenantId,
-          name: 'Funcionário desligado',
-          email: `desligado-${Date.now()}@exemplo.com`,
-          passwordHash,
-        })
+        .values({ tenantId: tenantA.tenantId, accountId })
         .returning({ id: users.id })
       if (!temporario) throw new Error('falha ao criar usuário temporário')
 
@@ -407,6 +485,9 @@ describe('referências a usuário de outro estabelecimento', () => {
         .returning({ id: auditLogs.id })
 
       await tx.delete(users).where(eq(users.id, temporario.id))
+      // A conta sobra sem vínculo: sai também, para não ficar no banco de teste.
+      await definirContaPropria(tx, accountId)
+      await tx.delete(accounts).where(eq(accounts.id, accountId))
       return registro?.id ?? ''
     })
 

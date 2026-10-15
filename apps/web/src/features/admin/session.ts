@@ -16,8 +16,11 @@ import { ApiError, requisitar } from '@/services/api'
  *   renovar depois de recarregar — e já ter o que mostrar no menu.
  *
  * A sessão é de **um** estabelecimento, e quem diz qual é a API: o login pede
- * só e-mail e senha, e a resposta traz o estabelecimento da pessoa. É do slug
- * dele que o painel tira o endereço.
+ * só o e-mail e a senha da conta, e a resposta traz o estabelecimento em que a
+ * pessoa entrou — o que ela usou por último. É do slug dele que o painel tira o
+ * endereço. Quem trabalha em mais de um troca pelo menu
+ * (`trocarDeEstabelecimento`), e a troca vale para o navegador inteiro: as
+ * abas dividem o cookie da sessão.
  */
 
 export interface UsuarioDoPainel {
@@ -86,11 +89,27 @@ export const useSessaoStore = create<EstadoDaSessao>()(
 
 const sessao = () => useSessaoStore.getState()
 
-/** Entra com e-mail e senha. Devolve o slug do estabelecimento da pessoa, para o painel ir até ele. */
+/** Entra com e-mail e senha. Devolve o slug do estabelecimento em que a pessoa entrou, para o painel ir até ele. */
 export async function entrar(email: string, senha: string): Promise<string> {
   const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/login', {
     method: 'POST',
     body: { email, password: senha },
+    comCookie: true,
+  })
+  sessao().guardar(resposta)
+  return resposta.establishment.slug
+}
+
+/**
+ * Troca a sessão para outro estabelecimento da conta, sem pedir a senha: quem
+ * prova a conta é o cookie da sessão de agora, que a API revoga. Não muda o
+ * endereço: o painel segue a sessão, e com a de outro estabelecimento a moldura
+ * vai para o painel dele (`AdminLayout`). Devolve o slug do estabelecimento novo.
+ */
+export async function trocarDeEstabelecimento(slug: string): Promise<string> {
+  const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/switch', {
+    method: 'POST',
+    body: { establishmentSlug: slug },
     comCookie: true,
   })
   sessao().guardar(resposta)

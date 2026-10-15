@@ -4,7 +4,6 @@ import {
   PERMISSOES,
   permissoesPorGrupo,
   permissoesQueFaltam,
-  senhaSchema,
   textoObrigatorio,
 } from '@repo/shared'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
@@ -15,7 +14,12 @@ import { chaveDoPlano, type UsoDoPlano } from './plan'
 import { comSessao } from './session'
 
 /**
- * A equipe do estabelecimento: as pessoas que entram no painel e os perfis.
+ * A equipe do estabelecimento: as pessoas que entram no painel, os convites e
+ * os perfis.
+ *
+ * Quem entra na equipe entra por convite: o e-mail e o perfil. O nome, o e-mail
+ * e a senha são da conta da pessoa — a mesma em todos os estabelecimentos em
+ * que ela trabalha —, e ninguém daqui os muda.
  *
  * Um perfil é um conjunto de permissões com nome, montado pelo estabelecimento;
  * cada pessoa tem um, e mudar o perfil muda todas as que o têm. O proprietário
@@ -32,6 +36,26 @@ export interface Perfil {
   permissions: string[]
   /** Quantas pessoas têm o perfil. */
   users: number
+}
+
+/** Um convite pendente, como `GET /api/v1/admin/invitations` devolve. */
+export interface Convite {
+  id: string
+  email: string
+  profile: { id: string; name: string }
+  /** O nome de quem convidou. */
+  invitedBy: string | null
+  expiresAt: string
+  /** Quando o último e-mail saiu: a criação ou o reenvio mais recente. */
+  sentAt: string
+  createdAt: string
+}
+
+/** O que convidar e reenviar devolvem. */
+export interface EnvioDoConvite {
+  invitation: Convite
+  /** Falso quando o servidor de e-mail falhou: o convite vale, e dá para reenviar. */
+  emailSent: boolean
 }
 
 /** Uma pessoa, como `GET /api/v1/admin/users` devolve. */
@@ -126,17 +150,34 @@ export function porQueNaoExcluirPerfil(perfil: Perfil): string | null {
     : `${String(perfil.users)} pessoas têm este perfil. Dê outro perfil a elas antes de excluir.`
 }
 
-/** Como a equipe está diante do limite do plano. `null`: o plano não limita as pessoas. */
+/**
+ * Como a equipe está diante do limite do plano. Os convites pendentes contam:
+ * cada um é uma vaga prometida. `null`: o plano não limita as pessoas.
+ */
 export function equipeNoPlano(
   uso: UsoDoPlano | undefined,
 ): { texto: string; noLimite: boolean } | null {
   if (!uso?.plan || uso.users.limit === null) return null
-  const { active, limit } = uso.users
+  const { active, invited, limit } = uso.users
+  const convites =
+    invited === 0
+      ? ''
+      : `, contando ${invited === 1 ? '1 convite pendente' : `${String(invited)} convites pendentes`}`
   return {
-    texto: `${String(active)} de ${String(limit)} ${limit === 1 ? 'pessoa ativa' : 'pessoas ativas'} do plano ${uso.plan.name}.`,
-    noLimite: active >= limit,
+    texto: `${String(active + invited)} de ${String(limit)} ${limit === 1 ? 'pessoa ativa' : 'pessoas ativas'} do plano ${uso.plan.name}${convites}.`,
+    noLimite: active + invited >= limit,
   }
 }
+
+const data = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' })
+
+/** O convite já venceu? Vencido, o link não abre, e reenviar dá um novo. */
+export const conviteVencido = (convite: Pick<Convite, 'expiresAt'>, agora = Date.now()) =>
+  new Date(convite.expiresAt).getTime() <= agora
+
+/** "Vale até 21/10/2026" ou "Venceu em 14/10/2026". */
+export const prazoDoConvite = (convite: Pick<Convite, 'expiresAt'>, agora = Date.now()) =>
+  `${conviteVencido(convite, agora) ? 'Venceu em' : 'Vale até'} ${data.format(new Date(convite.expiresAt))}`
 
 const dataEHora = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 
@@ -148,27 +189,19 @@ export const ultimoAcesso = (pessoa: Pick<Pessoa, 'lastLoginAt'>) =>
 
 // --- Formulários ------------------------------------------------------------------
 
-const nome = textoObrigatorio(120, 'Informe o nome.').refine(
-  (valor) => valor.length >= 2,
-  'Informe o nome.',
-)
-
-/** Cadastrar uma pessoa: o e-mail é o login, e a senha inicial segue as regras do cadastro. */
-export const formularioDePessoaNovaSchema = z.object({
-  name: nome,
+/** Convidar uma pessoa: o e-mail para onde vai o link, e o perfil que ela terá. */
+export const formularioDeConviteSchema = z.object({
   email: z.email('Informe um e-mail válido, como voce@exemplo.com.').max(254),
-  password: senhaSchema,
   profileId: z.string().min(1, 'Escolha um perfil.'),
 })
-export type ValoresDaPessoaNova = z.input<typeof formularioDePessoaNovaSchema>
-export type DadosDaPessoaNova = z.output<typeof formularioDePessoaNovaSchema>
+export type ValoresDoConvite = z.input<typeof formularioDeConviteSchema>
+export type DadosDoConvite = z.output<typeof formularioDeConviteSchema>
 
-export const PESSOA_NOVA: ValoresDaPessoaNova = { name: '', email: '', password: '', profileId: '' }
+export const CONVITE_NOVO: ValoresDoConvite = { email: '', profileId: '' }
 
-/** Editar uma pessoa: o nome e o perfil. O e-mail e a senha não mudam por aqui. */
+/** Editar uma pessoa: só o perfil. O nome, o e-mail e a senha são da conta dela. */
 export const formularioDePessoaSchema = z.object({
-  name: nome,
-  // Em branco no proprietário, que não tem perfil.
+  // Em branco em quem está sem perfil, que pode continuar assim.
   profileId: z.string(),
 })
 export type ValoresDaPessoa = z.input<typeof formularioDePessoaSchema>
@@ -189,11 +222,21 @@ export type DadosDoPerfil = z.output<typeof formularioDePerfilSchema> & { permis
 export const chaveDaEquipe = (slug: string) => ['painel', 'equipe', slug] as const
 export const chaveDasPessoas = (slug: string) => [...chaveDaEquipe(slug), 'pessoas'] as const
 export const chaveDosPerfis = (slug: string) => [...chaveDaEquipe(slug), 'perfis'] as const
+export const chaveDosConvites = (slug: string) => [...chaveDaEquipe(slug), 'convites'] as const
 
 export function usePessoas(slug: string) {
   return useQuery({
     queryKey: chaveDasPessoas(slug),
     queryFn: () => comSessao<Pessoa[]>('/api/v1/admin/users'),
+  })
+}
+
+/** Só para quem vê a equipe: sem `users:read`, a API recusa. */
+export function useConvites(slug: string, ativo: boolean) {
+  return useQuery({
+    queryKey: chaveDosConvites(slug),
+    queryFn: () => comSessao<Convite[]>('/api/v1/admin/invitations'),
+    enabled: ativo,
   })
 }
 
@@ -205,20 +248,43 @@ export function usePerfis(slug: string) {
 }
 
 /**
- * Depois de mexer numa pessoa ou num perfil, as duas listas: a das pessoas
- * mostra o nome do perfil, e a dos perfis, quantas pessoas cada um tem. E o
- * uso do plano, que conta as pessoas ativas.
+ * Depois de mexer numa pessoa, num convite ou num perfil, as listas da equipe:
+ * a das pessoas mostra o nome do perfil, e a dos perfis, quantas pessoas cada
+ * um tem. E o uso do plano, que conta as pessoas ativas e os convites.
  */
 function marcarEquipe(queryClient: QueryClient, slug: string) {
   void queryClient.invalidateQueries({ queryKey: chaveDaEquipe(slug) })
   void queryClient.invalidateQueries({ queryKey: chaveDoPlano(slug) })
 }
 
-export function useCriarPessoa(slug: string) {
+export function useConvidar(slug: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (dados: DadosDaPessoaNova) =>
-      comSessao<Pessoa>('/api/v1/admin/users', { method: 'POST', body: dados }),
+    mutationFn: (dados: DadosDoConvite) =>
+      comSessao<EnvioDoConvite>('/api/v1/admin/invitations', { method: 'POST', body: dados }),
+    onSuccess: () => {
+      marcarEquipe(queryClient, slug)
+    },
+  })
+}
+
+/** Um link novo para o mesmo convite: o anterior deixa de valer, e o prazo recomeça. */
+export function useReenviarConvite(slug: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      comSessao<EnvioDoConvite>(`/api/v1/admin/invitations/${id}/resend`, { method: 'POST' }),
+    onSuccess: () => {
+      marcarEquipe(queryClient, slug)
+    },
+  })
+}
+
+export function useCancelarConvite(slug: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      comSessao<undefined>(`/api/v1/admin/invitations/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       marcarEquipe(queryClient, slug)
     },
@@ -228,7 +294,7 @@ export function useCriarPessoa(slug: string) {
 export function useAlterarPessoa(slug: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, dados }: { id: string; dados: { name: string; profileId?: string } }) =>
+    mutationFn: ({ id, dados }: { id: string; dados: { profileId: string } }) =>
       comSessao<Pessoa>(`/api/v1/admin/users/${id}`, { method: 'PATCH', body: dados }),
     onSuccess: () => {
       marcarEquipe(queryClient, slug)

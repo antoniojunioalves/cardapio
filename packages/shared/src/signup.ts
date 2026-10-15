@@ -35,6 +35,8 @@ export const SLUGS_RESERVADOS: ReadonlySet<string> = new Set([
   'confirmar-email',
   'conta',
   'contato',
+  'convite',
+  'convites',
   'docs',
   'entrar',
   'esqueci-a-senha',

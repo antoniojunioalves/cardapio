@@ -17,6 +17,7 @@ import {
   SENHA_PADRAO,
   type TenantDeTeste,
 } from './helpers/fixtures.js'
+import { aceitarConvite, tokenDoConvitePara } from './helpers/convites.js'
 
 /**
  * Os perfis do estabelecimento: quem os vê, cria, altera e exclui — e o que
@@ -34,10 +35,6 @@ interface Perfil {
   description: string | null
   permissions: string[]
   users: number
-}
-interface Usuario {
-  id: string
-  profile: { id: string; name: string } | null
 }
 
 const entrar = async (email: string, password = SENHA_PADRAO) =>
@@ -75,17 +72,20 @@ async function criarPerfil(permissions: string[], name = nomeUnico('Perfil')) {
   return resposta.json<Perfil>()
 }
 
-/** Cria uma pessoa com o perfil e entra com ela. */
+/** Convida uma pessoa para o perfil, aceita pelo link do e-mail e entra com ela. */
 async function pessoaCom(profileId: string) {
   const email = `pessoa-${randomUUID().slice(0, 8)}@exemplo.com`
-  const criada = await chamar('POST', '/users', tokenDoDono, {
+  const convite = await chamar('POST', '/invitations', tokenDoDono, { email, profileId })
+  expect(convite.statusCode, convite.body).toBe(201)
+  const aceite = await aceitarConvite(app, tokenDoConvitePara(email), {
     name: 'Pessoa',
-    email,
     password: 'Senha-inicial-123',
-    profileId,
   })
-  expect(criada.statusCode, criada.body).toBe(201)
-  return { id: criada.json<Usuario>().id, token: await entrar(email, 'Senha-inicial-123') }
+  expect(aceite.statusCode, aceite.body).toBe(200)
+  return {
+    id: aceite.json<{ user: { id: string } }>().user.id,
+    token: await entrar(email, 'Senha-inicial-123'),
+  }
 }
 
 beforeAll(async () => {

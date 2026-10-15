@@ -1,11 +1,13 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 
-import { profiles, refreshTokens, users } from '../db/schema/index.js'
+import { accounts, profiles, refreshTokens, users } from '../db/schema/index.js'
 import type { TenantTransaction } from '../tenant/with-tenant.js'
 
 /**
- * Usuários do painel. Recebem a transação no contexto do tenant — o filtro por
- * estabelecimento é do RLS.
+ * Usuários do painel: os vínculos das pessoas com o estabelecimento, com o
+ * nome e o e-mail da conta de cada uma. Recebem a transação no contexto do
+ * tenant — o filtro por estabelecimento é do RLS, e a conta aparece porque tem
+ * vínculo aqui (`contas_da_equipe`).
  */
 
 export interface UsuarioDoPainel {
@@ -22,8 +24,8 @@ export interface UsuarioDoPainel {
 
 const colunas = {
   id: users.id,
-  name: users.name,
-  email: users.email,
+  name: accounts.name,
+  email: accounts.email,
   isActive: users.isActive,
   isOwner: users.isOwner,
   lastLoginAt: users.lastLoginAt,
@@ -54,8 +56,9 @@ export async function listarUsuarios(tx: TenantTransaction): Promise<UsuarioDoPa
   const linhas = await tx
     .select(colunas)
     .from(users)
+    .innerJoin(accounts, eq(accounts.id, users.accountId))
     .leftJoin(profiles, eq(profiles.id, users.profileId))
-    .orderBy(desc(users.isOwner), asc(sql`lower(${users.name})`))
+    .orderBy(desc(users.isOwner), asc(sql`lower(${accounts.name})`))
   return linhas.map(montar)
 }
 
@@ -66,25 +69,41 @@ export async function buscarUsuario(
   const [linha] = await tx
     .select(colunas)
     .from(users)
+    .innerJoin(accounts, eq(accounts.id, users.accountId))
     .leftJoin(profiles, eq(profiles.id, users.profileId))
     .where(eq(users.id, id))
     .limit(1)
   return linha ? montar(linha) : null
 }
 
-export async function inserirUsuario(
+/**
+ * O vínculo de uma conta com o estabelecimento, com o perfil dela: quem aceita
+ * um convite. Ela entra na mesma hora, então o último acesso já é agora.
+ */
+export async function inserirVinculo(
   tx: TenantTransaction,
-  dados: {
-    tenantId: string
-    name: string
-    email: string
-    passwordHash: string
-    profileId: string
-  },
+  dados: { tenantId: string; accountId: string; profileId: string },
 ): Promise<string> {
-  const [criado] = await tx.insert(users).values(dados).returning({ id: users.id })
-  if (!criado) throw new Error('usuário não foi criado')
+  const [criado] = await tx
+    .insert(users)
+    .values({ ...dados, lastLoginAt: new Date() })
+    .returning({ id: users.id })
+  if (!criado) throw new Error('o vínculo não foi criado')
   return criado.id
+}
+
+/** O vínculo da conta neste estabelecimento, se ela já está na equipe — ativa ou não. */
+export async function vinculoDoEmail(
+  tx: TenantTransaction,
+  email: string,
+): Promise<{ id: string; isActive: boolean } | null> {
+  const [vinculo] = await tx
+    .select({ id: users.id, isActive: users.isActive })
+    .from(users)
+    .innerJoin(accounts, eq(accounts.id, users.accountId))
+    .where(eq(accounts.email, email))
+    .limit(1)
+  return vinculo ?? null
 }
 
 /** Um perfil por pessoa: o novo substitui o anterior. */
@@ -96,13 +115,6 @@ export async function definirPerfil(
   await tx
     .update(users)
     .set({ profileId, updatedAt: sql`now()` })
-    .where(eq(users.id, id))
-}
-
-export async function alterarNome(tx: TenantTransaction, id: string, nome: string): Promise<void> {
-  await tx
-    .update(users)
-    .set({ name: nome, updatedAt: sql`now()` })
     .where(eq(users.id, id))
 }
 

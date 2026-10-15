@@ -183,6 +183,20 @@
       "when": 1791341155971,
       "tag": "0025_fim_dos_papeis_globais",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792023268968,
+      "tag": "0026_contas_e_convites",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792023290450,
+      "tag": "0027_vinculo_sem_credenciais",
+      "breakpoints": true
     }
   ]
 }

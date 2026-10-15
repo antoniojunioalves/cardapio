@@ -17,6 +17,7 @@ import { adminCatalogRoutes } from './routes/admin-catalog.js'
 import { adminCustomizationRoutes } from './routes/admin-customization.js'
 import { adminEmailConfirmationRoutes } from './routes/admin-email-confirmation.js'
 import { adminImageRoutes } from './routes/admin-images.js'
+import { adminInvitationRoutes } from './routes/admin-invitations.js'
 import { adminOrderRoutes } from './routes/admin-orders.js'
 import { adminPlanRoutes } from './routes/admin-plan.js'
 import { adminSettingsRoutes } from './routes/admin-settings.js'
@@ -24,6 +25,7 @@ import { adminProfileRoutes } from './routes/admin-profiles.js'
 import { adminUserRoutes } from './routes/admin-users.js'
 import { authRoutes } from './routes/auth.js'
 import { healthRoutes } from './routes/health.js'
+import { invitationAcceptanceRoutes } from './routes/invitation-acceptance.js'
 import { publicCustomerRoutes } from './routes/public-customers.js'
 import { publicMenuRoutes } from './routes/public-menu.js'
 import { publicOrderRoutes } from './routes/public-orders.js'
@@ -105,12 +107,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Rotas de domínio ficam sob o prefixo versionado. As sondas acima não: são
   // infraestrutura, não contrato público.
   await instance.register(authRoutes, { prefix: '/api/v1/auth' })
+  await instance.register(invitationAcceptanceRoutes, { prefix: '/api/v1/auth' })
   await instance.register(adminSettingsRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminImageRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCatalogRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCustomizationRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminOrderRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminUserRoutes, { prefix: '/api/v1/admin' })
+  await instance.register(adminInvitationRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminProfileRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminPlanRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminEmailConfirmationRoutes, { prefix: '/api/v1/admin' })

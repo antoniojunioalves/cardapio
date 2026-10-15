@@ -1,6 +1,7 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 
 import {
+  accounts,
   emailVerificationTokens,
   plans,
   subscriptions,
@@ -50,10 +51,13 @@ export async function inserirAssinatura(
   await tx.insert(subscriptions).values({ tenantId, planId })
 }
 
-/** O proprietário: quem cadastra o estabelecimento. Tem todas as permissões e não tem perfil. */
+/**
+ * O vínculo do proprietário: quem cadastra o estabelecimento. Tem todas as
+ * permissões e não tem perfil. A conta já existe — nova, ou de quem já tinha.
+ */
 export async function inserirDono(
   tx: TenantTransaction,
-  dados: { tenantId: string; name: string; email: string; passwordHash: string },
+  dados: { tenantId: string; accountId: string },
 ): Promise<{ id: string }> {
   const [dono] = await tx
     .insert(users)
@@ -63,13 +67,14 @@ export async function inserirDono(
   return dono
 }
 
-/** O proprietário do estabelecimento — quem o cadastrou. */
+/** O proprietário do estabelecimento — quem o cadastrou —, com o e-mail da conta dele. */
 export async function buscarDono(
   tx: TenantTransaction,
-): Promise<{ id: string; email: string } | null> {
+): Promise<{ id: string; accountId: string; email: string } | null> {
   const [dono] = await tx
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, accountId: users.accountId, email: accounts.email })
     .from(users)
+    .innerJoin(accounts, eq(accounts.id, users.accountId))
     .where(eq(users.isOwner, true))
     .limit(1)
   return dono ?? null
@@ -151,19 +156,15 @@ export async function ultimoEnvio(tx: TenantTransaction, userId: string): Promis
   return ultimo?.criadoEm ?? null
 }
 
-/**
- * Marca o e-mail como confirmado — se ainda for o mesmo para o qual o link foi
- * enviado. Devolve se a pessoa ainda tem aquele e-mail.
- */
-export async function marcarEmailConfirmado(
+/** A conta de um vínculo do estabelecimento. */
+export async function contaDoVinculo(
   tx: TenantTransaction,
   userId: string,
-  email: string,
-): Promise<boolean> {
-  const atualizados = await tx
-    .update(users)
-    .set({ emailVerifiedAt: sql`coalesce(${users.emailVerifiedAt}, now())`, updatedAt: new Date() })
-    .where(and(eq(users.id, userId), eq(users.email, email)))
-    .returning({ id: users.id })
-  return atualizados.length > 0
+): Promise<string | null> {
+  const [vinculo] = await tx
+    .select({ accountId: users.accountId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  return vinculo?.accountId ?? null
 }
