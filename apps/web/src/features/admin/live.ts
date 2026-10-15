@@ -28,11 +28,20 @@ export type AvisoDePedido =
 
 const URL_DO_CANAL = `${API_URL.replace(/^http/, 'ws')}/api/v1/admin/orders/stream`
 
+/**
+ * `estabelecimento` é o da sessão, ou `null` sem sessão. A conexão é de um
+ * estabelecimento só — autentica com o token dele —, e por isso reabre quando
+ * ele muda: na troca pelo menu, a de antes fecha e a do novo abre.
+ */
 export function usePedidosAoVivo(
-  ativo: boolean,
+  estabelecimento: string | null,
   aoAvisar: (aviso: AvisoDePedido) => void,
 ): EstadoDaConexao {
-  const [estado, setEstado] = useState<EstadoDaConexao>('conectando')
+  // O estado é de um estabelecimento: o de outro, depois de uma troca, vale como "conectando".
+  const [estado, setEstado] = useState<{ de: string | null; valor: EstadoDaConexao }>({
+    de: null,
+    valor: 'conectando',
+  })
 
   // A função muda a cada render de quem usa; a conexão não deve reabrir por isso.
   const avisar = useRef(aoAvisar)
@@ -41,8 +50,11 @@ export function usePedidosAoVivo(
   })
 
   useEffect(() => {
-    if (!ativo) return
+    if (!estabelecimento) return
 
+    const marcar = (valor: EstadoDaConexao) => {
+      setEstado({ de: estabelecimento, valor })
+    }
     let socket: WebSocket | null = null
     let encerrado = false
     let espera = 1000
@@ -79,7 +91,7 @@ export function usePedidosAoVivo(
         }
         if (mensagem.type === 'ready') {
           espera = 1000
-          setEstado('ao-vivo')
+          marcar('ao-vivo')
           avisar.current({ type: 'resync' })
         } else if (mensagem.type === 'order.created' || mensagem.type === 'order.status_changed') {
           avisar.current(mensagem as AvisoDePedido)
@@ -90,10 +102,10 @@ export function usePedidosAoVivo(
         if (encerrado || socket !== atual) return
         socket = null
         if (evento.code === 4003) {
-          setEstado('sem-permissao')
+          marcar('sem-permissao')
           return
         }
-        setEstado('reconectando')
+        marcar('reconectando')
         if (evento.code === 4001) {
           void renovarSessao().then(
             () => {
@@ -115,7 +127,7 @@ export function usePedidosAoVivo(
       if (agendado) clearTimeout(agendado)
       socket?.close()
     }
-  }, [ativo])
+  }, [estabelecimento])
 
-  return estado
+  return estado.de === estabelecimento ? estado.valor : 'conectando'
 }

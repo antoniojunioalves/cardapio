@@ -18,7 +18,9 @@ import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import { RECURSO_USUARIOS } from '../src/plans/limits.js'
 import { travarLimiteDoPlano } from '../src/plans/service.js'
-import { inserirUsuario } from '../src/users/repository.js'
+import { generateTenantToken } from '../src/auth/tokens.js'
+import { inserirConvite } from '../src/invitations/repository.js'
+import { aceitarConvite, tokenDoConvitePara } from './helpers/convites.js'
 import {
   criarPerfilDeTeste,
   criarTenantComUsuario,
@@ -58,7 +60,12 @@ async function entrar(email: string, password = SENHA_PADRAO) {
   })
 }
 
-function chamar(method: 'GET' | 'POST' | 'PATCH', url: string, token: string, payload?: object) {
+function chamar(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  url: string,
+  token: string,
+  payload?: object,
+) {
   return app.inject({
     method,
     url: `/api/v1/admin${url}`,
@@ -67,28 +74,41 @@ function chamar(method: 'GET' | 'POST' | 'PATCH', url: string, token: string, pa
   })
 }
 
-async function criar(nomeDoPerfil: NomeDePerfil, token = tokenDoDono) {
-  const email = `pessoa-${randomUUID().slice(0, 8)}@EXEMPLO.com`
-  const resposta = await chamar('POST', '/users', token, {
-    name: 'Pessoa',
-    email,
-    password: 'Senha-inicial-123',
-    profileId: perfil[nomeDoPerfil],
+/** A senha que cada pessoa escolhe ao aceitar o convite. */
+const SENHA_DA_PESSOA = 'Senha-inicial-123'
+
+/**
+ * Põe uma pessoa nova na equipe pelo caminho de verdade: o convite, e o aceite
+ * pelo link do e-mail. `resposta` é a do convite; recusado, não há aceite, e o
+ * `id` vem vazio.
+ */
+async function criar(nomeDoPerfil: NomeDePerfil, token = tokenDoDono, perfilId?: string) {
+  const email = `pessoa-${randomUUID().slice(0, 8)}@exemplo.com`
+  const resposta = await chamar('POST', '/invitations', token, {
+    email: email.toUpperCase(),
+    profileId: perfilId ?? perfil[nomeDoPerfil],
   })
-  return { resposta, email: email.toLowerCase() }
+  if (resposta.statusCode !== 201) return { resposta, email, id: '' }
+
+  const aceite = await aceitarConvite(app, tokenDoConvitePara(email), {
+    name: 'Pessoa',
+    password: SENHA_DA_PESSOA,
+  })
+  expect(aceite.statusCode, aceite.body).toBe(200)
+  return { resposta, email, id: aceite.json<{ user: { id: string } }>().user.id }
 }
 
-/** Cria a pessoa com o perfil e entra com ela: o token e o id. */
+/** Põe a pessoa na equipe com o perfil e entra com ela: o token e o id. */
 async function entrarComo(nomeDoPerfil: NomeDePerfil) {
   await liberarVagas()
-  const { resposta, email } = await criar(nomeDoPerfil)
-  const token = (await entrar(email, 'Senha-inicial-123')).json<{
+  const { email, id } = await criar(nomeDoPerfil)
+  const token = (await entrar(email, SENHA_DA_PESSOA)).json<{
     accessToken: string
   }>().accessToken
-  return { token, id: resposta.json<Usuario>().id }
+  return { token, id }
 }
 
-/** Desativa todos, menos o dono, para cada teste começar com vagas. */
+/** Desativa todos, menos o dono, e cancela os convites, para cada teste começar com vagas. */
 async function liberarVagas() {
   const lista = (await chamar('GET', '/users', tokenDoDono)).json<Usuario[]>()
   for (const u of lista) {
@@ -96,6 +116,12 @@ async function liberarVagas() {
       await chamar('POST', `/users/${u.id}/deactivate`, tokenDoDono)
     }
   }
+  await limparConvites()
+}
+
+async function limparConvites() {
+  const convites = (await chamar('GET', '/invitations', tokenDoDono)).json<{ id: string }[]>()
+  for (const c of convites) await chamar('DELETE', `/invitations/${c.id}`, tokenDoDono)
 }
 
 beforeAll(async () => {
@@ -130,120 +156,68 @@ afterAll(async () => {
   await closeDatabase()
 })
 
-describe('criar usuário', () => {
-  it('o dono cria um atendente, que consegue entrar com a senha inicial', async () => {
+describe('entrar na equipe', () => {
+  it('a pessoa convidada aceita e aparece na lista, com o perfil, sem senha nenhuma', async () => {
     await liberarVagas()
-    const { resposta, email } = await criar('Atendente')
+    const { resposta, email, id } = await criar('Atendente')
 
     expect(resposta.statusCode, resposta.body).toBe(201)
-    expect(resposta.json()).toMatchObject({
+    const lista = (await chamar('GET', '/users', tokenDoDono)).json<Usuario[]>()
+    expect(lista.find((u) => u.id === id)).toMatchObject({
       email,
       isActive: true,
       isOwner: false,
       profile: { id: perfil.Atendente, name: 'Atendente' },
     })
-    expect(resposta.body).not.toContain('password')
+    expect(JSON.stringify(lista)).not.toContain('password')
 
-    expect((await entrar(email, 'Senha-inicial-123')).statusCode).toBe(200)
+    expect((await entrar(email, SENHA_DA_PESSOA)).statusCode).toBe(200)
   })
 
-  it('a senha inicial segue as regras da senha do cadastro', async () => {
-    await liberarVagas()
-    for (const password of [
-      'Curta-1',
-      'sem-maiuscula-123',
-      'SEM-MINUSCULA-123',
-      'SemEspecial123',
-    ]) {
-      const resposta = await chamar('POST', '/users', tokenDoDono, {
-        name: 'Fraca',
-        email: `fraca-${randomUUID().slice(0, 8)}@exemplo.com`,
-        password,
-        profileId: perfil.Atendente,
-      })
-      expect(resposta.statusCode, password).toBe(400)
-    }
-  })
-
-  it('e-mail repetido é recusado', async () => {
-    await liberarVagas()
-    const { email } = await criar('Atendente')
-    await liberarVagas()
-
-    const repetido = await chamar('POST', '/users', tokenDoDono, {
-      name: 'Outra',
-      email,
-      password: 'Senha-inicial-123',
-      profileId: perfil.Atendente,
-    })
-    expect(repetido.statusCode).toBe(409)
-    expect(repetido.json()).toMatchObject({ error: { code: 'USER_EMAIL_TAKEN' } })
-  })
-
-  it('e-mail que já é de outro estabelecimento é recusado', async () => {
-    // O e-mail é o login, único na plataforma: se pudesse se repetir, entrar
-    // só com e-mail e senha não saberia em qual estabelecimento.
-    await liberarVagas()
-
-    const deOutro = await chamar('POST', '/users', tokenDoDono, {
-      name: 'Emprestado',
-      email: outraLoja.email,
-      password: 'Senha-inicial-123',
-      profileId: perfil.Atendente,
-    })
-    expect(deOutro.statusCode).toBe(409)
-    expect(deOutro.json()).toMatchObject({ error: { code: 'USER_EMAIL_TAKEN' } })
-  })
-
-  it('todo usuário criado tem um perfil: sem ele, a criação é recusada', async () => {
+  it('não há mais como criar alguém com uma senha escolhida por quem cadastra', async () => {
     const resposta = await chamar('POST', '/users', tokenDoDono, {
-      name: 'Sem perfil',
-      email: 'sem-perfil@exemplo.com',
-      password: 'Senha-inicial-123',
+      name: 'Com senha',
+      email: `com-senha-${randomUUID().slice(0, 8)}@exemplo.com`,
+      password: SENHA_DA_PESSOA,
+      profileId: perfil.Atendente,
     })
-    expect(resposta.statusCode).toBe(400)
+    expect(resposta.statusCode).toBe(404)
   })
 
-  it('não há como criar outro proprietário: o corpo não aceita o sinal de dono', async () => {
+  it('não há como convidar outro proprietário: o corpo não aceita o sinal de dono', async () => {
     await liberarVagas()
     const email = `dono2-${randomUUID().slice(0, 8)}@exemplo.com`
-    const resposta = await chamar('POST', '/users', tokenDoDono, {
-      name: 'Outro dono',
+    const convite = await chamar('POST', '/invitations', tokenDoDono, {
       email,
-      password: 'Senha-inicial-123',
       profileId: perfil.Atendente,
       isOwner: true,
     })
+    expect(convite.statusCode).toBe(201)
 
-    // O campo a mais é ignorado: a pessoa nasce com o perfil, e não como dona.
-    expect(resposta.statusCode).toBe(201)
-    expect(resposta.json()).toMatchObject({ isOwner: false, profile: { name: 'Atendente' } })
-  })
-
-  it('perfil de outro estabelecimento responde 404, e ninguém é criado', async () => {
-    await liberarVagas()
-    const email = `intruso-${randomUUID().slice(0, 8)}@exemplo.com`
-    const resposta = await chamar('POST', '/users', tokenDoDono, {
-      name: 'Intruso',
-      email,
-      password: 'Senha-inicial-123',
-      profileId: outraLoja.profileId,
+    const aceite = await aceitarConvite(app, tokenDoConvitePara(email), {
+      name: 'Outro dono',
+      password: SENHA_DA_PESSOA,
     })
+    const id = aceite.json<{ user: { id: string } }>().user.id
 
-    expect(resposta.statusCode).toBe(404)
-    expect((await entrar(email, 'Senha-inicial-123')).statusCode).toBe(401)
+    // O campo a mais é ignorado: a pessoa entra com o perfil, e não como dona.
+    const lista = (await chamar('GET', '/users', tokenDoDono)).json<Usuario[]>()
+    expect(lista.find((u) => u.id === id)).toMatchObject({
+      isOwner: false,
+      profile: { name: 'Atendente' },
+    })
   })
 })
 
 describe('limite de usuários do plano', () => {
-  it('duas criações ao mesmo tempo: a segunda espera a primeira e encontra o limite', async () => {
+  it('dois convites ao mesmo tempo: o segundo espera o primeiro e encontra o limite', async () => {
     await liberarVagas()
     await criar('Atendente')
     // Dono + 1 = 2 de 3: sobra exatamente uma vaga.
     const contexto = tenantContextFromUser(loja.tenantId)
 
-    // A primeira criação, parada no meio: travou o limite e inseriu, mas ainda
-    // não confirmou — a outra transação não enxerga o usuário dela.
+    // O primeiro convite, parado no meio: travou o limite e gravou, mas ainda
+    // não confirmou — a outra transação não enxerga o convite dele.
     let confirmar = () => undefined as void
     const sinal = new Promise<void>((resolve) => {
       confirmar = resolve
@@ -254,12 +228,13 @@ describe('limite de usuários do plano', () => {
     })
     const primeira = withTenant(contexto, async (tx) => {
       await travarLimiteDoPlano(tx, contexto, RECURSO_USUARIOS)
-      await inserirUsuario(tx, {
+      await inserirConvite(tx, {
         tenantId: loja.tenantId,
-        name: 'Primeira',
         email: `primeira-${randomUUID().slice(0, 8)}@exemplo.com`,
-        passwordHash: 'hash-qualquer',
         profileId: perfil.Atendente,
+        invitedByUserId: loja.userId,
+        tokenHash: generateTenantToken(loja.tenantId).tokenHash,
+        expiresAt: new Date(Date.now() + 60_000),
       })
       inseriu()
       await sinal
@@ -281,20 +256,20 @@ describe('limite de usuários do plano', () => {
     const resposta = await segunda
     expect(resposta.statusCode).toBe(409)
     expect(resposta.json()).toMatchObject({ error: { code: 'PLAN_USER_LIMIT' } })
+    await limparConvites()
   })
 
   it('conta só os ativos: cheio recusa, desativar abre vaga, reativar respeita o limite', async () => {
     await liberarVagas()
     // Dono + 2 = 3, o limite.
     await criar('Atendente')
-    const { resposta: segundo } = await criar('Atendente')
+    const { id: idDoSegundo } = await criar('Atendente')
 
     const cheio = await criar('Atendente')
     expect(cheio.resposta.statusCode).toBe(409)
     expect(cheio.resposta.json()).toMatchObject({ error: { code: 'PLAN_USER_LIMIT' } })
     expect(cheio.resposta.body).toContain('Plano de teste permite 3 usuários ativos')
 
-    const idDoSegundo = segundo.json<Usuario>().id
     await chamar('POST', `/users/${idDoSegundo}/deactivate`, tokenDoDono)
     const { resposta: terceiro } = await criar('Atendente')
     expect(terceiro.statusCode).toBe(201)
@@ -302,14 +277,31 @@ describe('limite de usuários do plano', () => {
     const reativar = await chamar('POST', `/users/${idDoSegundo}/reactivate`, tokenDoDono)
     expect(reativar.statusCode).toBe(409)
   })
+
+  it('um convite pendente ocupa vaga: nem a reativação passa por cima dele', async () => {
+    await liberarVagas()
+    const { id } = await criar('Atendente')
+    await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)
+    // Dono + 1 ativo + 1 convite = 3, o limite.
+    await criar('Atendente')
+    const convite = await chamar('POST', '/invitations', tokenDoDono, {
+      email: `pendente-${randomUUID().slice(0, 8)}@exemplo.com`,
+      profileId: perfil.Atendente,
+    })
+    expect(convite.statusCode).toBe(201)
+
+    const reativar = await chamar('POST', `/users/${id}/reactivate`, tokenDoDono)
+    expect(reativar.statusCode).toBe(409)
+    expect(reativar.json()).toMatchObject({ error: { code: 'PLAN_USER_LIMIT' } })
+    await limparConvites()
+  })
 })
 
 describe('desativar', () => {
   it('encerra as sessões: o token para de valer, o refresh e o login são recusados', async () => {
     await liberarVagas()
-    const { resposta, email } = await criar('Atendente')
-    const id = resposta.json<Usuario>().id
-    const sessao = sessaoDe<{ accessToken: string }>(await entrar(email, 'Senha-inicial-123'))
+    const { email, id } = await criar('Atendente')
+    const sessao = sessaoDe<{ accessToken: string }>(await entrar(email, SENHA_DA_PESSOA))
 
     expect((await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)).statusCode).toBe(200)
 
@@ -320,7 +312,7 @@ describe('desativar', () => {
       payload: { refreshToken: sessao.refreshToken },
     })
     expect(refresh.statusCode).toBe(401)
-    expect((await entrar(email, 'Senha-inicial-123')).statusCode).toBe(403)
+    expect((await entrar(email, SENHA_DA_PESSOA)).statusCode).toBe(403)
 
     // Segunda barreira: a renovação já recusa usuário inativo, mas nenhum
     // refresh token dele fica válido no banco.
@@ -349,9 +341,8 @@ describe('desativar', () => {
 
   it('a renovação recusada de quem foi desativado não vira "token roubado" na auditoria', async () => {
     await liberarVagas()
-    const { resposta, email } = await criar('Atendente')
-    const id = resposta.json<Usuario>().id
-    const sessao = sessaoDe<{ accessToken: string }>(await entrar(email, 'Senha-inicial-123'))
+    const { email, id } = await criar('Atendente')
+    const sessao = sessaoDe<{ accessToken: string }>(await entrar(email, SENHA_DA_PESSOA))
     await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)
 
     expect((await renovar(sessao.refreshToken)).statusCode).toBe(401)
@@ -362,12 +353,11 @@ describe('desativar', () => {
 
   it('reativado, o aparelho antigo não derruba a sessão nova nem acusa roubo', async () => {
     await liberarVagas()
-    const { resposta, email } = await criar('Atendente')
-    const id = resposta.json<Usuario>().id
-    const antiga = sessaoDe<{ accessToken: string }>(await entrar(email, 'Senha-inicial-123'))
+    const { email, id } = await criar('Atendente')
+    const antiga = sessaoDe<{ accessToken: string }>(await entrar(email, SENHA_DA_PESSOA))
     await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)
     await chamar('POST', `/users/${id}/reactivate`, tokenDoDono)
-    const nova = sessaoDe<{ accessToken: string }>(await entrar(email, 'Senha-inicial-123'))
+    const nova = sessaoDe<{ accessToken: string }>(await entrar(email, SENHA_DA_PESSOA))
 
     // O celular que ficou com a sessão de antes tenta renovar.
     expect((await renovar(antiga.refreshToken)).statusCode).toBe(401)
@@ -402,13 +392,13 @@ describe('conexão ao vivo', () => {
 
   it('desativar o usuário fecha a conexão ao vivo dele na hora', async () => {
     await liberarVagas()
-    const { resposta, email } = await criar('Atendente')
+    const { email, id } = await criar('Atendente')
     const token = sessaoDe<{ accessToken: string }>(
-      await entrar(email, 'Senha-inicial-123'),
+      await entrar(email, SENHA_DA_PESSOA),
     ).accessToken
     const conexao = await aoVivo(token)
 
-    await chamar('POST', `/users/${resposta.json<Usuario>().id}/deactivate`, tokenDoDono)
+    await chamar('POST', `/users/${id}/deactivate`, tokenDoDono)
 
     await conexao.ate(() => conexao.eventos.some((e) => e.tipo === 'fechou'))
     expect(conexao.eventos.find((e) => e.tipo === 'fechou')?.valor).toBe(4001)
@@ -416,13 +406,13 @@ describe('conexão ao vivo', () => {
 
   it('mudar o perfil também fecha, para a conexão voltar com as permissões novas', async () => {
     await liberarVagas()
-    const { resposta, email } = await criar('Atendente')
+    const { email, id } = await criar('Atendente')
     const token = sessaoDe<{ accessToken: string }>(
-      await entrar(email, 'Senha-inicial-123'),
+      await entrar(email, SENHA_DA_PESSOA),
     ).accessToken
     const conexao = await aoVivo(token)
 
-    await chamar('PATCH', `/users/${resposta.json<Usuario>().id}`, tokenDoDono, {
+    await chamar('PATCH', `/users/${id}`, tokenDoDono, {
       profileId: perfil.Administrador,
     })
 
@@ -432,11 +422,10 @@ describe('conexão ao vivo', () => {
 })
 
 describe('o administrador', () => {
-  it('cria e altera usuários, mas não desativa ninguém: o perfil pronto não traz essa permissão', async () => {
+  it('convida e altera usuários, mas não desativa ninguém: o perfil pronto não traz essa permissão', async () => {
     const admin = await entrarComo('Administrador')
-    const { resposta } = await criar('Atendente', admin.token)
+    const { resposta, id } = await criar('Atendente', admin.token)
     expect(resposta.statusCode).toBe(201)
-    const id = resposta.json<Usuario>().id
 
     const mudado = await chamar('PATCH', `/users/${id}`, admin.token, {
       profileId: perfil.Cozinha,
@@ -449,7 +438,9 @@ describe('o administrador', () => {
   it('não mexe na conta do proprietário, nem muda o próprio perfil', async () => {
     const admin = await entrarComo('Administrador')
 
-    const noDono = await chamar('PATCH', `/users/${loja.userId}`, admin.token, { name: 'Outro' })
+    const noDono = await chamar('PATCH', `/users/${loja.userId}`, admin.token, {
+      profileId: perfil.Atendente,
+    })
     expect(noDono.statusCode).toBe(403)
 
     const proprio = await chamar('PATCH', `/users/${admin.id}`, admin.token, {
@@ -473,20 +464,14 @@ describe('ninguém dá o que não tem', () => {
       ]),
     )
     await liberarVagas()
-    const email = `recepcao-${randomUUID().slice(0, 8)}@exemplo.com`
-    await chamar('POST', '/users', tokenDoDono, {
-      name: 'Recepção',
-      email,
-      password: 'Senha-inicial-123',
-      profileId: id,
-    })
-    const token = (await entrar(email, 'Senha-inicial-123')).json<{
+    const { email } = await criar('Atendente', tokenDoDono, id)
+    const token = (await entrar(email, SENHA_DA_PESSOA)).json<{
       accessToken: string
     }>().accessToken
     return { token, perfilId: id }
   }
 
-  it('quem não tem as permissões de um perfil não cria ninguém com ele', async () => {
+  it('quem não tem as permissões de um perfil não convida ninguém para ele', async () => {
     const recepcao = await comoRecepcao()
 
     // O atendente marca o que esgotou e cancela pedido: a recepção não tem nada disso.
@@ -497,25 +482,22 @@ describe('ninguém dá o que não tem', () => {
     expect(resposta.body).toContain('Marcar o que esgotou')
   })
 
-  it('mas cria com o perfil que está ao alcance dela', async () => {
+  it('mas convida para o perfil que está ao alcance dela', async () => {
     const recepcao = await comoRecepcao()
-    const email = `colega-${randomUUID().slice(0, 8)}@exemplo.com`
 
-    const resposta = await chamar('POST', '/users', recepcao.token, {
-      name: 'Colega',
-      email,
-      password: 'Senha-inicial-123',
+    const resposta = await chamar('POST', '/invitations', recepcao.token, {
+      email: `colega-${randomUUID().slice(0, 8)}@exemplo.com`,
       profileId: recepcao.perfilId,
     })
 
     expect(resposta.statusCode, resposta.body).toBe(201)
+    await limparConvites()
   })
 
   it('não promove ninguém a um perfil acima do seu', async () => {
     const recepcao = await comoRecepcao()
-    const { resposta } = await criar('Cozinha')
     // A cozinha também está acima da recepção: marca o que esgotou.
-    const id = resposta.json<Usuario>().id
+    const { id } = await criar('Cozinha')
 
     const promover = await chamar('PATCH', `/users/${id}`, recepcao.token, {
       profileId: perfil.Administrador,
@@ -525,18 +507,16 @@ describe('ninguém dá o que não tem', () => {
     expect(promover.json()).toMatchObject({ error: { code: 'PROFILE_OUT_OF_REACH' } })
   })
 
-  it('não rebaixa, não renomeia nem desativa quem tem um perfil acima do seu', async () => {
+  it('não rebaixa nem desativa quem tem um perfil acima do seu', async () => {
     const recepcao = await comoRecepcao()
-    const { resposta } = await criar('Administrador')
-    const id = resposta.json<Usuario>().id
+    const { id } = await criar('Administrador')
 
     const rebaixar = await chamar('PATCH', `/users/${id}`, recepcao.token, {
       profileId: recepcao.perfilId,
     })
-    const renomear = await chamar('PATCH', `/users/${id}`, recepcao.token, { name: 'Outro nome' })
     const desativar = await chamar('POST', `/users/${id}/deactivate`, recepcao.token)
 
-    for (const tentativa of [rebaixar, renomear, desativar]) {
+    for (const tentativa of [rebaixar, desativar]) {
       expect(tentativa.statusCode).toBe(403)
       expect(tentativa.json()).toMatchObject({ error: { code: 'PROFILE_OUT_OF_REACH' } })
     }
@@ -572,12 +552,26 @@ describe('regras gerais', () => {
     expect(resposta.statusCode).toBe(409)
   })
 
-  it('o proprietário muda o próprio nome', async () => {
+  it('o nome não se muda por aqui, nem o do proprietário: é da conta da pessoa', async () => {
     const resposta = await chamar('PATCH', `/users/${loja.userId}`, tokenDoDono, {
       name: 'Dona Maria',
     })
-    expect(resposta.statusCode).toBe(200)
-    expect(resposta.json()).toMatchObject({ name: 'Dona Maria', isOwner: true })
+    expect(resposta.statusCode).toBe(400)
+  })
+
+  it('o mesmo perfil de antes não muda nada, nem vai para a auditoria', async () => {
+    await liberarVagas()
+    const { id } = await criar('Cozinha')
+    const mesma = await chamar('PATCH', `/users/${id}`, tokenDoDono, { profileId: perfil.Cozinha })
+    expect(mesma.statusCode).toBe(200)
+
+    const registros = await withTenant(tenantContextFromUser(loja.tenantId), (tx) =>
+      tx
+        .select({ action: auditLogs.action })
+        .from(auditLogs)
+        .where(and(eq(auditLogs.entityId, id), eq(auditLogs.action, 'user.updated'))),
+    )
+    expect(registros).toEqual([])
   })
 
   it('atendente não vê a lista de usuários', async () => {
@@ -587,15 +581,14 @@ describe('regras gerais', () => {
 
   it('usuário de outro estabelecimento responde 404', async () => {
     const resposta = await chamar('PATCH', `/users/${outraLoja.userId}`, tokenDoDono, {
-      name: 'Invasor',
+      profileId: perfil.Atendente,
     })
     expect(resposta.statusCode).toBe(404)
   })
 
-  it('criar, alterar e desativar ficam na auditoria, com o perfil', async () => {
+  it('entrar, mudar de perfil e desativar ficam na auditoria, com o perfil', async () => {
     await liberarVagas()
-    const { resposta } = await criar('Atendente')
-    const id = resposta.json<Usuario>().id
+    const { id, email } = await criar('Atendente')
     await chamar('PATCH', `/users/${id}`, tokenDoDono, { profileId: perfil.Cozinha })
 
     const registros = await withTenant(tenantContextFromUser(loja.tenantId), (tx) =>
@@ -604,7 +597,8 @@ describe('regras gerais', () => {
         .from(auditLogs)
         .where(and(eq(auditLogs.entityType, 'user'), eq(auditLogs.entityId, id))),
     )
-    expect(registros.find((r) => r.action === 'user.created')?.metadata).toEqual({
+    expect(registros.find((r) => r.action === 'invitation.accepted')?.metadata).toEqual({
+      email,
       perfil: 'Atendente',
     })
     expect(registros.find((r) => r.action === 'user.updated')?.metadata).toEqual({

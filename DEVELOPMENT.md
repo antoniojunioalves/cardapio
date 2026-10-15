@@ -362,6 +362,13 @@ escolha e falha se ela ficar implícita.
 **Da plataforma:** declare a tabela em `TABELAS_GLOBAIS`, em `tests/rls-guard.test.ts`, com o
 motivo. Sem isso o teste falha — de propósito.
 
+**Global, mas com dado de pessoa** — como a conta (`accounts`, Fase 25d): declare em
+`TABELAS_GLOBAIS` **e** proteja com RLS forçado, com policies que dependam de uma variável da
+transação, nunca de "tudo". Cada policy fora do tenant entra em `POLICIES_FORA_DO_TENANT`, com o
+comando e o motivo; o teste confere o filtro `tenant_id = app.tenant_id` pela expressão, e não só
+pelo nome da variável. Uma policy que olha para outra tabela (`contas_da_equipe` olha `users`) não
+pode ser olhada de volta por ela, ou o PostgreSQL acusa recursão.
+
 **Migration que mexe em dados de estabelecimento** (e não só na estrutura): o RLS forçado vale
 também para quem migra. Um `UPDATE` solto não enxerga linha nenhuma — e não dá erro. Percorra os
 estabelecimentos e defina o contexto de cada um, como a `0024_perfis_do_estabelecimento.sql`:
@@ -383,6 +390,13 @@ testes não tem (foi assim que apareceu o usuário sem papel, na Fase 25a): crie
 `pg_dump | psql`, passe a posse para `cardapio_migrator`, dê `CONNECT` a `cardapio_app`, e rode
 `pnpm db:migrate` com `MIGRATION_DATABASE_URL` e `DATABASE_URL` apontando para a cópia. Confira
 as contagens e apague a cópia.
+
+**Tirar colunas e pôr outras na mesma tabela faz o `drizzle-kit generate` perguntar se foi uma
+renomeação** — e a pergunta é interativa. Gere em dois passos, como a 0026 e a 0027 (Fase 25d):
+primeiro só o que entra, depois só o que sai. Coluna nova `NOT NULL` numa tabela com linhas entra
+anulável, recebe os dados no laço acima e só então ganha o `SET NOT NULL` — edite o SQL gerado. E
+uma policy que lê uma coluna sai **antes** da coluna: o banco não deixa apagar o que uma policy
+usa.
 
 ### Protegendo uma rota
 
@@ -486,7 +500,8 @@ diretório temporário do sistema.
 
 ### Enviando um e-mail
 
-Monte a mensagem num módulo puro (`src/signup/messages.ts` é o modelo) e envie com
+Monte a mensagem num módulo puro (`src/signup/messages.ts` e `src/invitations/messages.ts` são os
+modelos) e envie com
 `enviarSemDerrubar` (`src/email/index.ts`) **depois** do commit da transação — nunca dentro dela:
 um rollback não desfaz um e-mail enviado. `enviarSemDerrubar` registra a falha no log e devolve
 `false`, em vez de lançar: o que a transação gravou continua valendo, e quem chamou decide o que
@@ -510,8 +525,9 @@ memória — a instância `email` é um `MemoryEmailProvider`, com a caixa em `e
 
 Pelo mesmo caminho do cadastro: `criarEstabelecimento` (`src/signup/service.ts`), dentro de um
 `withTenant` aberto com `tenantContextFromSignup(await novoIdDeEstabelecimento())`. Ele grava o
-estabelecimento, a assinatura, o dono — marcado como proprietário — e os quatro perfis prontos
-numa transação; o seed faz assim.
+estabelecimento, a assinatura, o vínculo do dono — marcado como proprietário — e os quatro perfis
+prontos numa transação; o seed faz assim. O dono é uma conta nova (`{ nome, email, senhaHash }`)
+ou a de quem já tem uma (`{ contaId }`).
 
 Precisa do plano no banco: rode `seedPlans()` antes — o `beforeAll` de
 `tests/signup-routes.test.ts` é o modelo. A fixture `criarTenantComUsuario` continua separada de
@@ -520,6 +536,14 @@ proprietário, com `dono`), e nenhum plano — o que a maioria dos testes precis
 `criarColega` põe mais uma pessoa no mesmo estabelecimento, com outras permissões, e `comTudo(id)`
 é o ator para chamar direto um serviço que confere permissão.
 
+Desde a 25d cada pessoa de teste tem uma conta (`accountId`) e um vínculo (`userId`).
+`vincularConta(quem, em)` põe a mesma conta na equipe de outro estabelecimento — a mesma pessoa em
+dois lugares. As contas são globais e não saem em cascata com o estabelecimento:
+`removerTenantDeTeste` apaga as da equipe dele que ficaram sem vínculo, e
+`removerContasSemVinculo(emails)` apaga as que um teste criou pela API (o cadastro, o aceite de um
+convite). Para pôr alguém na equipe pelo caminho de verdade, `tests/helpers/convites.ts` lê o link
+do convite na caixa de saída (`tokenDoConvitePara`) e aceita (`aceitarConvite`).
+
 ### Acessando dados de um tenant
 
 Sempre por `withTenant(context, tx => …)`. O client `db` cru só serve para dados globais e para
@@ -527,30 +551,31 @@ o registro de tenants; usá-lo com dado de estabelecimento devolve zero linhas, 
 encontra contexto. O sintoma é "sumiu tudo", não um vazamento — falha fechada, mas confusa se
 você não souber a causa.
 
-A única leitura de dado de estabelecimento fora de `withTenant` é a do login:
-`tenantDoEmail(email)` (`src/auth/login-lookup.ts`) acha o estabelecimento de um e-mail, e só o
-`tenant_id` dele. Precisa achar um usuário pelo e-mail sem saber o tenant — o "esqueci minha
-senha" da Fase 25, por exemplo? Use essa função e siga com `withTenant`; não crie outra consulta
-fora de contexto nem outra policy. O teste `rls-guard` recusa policy nova que não filtre pelo
-tenant.
+**A conta e os vínculos dela têm o contexto próprio** (`src/accounts/context.ts`, Fase 25d):
+
+- `withAccountEmail(email, tx => …)` mostra a conta daquele e-mail — o login, o cadastro e o
+  convite procuram por ele. Dentro de um `withTenant`, `definirEmailDaConta(tx, email)` faz o mesmo.
+- `withAccount(accountId, tx => …)` mostra a própria conta e, sem estabelecimento no contexto, os
+  vínculos dela em todos (`vinculosDaConta`). Dentro de um `withTenant`, `definirContaPropria(tx, id)`
+  deixa alterar a conta — e **não** mostra a equipe de outro estabelecimento.
+
+Só defina a conta depois de a pessoa provar quem é: a senha conferiu, a sessão é válida, ou o
+link de um e-mail chegou a ela. Precisa achar uma conta pelo e-mail — o "esqueci minha senha" da
+25c, por exemplo? Use `withAccountEmail`; não crie outra consulta fora de contexto nem outra
+policy. O teste `rls-guard` recusa policy nova que não filtre pelo tenant sem estar declarada.
 
 ### Entrando no painel
 
 O login é um só, em [localhost:5173/entrar](http://localhost:5173/entrar), com e-mail e senha —
-sem informar o estabelecimento. Os donos do seed estão no README (`ze@exemplo.com` e os outros,
-senha `cardapio123`).
+sem informar o estabelecimento: a pessoa entra no que usou por último. Os donos do seed estão no
+README (`ze@exemplo.com` e os outros, senha `cardapio123`); o Zé também é da equipe da pizzaria,
+para ver a troca de estabelecimento pelo menu.
 
-O e-mail é único na plataforma. Se `pnpm db:migrate` falhar em `users_email` num banco antigo de
-desenvolvimento, há o mesmo e-mail em dois estabelecimentos — de antes da Fase 18b, quando isso
-era permitido. Para ver quais:
-
-```sql
-select u.email, t.slug from users u join tenants t on t.id = u.tenant_id
-where u.email in (select email from users group by 1 having count(*) > 1);
-```
-
-Apague o estabelecimento que sobra (`delete from tenants where slug = '…'`, que leva o usuário em
-cascata) ou recrie o banco com `pnpm db:reset`, `pnpm db:migrate` e `pnpm db:seed`.
+Para pôr alguém na equipe, convide pela tela Equipe: o link chega no Mailpit
+(http://localhost:8025), e abri-lo noutra janela anônima mostra o aceite como a pessoa vê. As
+contas do seed não abrem outro estabelecimento pela página de cadastro: a senha delas está fora das
+regras que o formulário confere (pendência registrada no PROJECT_PLAN). Para isso, use uma conta
+criada por um convite.
 
 ### Acrescentando uma tela ao painel
 
@@ -663,9 +688,10 @@ pelo nome do perfil** — o perfil é do estabelecimento e pode se chamar qualqu
   o perfil permite — sem isso, um formulário quase todo desligado parece defeito.
 - Toda regra da tela tem a sua na API. A tela é conveniência; quem recusa é a API.
 
-Para testar, `tests/helpers/equipe.ts` tem a API simulada da equipe (`simularEquipe`), pessoas e
-perfis de exemplo, e `comoPerfil`, que devolve a sessão de quem tem um dos perfis — para abrir a
-tela como o atendente, e não como o proprietário.
+Para testar, `tests/helpers/equipe.ts` tem a API simulada da equipe (`simularEquipe`) — pessoas,
+perfis e convites (`convite(…)`), que convidar, reenviar e cancelar mudam —, e `comoPerfil`, que
+devolve a sessão de quem tem um dos perfis — para abrir a tela como o atendente, e não como o
+proprietário.
 
 ### Testando uma página
 

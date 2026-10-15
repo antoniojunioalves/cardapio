@@ -16,6 +16,7 @@ import {
 import {
   carregarPlano,
   contarCategorias,
+  contarConvitesPendentes,
   contarPedidosDesde,
   contarProdutos,
   contarUsuariosAtivos,
@@ -25,7 +26,8 @@ export interface UsoDoPlano {
   /** `null`: sem assinatura ativa — nada é limitado. */
   plano: { codigo: string; nome: string } | null
   pedidos: UsoDePedidos
-  usuarios: { ativos: number; limite: number | null }
+  /** `convites`: os pendentes no prazo, que também ocupam vaga. */
+  usuarios: { ativos: number; convites: number; limite: number | null }
   produtos: { usados: number; limite: number | null }
   categorias: { usados: number; limite: number | null }
 }
@@ -34,18 +36,42 @@ export interface UsoDoPlano {
  * O uso do plano agora. Sem assinatura ativa, nada é limitado: ainda não há
  * cobrança, e todo estabelecimento criado pelo seed tem assinatura.
  */
-/** Quantos usuários ativos existem e quantos o plano permite. */
+/** Quantos usuários ativos e convites pendentes existem, e quantos o plano permite. */
 export async function usoDeUsuarios(tx: TenantTransaction): Promise<{
   plano: { codigo: string; nome: string } | null
   ativos: number
+  convites: number
   limite: number | null
 }> {
   const plano = await carregarPlano(tx)
   return {
     plano: plano && { codigo: plano.codigo, nome: plano.nome },
     ativos: await contarUsuariosAtivos(tx),
+    convites: await contarConvitesPendentes(tx),
     limite: plano?.limites.get(RECURSO_USUARIOS) ?? null,
   }
+}
+
+/**
+ * Confere se o plano ainda tem vaga para mais uma pessoa na equipe — um
+ * convite novo, ou alguém reativado. Trava antes de contar: sem isso, dois
+ * pedidos ao mesmo tempo contariam a mesma vaga e passariam os dois
+ * (`travarLimiteDoPlano`).
+ */
+export async function exigirVagaNaEquipe(
+  tx: TenantTransaction,
+  context: TenantContext,
+): Promise<void> {
+  await travarLimiteDoPlano(tx, context, RECURSO_USUARIOS)
+  const uso = await usoDeUsuarios(tx)
+  if (cabeMaisUm(uso.ativos + uso.convites, uso.limite)) return
+
+  throw new ConflictError(
+    `O plano ${uso.plano?.nome ?? ''} permite ${String(uso.limite)} usuários ativos, ` +
+      'contando os convites pendentes. Desative alguém ou cancele um convite para abrir vaga, ' +
+      'ou mude de plano.',
+    'PLAN_USER_LIMIT',
+  )
 }
 
 export async function usoDoPlano(
@@ -56,11 +82,12 @@ export async function usoDoPlano(
   const plano = await carregarPlano(tx)
   const pedidosNoMes = await contarPedidosDesde(tx, inicioDoMes(agora, timezone))
   const ativos = await contarUsuariosAtivos(tx)
+  const convites = await contarConvitesPendentes(tx)
 
   return {
     plano: plano && { codigo: plano.codigo, nome: plano.nome },
     pedidos: situacaoDosPedidos(pedidosNoMes, plano?.limites.get(RECURSO_PEDIDOS_POR_MES) ?? null),
-    usuarios: { ativos, limite: plano?.limites.get(RECURSO_USUARIOS) ?? null },
+    usuarios: { ativos, convites, limite: plano?.limites.get(RECURSO_USUARIOS) ?? null },
     produtos: {
       usados: await contarProdutos(tx),
       limite: plano?.limites.get(RECURSO_PRODUTOS) ?? null,

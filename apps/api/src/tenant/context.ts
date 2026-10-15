@@ -5,7 +5,7 @@
  * permite responder "como este pedido soube que era o tenant X?" meses depois.
  */
 export type TenantSource =
-  'authenticated-user' | 'public-slug' | 'token' | 'signup' | 'login-email' | 'platform'
+  'authenticated-user' | 'public-slug' | 'token' | 'signup' | 'account' | 'platform'
 
 export interface TenantContext {
   readonly tenantId: string
@@ -49,12 +49,13 @@ export function tenantContextFromSignup(tenantId: string): TenantContext {
 }
 
 /**
- * O estabelecimento de quem está entrando, achado pelo e-mail. O id vem do
- * banco (`auth/login-lookup.ts`), nunca do corpo da requisição — e só vira
- * sessão se a senha conferir dentro desse contexto.
+ * O estabelecimento de um vínculo da conta de quem já provou quem é — pela
+ * senha, no login, ou pela sessão, na troca de estabelecimento. O id vem dos
+ * vínculos da conta, lidos do banco (`accounts/repository.ts`), e nunca do
+ * corpo da requisição: na troca, o endereço pedido só escolhe entre eles.
  */
-export function tenantContextFromLoginEmail(tenantId: string): TenantContext {
-  return { tenantId, source: 'login-email' }
+export function tenantContextFromAccount(tenantId: string): TenantContext {
+  return { tenantId, source: 'account' }
 }
 
 /**

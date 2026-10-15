@@ -37,6 +37,8 @@ interface AdminNavProps {
   aberto: boolean
   aoNavegar: () => void
   aoSair: () => void
+  /** Só existe quando a conta está em mais de um estabelecimento: abre a troca. */
+  aoTrocarDeEstabelecimento?: (() => void) | undefined
 }
 
 /**
@@ -54,6 +56,7 @@ export function AdminNav({
   aberto,
   aoNavegar,
   aoSair,
+  aoTrocarDeEstabelecimento,
 }: AdminNavProps) {
   const itens = itensDoMenu(permissoes)
 
@@ -100,9 +103,18 @@ export function AdminNav({
         aberto ? 'visible translate-x-0 shadow-overlay' : 'invisible -translate-x-full'
       }`}
     >
-      <div className="px-3">
+      <div className="flex flex-col items-start gap-1 px-3">
         <p className="text-heading line-clamp-2 break-words">{estabelecimento}</p>
         <p className="text-caption text-content-inverted/60">Painel do estabelecimento</p>
+        {aoTrocarDeEstabelecimento && (
+          <button
+            type="button"
+            onClick={aoTrocarDeEstabelecimento}
+            className="text-caption -mx-2 rounded-control px-2 py-1 font-semibold text-content-inverted underline underline-offset-2 hover:bg-content-inverted/10"
+          >
+            Trocar de estabelecimento
+          </button>
+        )}
       </div>
 
       {/* Um `nav` só, do primeiro item ao "Sair": o rodapé também é navegação do painel. */}

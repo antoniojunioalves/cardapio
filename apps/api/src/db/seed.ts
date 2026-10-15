@@ -1,6 +1,8 @@
 import { FUSO_PADRAO } from '@repo/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 
+import { withAccountEmail } from '../accounts/context.js'
+import { buscarContaPeloEmail } from '../accounts/repository.js'
 import { hashPassword } from '../auth/password.js'
 import { infraLogger } from '../lib/logger.js'
 import { criarEstabelecimento, novoIdDeEstabelecimento } from '../signup/service.js'
@@ -21,8 +23,10 @@ import {
   deliveryRegions,
   deliverySettings,
   paymentMethods,
+  profiles,
   tenantPaymentMethods,
   tenantSettings,
+  users,
 } from './schema/index.js'
 import { seedPaymentMethods } from './seed-payment-methods.js'
 import { seedPlans } from './seed-plans.js'
@@ -668,10 +672,50 @@ async function semearEstabelecimentos(): Promise<void> {
   }
 }
 
+/**
+ * Uma pessoa em dois estabelecimentos: o Zé, dono da lanchonete, também é da
+ * equipe da pizzaria, como Gerente do cardápio — com a mesma conta, para dar para ver a
+ * troca de estabelecimento. A pizzaria é a do plano sem limite de pessoas: na
+ * lanchonete e na padaria, a vaga que sobra no plano gratuito fica livre para
+ * um convite.
+ */
+async function semearEquipeCompartilhada(): Promise<void> {
+  const email = 'ze@exemplo.com'
+  const pizzaria = await findTenantBySlug('pizzaria-da-esquina')
+  const ze = await withAccountEmail(email, (tx) => buscarContaPeloEmail(tx, email))
+  if (!pizzaria || !ze) throw new Error('a pizzaria ou a conta do Zé não foram criadas')
+
+  await withTenant(tenantContextFromUser(pizzaria.id), async (tx) => {
+    const [jaEsta] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.accountId, ze.id))
+      .limit(1)
+    if (jaEsta) return
+
+    const [gerente] = await tx
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(eq(profiles.name, 'Gerente do cardápio'))
+      .limit(1)
+    if (!gerente) throw new Error('a pizzaria não tem o perfil Gerente do cardápio')
+
+    await tx
+      .insert(users)
+      .values({ tenantId: pizzaria.id, accountId: ze.id, profileId: gerente.id })
+  })
+
+  infraLogger.info(
+    { login: email, estabelecimentos: ['lanchonete-do-ze', 'pizzaria-da-esquina'] },
+    'conta em dois estabelecimentos semeada',
+  )
+}
+
 try {
   await seedPaymentMethods()
   await seedPlans()
   await semearEstabelecimentos()
+  await semearEquipeCompartilhada()
   infraLogger.info({ senha: SENHA_DEMO }, 'seed concluído — todos os usuários usam esta senha')
 } catch (error) {
   infraLogger.fatal({ err: error }, 'falha no seed')

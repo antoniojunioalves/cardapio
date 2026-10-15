@@ -7,8 +7,10 @@
  * cancelar não devolve a vaga, senão bastaria cancelar para nunca chegar ao
  * limite. O mês é o do calendário, no fuso do estabelecimento.
  *
- * **Usuários**: limite exato, sem tolerância — é o dono que cria usuário, e
- * ele pode desativar um para abrir vaga. Só usuário ativo conta.
+ * **Usuários**: limite exato, sem tolerância — é o dono que convida, e ele
+ * pode desativar alguém ou cancelar um convite para abrir vaga. Contam os
+ * usuários ativos e os convites pendentes no prazo: um convite é uma vaga
+ * prometida, e quem o aceita não pode dar com o plano cheio.
  *
  * **Produtos e categorias**: limite exato, sem tolerância. Todo produto conta —
  * combo, indisponível, sem foto —, porque o que o limite contém é o espaço que

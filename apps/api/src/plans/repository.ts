@@ -1,7 +1,8 @@
-import { count, eq, gte } from 'drizzle-orm'
+import { count, eq, gt, gte } from 'drizzle-orm'
 
 import {
   categories,
+  invitations,
   orders,
   planFeatures,
   plans,
@@ -60,6 +61,15 @@ export async function contarPedidosDesde(tx: TenantTransaction, inicio: Date): P
 
 export async function contarUsuariosAtivos(tx: TenantTransaction): Promise<number> {
   const [linha] = await tx.select({ total: count() }).from(users).where(eq(users.isActive, true))
+  return linha?.total ?? 0
+}
+
+/** Os convites para a equipe que ainda podem ser aceitos: os vencidos não ocupam vaga. */
+export async function contarConvitesPendentes(tx: TenantTransaction): Promise<number> {
+  const [linha] = await tx
+    .select({ total: count() })
+    .from(invitations)
+    .where(gt(invitations.expiresAt, new Date()))
   return linha?.total ?? 0
 }
 

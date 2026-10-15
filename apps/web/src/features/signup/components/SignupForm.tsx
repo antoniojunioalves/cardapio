@@ -61,7 +61,11 @@ function errosPorCampo(detalhes: unknown): Partial<Record<Campo, string>> {
   return erros
 }
 
-/** O e-mail é o login, um por pessoa: quem já tem conta entra, em vez de se cadastrar de novo. */
+/**
+ * O e-mail é o login, um por pessoa. Quem já tem conta abre mais um
+ * estabelecimento com a senha dela; com outra senha, a API recusa, e o campo
+ * oferece entrar no painel.
+ */
 const CONTA_EXISTENTE = 'conta-existente'
 
 function mensagemDaFalha(erro: unknown): string {
@@ -223,7 +227,7 @@ export function SignupForm({ aoCadastrar }: SignupFormProps) {
         rotulo="E-mail"
         type="email"
         autoComplete="email"
-        dica="Enviamos um link para confirmar. O cardápio só vai ao ar depois disso."
+        dica="Enviamos um link para confirmar, e o cardápio vai ao ar depois disso. Já tem conta? Use o mesmo e-mail e a mesma senha."
         erro={erros.email?.message}
         {...register('email')}
       />

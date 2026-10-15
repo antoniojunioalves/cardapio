@@ -17,6 +17,9 @@ afterAll(async () => {
  * "é de tenant" — e a escolha errada aparece na revisão do código.
  */
 const TABELAS_GLOBAIS: Record<string, string> = {
+  accounts:
+    'a conta é a pessoa, a mesma em todos os estabelecimentos em que trabalha; o que ela é em ' +
+    'cada um é o vínculo, em users. Tem RLS forçado próprio, pela conta e pelo e-mail no contexto',
   tenants: 'é o próprio registro de tenants; a resolução do slug antecede o contexto',
   plans: 'catálogo de planos da plataforma, igual para todos',
   plan_features: 'recursos e limites de um plano, não de um estabelecimento',
@@ -93,6 +96,14 @@ describe('guarda de Row-Level Security', () => {
     ).toEqual([])
   })
 
+  it('a conta, global, tem RLS habilitado e forçado mesmo assim', async () => {
+    // Ela guarda o e-mail e a senha de todo mundo: sem RLS, qualquer consulta
+    // esquecida listaria as contas da plataforma inteira.
+    const contas = (await inspecionarTabelas()).find((t) => t.tabela === 'accounts')
+    expect(contas).toMatchObject({ rls_habilitado: true, rls_forcado: true })
+    expect(contas?.policies).toBeGreaterThan(0)
+  })
+
   it('toda tabela sem tenant_id está declarada como global de propósito', async () => {
     const tabelas = await inspecionarTabelas()
 
@@ -121,13 +132,43 @@ describe('guarda de Row-Level Security', () => {
  * leitura" para outra coisa, falha aqui e aparece na revisão.
  */
 const POLICIES_FORA_DO_TENANT: Record<string, { comando: string; motivo: string }> = {
-  'users.login_por_email': {
+  'accounts.conta_nova': {
+    comando: 'INSERT',
+    motivo: 'cria só a conta do e-mail em app.account_email: o cadastro e o aceite de um convite',
+  },
+  'accounts.conta_por_email': {
     comando: 'SELECT',
     motivo:
-      'o login pede só e-mail e senha: lê a linha do e-mail que está entrando, para achar o ' +
-      'estabelecimento antes de existir contexto de tenant (`auth/login-lookup.ts`)',
+      'lê só a conta do e-mail em app.account_email: o login, o cadastro e o convite procuram ' +
+      'por ele antes de existir contexto de tenant (`accounts/context.ts`)',
+  },
+  'accounts.conta_propria': {
+    comando: 'ALL',
+    motivo:
+      'a conta de app.account_id, definido só depois de a pessoa provar quem é — pela senha, ' +
+      'pela sessão ou pelo link de um convite ou de uma confirmação',
+  },
+  'accounts.contas_da_equipe': {
+    comando: 'SELECT',
+    motivo:
+      'as contas com vínculo no estabelecimento do contexto: a subconsulta em users já passa ' +
+      'pelo RLS dele',
+  },
+  'users.vinculos_da_conta': {
+    comando: 'SELECT',
+    motivo:
+      'os vínculos da conta de app.account_id em todos os estabelecimentos, para o login e a ' +
+      'troca — e só sem tenant no contexto',
   },
 }
+
+/**
+ * O filtro pelo tenant: a coluna comparada com `app.tenant_id`. Só mencionar a
+ * variável não basta — `vinculos_da_conta` a menciona para exigir que ela
+ * esteja **vazia**, o contrário de filtrar por ela.
+ */
+const FILTRO_DO_TENANT =
+  /tenant_id = \(NULLIF\(current_setting\('app\.tenant_id'::text, true\), ''::text\)\)::uuid/
 
 interface PolicyInfo {
   [coluna: string]: unknown
@@ -162,7 +203,7 @@ describe('guarda das policies', () => {
     expect(policies.length).toBeGreaterThan(0)
 
     const foraDoTenant = policies
-      .filter((p) => !p.expressoes.includes('app.tenant_id'))
+      .filter((p) => !FILTRO_DO_TENANT.test(p.expressoes))
       .map((p) => ({ policy: p.policy, comando: p.comando }))
 
     expect(

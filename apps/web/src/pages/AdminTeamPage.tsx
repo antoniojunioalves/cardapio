@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { IconeMais } from '@/components/icons'
 import { Sheet } from '@/components/Sheet'
@@ -8,17 +8,24 @@ import {
   botaoDeTexto,
   botaoDeTextoPerigo,
 } from '@/features/admin/components/form-parts'
-import { NewPersonSheet, PersonSheet } from '@/features/admin/components/PersonSheet'
+import { InviteSheet, PersonSheet } from '@/features/admin/components/PersonSheet'
 import { usePainel } from '@/features/admin/panel'
 import { usePlano } from '@/features/admin/plan'
 import {
   alcanca,
   alcancaAPessoa,
+  conviteVencido,
   equipeNoPlano,
+  prazoDoConvite,
   ultimoAcesso,
+  useCancelarConvite,
+  useConvites,
   useDefinirAtivo,
   usePerfis,
   usePessoas,
+  useReenviarConvite,
+  type Convite,
+  type EnvioDoConvite,
   type Pessoa,
 } from '@/features/admin/team'
 import { ApiError } from '@/services/api'
@@ -27,34 +34,52 @@ const botaoPrincipal =
   'text-body inline-flex shrink-0 items-center gap-1 rounded-control bg-primary px-4 py-2.5 font-semibold text-primary-content hover:bg-primary-hover disabled:opacity-50'
 const selo = 'text-caption rounded-pill px-2 py-0.5 font-semibold'
 
+/** A mensagem de uma recusa da API — que já fala com quem usa o painel — ou a genérica. */
+const explicar = (erro: unknown, generica: string) =>
+  erro instanceof ApiError && [403, 404, 409, 429].includes(erro.status) ? erro.message : generica
+
 /**
  * As pessoas que entram no painel, em `/{tenantSlug}/admin/equipe`: quem é, com
- * que e-mail entra e o que pode fazer — o perfil. Cadastrar e editar abrem uma
- * janela sobre a lista.
+ * que e-mail entra e o que pode fazer — o perfil. E os convites que ainda não
+ * foram aceitos.
+ *
+ * Quem entra na equipe entra por convite: o e-mail e o perfil. O nome e a
+ * senha são da conta da pessoa, e só ela os muda; daqui, muda-se o perfil e se
+ * ela tem acesso.
  *
  * Os botões seguem as regras da API: só o proprietário mexe na conta dele,
- * ninguém mexe em quem tem um perfil com permissões que ele mesmo não tem, e
- * ninguém se desativa nem muda o próprio perfil.
+ * ninguém mexe em quem tem um perfil com permissões que ele mesmo não tem — nem
+ * no convite para um perfil assim —, e ninguém se desativa nem muda o próprio
+ * perfil.
  */
 export function AdminTeamPage() {
   const { slug, permissoes, usuario } = usePainel()
   const pessoas = usePessoas(slug)
   const perfis = usePerfis(slug)
+  const convites = useConvites(slug, true)
   const plano = equipeNoPlano(usePlano(slug, true).data)
   const definirAtivo = useDefinirAtivo(slug)
-  // A janela: `{}` cadastra uma pessoa; com `pessoa`, edita.
+  const reenviar = useReenviarConvite(slug)
+  const cancelar = useCancelarConvite(slug)
+  const idDosConvites = useId()
+  // A janela: `{}` convida uma pessoa; com `pessoa`, muda o perfil dela.
   const [janela, setJanela] = useState<{ pessoa?: Pessoa } | null>(null)
   const [desativando, setDesativando] = useState<Pessoa | null>(null)
-  const [aviso, setAviso] = useState<string>()
+  const [cancelando, setCancelando] = useState<Convite | null>(null)
+  const [aviso, setAviso] = useState<{ texto: string; atencao?: boolean }>()
 
   const pode = {
-    cadastrar: permissoes.includes('users:create'),
+    convidar: permissoes.includes('users:create'),
     alterar: permissoes.includes('users:update'),
     desativar: permissoes.includes('users:delete'),
   }
   const eu = { id: usuario.id, permissoes }
   // Os perfis que a pessoa logada pode dar a alguém.
   const perfisAoAlcance = (perfis.data ?? []).filter((p) => alcanca(p.permissions, permissoes))
+  const alcancaOConvite = (convite: Convite) => {
+    const perfil = perfis.data?.find((p) => p.id === convite.profile.id)
+    return perfil !== undefined && alcanca(perfil.permissions, permissoes)
+  }
 
   function definir(pessoa: Pessoa, ativo: boolean) {
     setAviso(undefined)
@@ -63,9 +88,27 @@ export function AdminTeamPage() {
       {
         onSuccess: () => {
           setDesativando(null)
-          setAviso(`${pessoa.name} ${ativo ? 'voltou a ter' : 'não tem mais'} acesso ao painel.`)
+          setAviso({
+            texto: `${pessoa.name} ${ativo ? 'voltou a ter' : 'não tem mais'} acesso ao painel.`,
+          })
         },
       },
+    )
+  }
+
+  function avisarEnvio({ invitation, emailSent }: EnvioDoConvite, de: 'novo' | 'reenvio') {
+    setAviso(
+      emailSent
+        ? {
+            texto:
+              de === 'novo'
+                ? `Convite enviado para ${invitation.email}. A pessoa entra pelo link do e-mail.`
+                : `Convite reenviado para ${invitation.email}, com um link novo.`,
+          }
+        : {
+            texto: `O convite para ${invitation.email} está feito, mas o e-mail não saiu. Tente reenviar daqui a alguns minutos.`,
+            atencao: true,
+          },
     )
   }
 
@@ -78,7 +121,7 @@ export function AdminTeamPage() {
           Quem entra no painel do estabelecimento. O que cada pessoa pode fazer vem do perfil dela.{' '}
           {plano?.texto}
         </p>
-        {pode.cadastrar && (
+        {pode.convidar && (
           <button
             type="button"
             disabled={plano?.noLimite}
@@ -88,20 +131,23 @@ export function AdminTeamPage() {
             className={botaoPrincipal}
           >
             <IconeMais className="size-5" />
-            Nova pessoa
+            Convidar pessoa
           </button>
         )}
       </div>
 
-      {aviso && (
-        <p role="status" className="text-caption font-semibold text-success">
-          {aviso}
-        </p>
-      )}
-      {pode.cadastrar && plano?.noLimite && (
+      {aviso &&
+        (aviso.atencao ? (
+          <AvisoDeAtencao>{aviso.texto}</AvisoDeAtencao>
+        ) : (
+          <p role="status" className="text-caption font-semibold text-success">
+            {aviso.texto}
+          </p>
+        ))}
+      {pode.convidar && plano?.noLimite && (
         <AvisoDeAtencao>
-          A equipe chegou ao limite de pessoas ativas do plano. Para cadastrar outra, desative uma
-          pessoa ou mude de plano.
+          A equipe chegou ao limite de pessoas do plano, contando os convites pendentes. Para
+          convidar outra, desative uma pessoa, cancele um convite ou mude de plano.
         </AvisoDeAtencao>
       )}
       {definirAtivo.isError && !desativando && (
@@ -123,6 +169,9 @@ export function AdminTeamPage() {
           {pessoas.data.map((pessoa) => {
             const souEu = pessoa.id === usuario.id
             const aoAlcance = alcancaAPessoa(pessoa, eu, perfis.data)
+            // O que se muda numa pessoa é o perfil: o proprietário não tem um, e
+            // ninguém muda o próprio.
+            const podeAlterar = pode.alterar && aoAlcance && !pessoa.isOwner && !souEu
             const podeDesativar = pode.desativar && aoAlcance && !pessoa.isOwner && !souEu
             return (
               <li
@@ -136,7 +185,7 @@ export function AdminTeamPage() {
                   <EditarEExcluir
                     quem={pessoa.name}
                     editar={
-                      pode.alterar && aoAlcance
+                      podeAlterar
                         ? () => {
                             setJanela({ pessoa })
                           }
@@ -195,36 +244,147 @@ export function AdminTeamPage() {
         </ul>
       )}
 
+      {convites.data && convites.data.length > 0 && (
+        <section aria-labelledby={idDosConvites} className="flex flex-col gap-stack">
+          <h2 id={idDosConvites} className="text-body font-semibold text-content">
+            Convites pendentes
+          </h2>
+          {(reenviar.isError || cancelar.isError) && !cancelando && (
+            <p role="alert" className="text-caption text-danger">
+              {explicar(
+                reenviar.error ?? cancelar.error,
+                'Não foi possível mexer no convite agora. Tente de novo.',
+              )}
+            </p>
+          )}
+          <ul className="flex flex-col gap-stack">
+            {convites.data.map((convite) => {
+              const vencido = conviteVencido(convite)
+              const podeMexer = pode.convidar && alcancaOConvite(convite)
+              return (
+                <li
+                  key={convite.id}
+                  className="flex flex-col gap-1 rounded-card bg-surface p-card shadow-card"
+                >
+                  <p className="text-body font-semibold break-all text-content">{convite.email}</p>
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className={`${selo} bg-brand-50 text-brand-800`}>
+                      {convite.profile.name}
+                    </span>
+                    <span
+                      className={`${selo} ${vencido ? 'bg-accent-100 text-accent-800' : 'bg-surface-muted text-content'}`}
+                    >
+                      {vencido ? 'Vencido' : 'Aguardando aceite'}
+                    </span>
+                  </p>
+                  <p className="text-caption text-content-muted">
+                    {prazoDoConvite(convite)}
+                    {convite.invitedBy && ` · Enviado por ${convite.invitedBy}`}
+                  </p>
+                  {podeMexer && (
+                    <div className="-ml-2 flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Reenviar o convite para ${convite.email}`}
+                        disabled={reenviar.isPending}
+                        onClick={() => {
+                          setAviso(undefined)
+                          cancelar.reset()
+                          reenviar.mutate(convite.id, {
+                            onSuccess: (envio) => {
+                              avisarEnvio(envio, 'reenvio')
+                            },
+                          })
+                        }}
+                        className={botaoDeTexto}
+                      >
+                        Reenviar
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Cancelar o convite para ${convite.email}`}
+                        onClick={() => {
+                          reenviar.reset()
+                          cancelar.reset()
+                          setCancelando(convite)
+                        }}
+                        className={botaoDeTextoPerigo}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
       {janela &&
         (janela.pessoa ? (
           <PersonSheet
             slug={slug}
             pessoa={janela.pessoa}
             perfis={perfisAoAlcance}
-            souEu={janela.pessoa.id === usuario.id}
             aoFechar={() => {
               setJanela(null)
             }}
             aoSalvar={(salva) => {
-              setAviso(`${salva.name}: alterações salvas.`)
+              setAviso({ texto: `${salva.name}: perfil salvo.` })
               setJanela(null)
             }}
           />
         ) : (
-          <NewPersonSheet
+          <InviteSheet
             slug={slug}
             perfis={perfisAoAlcance}
             aoFechar={() => {
               setJanela(null)
             }}
-            aoSalvar={(criada) => {
-              setAviso(
-                `${criada.name} foi cadastrada. Passe a ela o e-mail e a senha para entrar no painel.`,
-              )
+            aoConvidar={(envio) => {
+              avisarEnvio(envio, 'novo')
               setJanela(null)
             }}
           />
         ))}
+
+      {cancelando && (
+        <Sheet
+          titulo={`Cancelar o convite para ${cancelando.email}?`}
+          aoFechar={() => {
+            setCancelando(null)
+          }}
+          rodape={
+            <button
+              type="button"
+              disabled={cancelar.isPending}
+              onClick={() => {
+                const { id, email } = cancelando
+                cancelar.mutate(id, {
+                  onSuccess: () => {
+                    setCancelando(null)
+                    setAviso({ texto: `O convite para ${email} foi cancelado.` })
+                  },
+                })
+              }}
+              className="text-body w-full rounded-control bg-danger px-4 py-3 font-semibold text-content-inverted disabled:opacity-50"
+            >
+              {cancelar.isPending ? 'Cancelando…' : 'Cancelar convite'}
+            </button>
+          }
+        >
+          <p className="text-body text-content">
+            O link do e-mail deixa de valer, e a vaga do plano fica livre. Se mudar de ideia, é só
+            convidar de novo.
+          </p>
+          {cancelar.isError && (
+            <p role="alert" className="text-caption mt-stack text-danger">
+              {explicar(cancelar.error, 'Não foi possível cancelar agora. Tente de novo.')}
+            </p>
+          )}
+        </Sheet>
+      )}
 
       {desativando && (
         <Sheet

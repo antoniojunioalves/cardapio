@@ -36,3 +36,21 @@ export const timestamps = {
  * NULL, que a policy trata como falso — nenhuma linha. Falha fechada.
  */
 export const currentTenantId = sql`nullif(current_setting('app.tenant_id', true), '')::uuid`
+
+/**
+ * A conta de quem já provou ser quem é — pela senha, pela sessão ou pelo link
+ * de um convite —, lida do contexto da transação. Só `account/with-account.ts`
+ * a define. O `nullif` e o `true` fazem o mesmo que em `currentTenantId`: sem
+ * a variável, nenhuma linha.
+ */
+export const currentAccountId = sql`nullif(current_setting('app.account_id', true), '')::uuid`
+
+/**
+ * O e-mail da conta que se procura — no login, no cadastro e no aceite de um
+ * convite —, lido do contexto da transação. Mostra a conta daquele e-mail e
+ * nenhuma outra. Só `account/with-account.ts` o define.
+ */
+export const currentAccountEmail = sql`nullif(current_setting('app.account_email', true), '')`
+
+/** Verdadeiro quando a transação não tem estabelecimento: só a conta. */
+export const semTenantNoContexto = sql`nullif(current_setting('app.tenant_id', true), '') IS NULL`

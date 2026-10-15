@@ -40,17 +40,26 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
 
 ## Autenticação e contas
 
-- Convite de usuário por e-mail — hoje o dono define a senha inicial (Fase 25a), e a pessoa a
-  troca depois (Fase 25b)
+- **Entrar sem senha**: um link ou um código no e-mail para a equipe, e entrar com o Google — a
+  conta por pessoa da Fase 25d já é o desenho que isso pede
+- **Um provedor de identidade pronto** (Auth0, Clerk, Cognito, Keycloak), com "organizações" e
+  dois grupos de usuários — equipe e clientes —, só se manter o login próprio virar um peso
 - Transferência da posse do estabelecimento: passar a marca de proprietário (`users.is_owner`) a
   outra pessoa. Hoje ela fica com quem fez o cadastro
-- Alterar o e-mail de uma pessoa da equipe — hoje se cadastra de novo
+- Excluir uma pessoa da equipe (hoje ela é desativada, e o vínculo fica)
+- Limpar os cadastros nunca confirmados: o estabelecimento `PENDING` antigo e a conta que só ele
+  usa — hoje ficam no banco, e o e-mail da conta, "ocupado"
+- Trocar de estabelecimento pelo endereço da página: hoje o endereço de outro estabelecimento leva
+  ao da sessão, e a troca é pelo menu
+- Mais de um estabelecimento aberto ao mesmo tempo no mesmo navegador — hoje as abas dividem a
+  sessão
 - **Ajuste de permissão por pessoa**, além do perfil. Hoje cada pessoa tem um perfil e não há
   exceção individual (decisão do Junio, Fase 25a): para alguém diferente, cria-se outro perfil
 - Perfis prontos atualizados quando o catálogo de permissões crescer. Um estabelecimento que já
   existe não recebe a permissão nova nos perfis dele: o dono a marca (o proprietário a tem na hora)
-- Troca do próprio e-mail, com nova confirmação — o link de confirmação (Fase 17) vale só para o
-  e-mail ao qual foi enviado, então a troca já nasce protegida; falta a funcionalidade
+- Troca do e-mail da conta, com nova confirmação — o link de confirmação (Fase 17) vale só para o
+  e-mail ao qual foi enviado, então a troca já nasce protegida; falta a funcionalidade. É da
+  pessoa, e não do estabelecimento: a conta é uma só (Fase 25d)
 - Captcha no cadastro, se aparecer abuso — hoje há limite por IP, campo-armadilha e o cardápio só
   vai ao ar depois da confirmação do e-mail (Fase 17)
 
@@ -67,7 +76,10 @@ política de retenção. O MVP não implementa fluxo de titular de dados.
   (SECURITY.md, seção 5): telefone não prova quem está digitando. Com o cliente **logado na
   própria conta**, a identidade está provada, e o checkout deve trazer tudo preenchido e visível —
   nome completo, endereços completos (CEP, rua, número, complemento, referência) para conferir e
-  editar. O comportamento mascarado continua valendo para quem pede sem login.
+  editar. O comportamento mascarado continua valendo para quem pede sem login. **A conta de
+  cliente é separada da conta da equipe** (decisão do Junio, Fase 25d): é do estabelecimento, numa
+  tabela própria, e nunca divide unicidade com `accounts` — o mesmo e-mail pode ser cliente e
+  equipe, no mesmo estabelecimento ou em outro.
 - Painel da plataforma para o Super Admin — no MVP ele age por comando (Fase 19); a tabela
   `platform_admins` fica para este painel
 - Avisar o dono por e-mail quando o estabelecimento é suspenso ou reativado, e mostrar o motivo a
@@ -279,14 +291,6 @@ evolução com impacto no carrinho e no cálculo do pedido.
 - Isolamento físico opcional para tenants de plano CUSTOM — banco dedicado, trocando apenas a
   obtenção de conexão dentro de `withTenant`
 - Multi-unidade e franquias
-- Uma pessoa em mais de um estabelecimento com a mesma conta. Hoje o e-mail é único na plataforma e
-  pertence a um estabelecimento só (é o que permite entrar só com e-mail e senha — Fase 18b); quem
-  tem dois usa um e-mail em cada. Para uma conta só, o usuário deixa de pertencer a um tenant: vira
-  conta da plataforma, com vínculos a estabelecimentos e uma tela para escolher em qual entrar.
-  **O caso do funcionário saiu daqui e virou a Fase 25d** (PROJECT_PLAN.md, "O que falta para o
-  MVP"): quem trabalhou num estabelecimento precisa poder ser cadastrado em outro. Se a 25d
-  resolver só a troca de estabelecimento, a conta única para quem está em dois ao mesmo tempo —
-  e para o dono com duas lojas — continua aqui.
 - Internacionalização _(o MVP é pt-BR, sem biblioteca de i18n)_
 
 ## Infraestrutura

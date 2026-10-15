@@ -6,7 +6,11 @@ import { getJson, requisitar } from '@/services/api'
 
 /** A resposta de `POST /api/v1/public/signup`: a sessão, como no login, e o estabelecimento. */
 export interface EstabelecimentoCadastrado extends RespostaDeSessao {
-  /** Falso quando o servidor de e-mail falhou: o cadastro vale, e o painel oferece o reenvio. */
+  /**
+   * Falso quando o servidor de e-mail falhou — o cadastro vale, e o painel
+   * oferece o reenvio — e quando não havia o que confirmar: a conta já tinha o
+   * e-mail confirmado, e o estabelecimento nasceu publicado.
+   */
   confirmationEmailSent: boolean
 }
 

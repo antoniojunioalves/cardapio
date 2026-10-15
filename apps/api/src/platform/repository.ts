@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, isNull, sql } from 'drizzle-orm'
 
 import { db } from '../db/index.js'
 import {
+  accounts,
   auditLogs,
   plans,
   refreshTokens,
@@ -59,11 +60,12 @@ export interface DonoDoEstabelecimento {
   emailConfirmado: boolean
 }
 
-/** O proprietário do estabelecimento — quem o cadastrou. */
+/** O proprietário do estabelecimento — quem o cadastrou —, com o e-mail da conta dele. */
 export async function buscarDono(tx: TenantTransaction): Promise<DonoDoEstabelecimento | null> {
   const [dono] = await tx
-    .select({ id: users.id, email: users.email, confirmadoEm: users.emailVerifiedAt })
+    .select({ id: users.id, email: accounts.email, confirmadoEm: accounts.emailVerifiedAt })
     .from(users)
+    .innerJoin(accounts, eq(accounts.id, users.accountId))
     .where(eq(users.isOwner, true))
     .limit(1)
   return dono

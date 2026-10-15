@@ -13,35 +13,35 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 
+import { accounts } from './accounts.js'
 import { profiles } from './profiles.js'
-import { currentTenantId, primaryId, timestamps } from './shared.js'
+import {
+  currentAccountId,
+  currentTenantId,
+  primaryId,
+  semTenantNoContexto,
+  timestamps,
+} from './shared.js'
 import { tenants } from './tenants.js'
 
 /**
- * O e-mail de quem está entrando, lido do contexto da transação. Só o login o
- * define (`auth/login-lookup.ts`). O `nullif` faz a variável vazia — o que
- * sobra numa conexão do pool depois que a transação termina — não casar com
- * linha nenhuma.
- */
-const emailEmLogin = sql`nullif(current_setting('app.login_email', true), '')`
-
-/**
- * Usuário administrativo de um estabelecimento: o dono e os funcionários, cada
- * um com o seu e-mail e a sua senha.
+ * O vínculo de uma pessoa com um estabelecimento: o que ela é **ali** — a
+ * proprietária ou não, o perfil, se está ativa, quando entrou pela última vez.
  *
- * O e-mail é único **na plataforma inteira**, e sempre em minúsculas: o login
- * pede só e-mail e senha, e é o e-mail que diz de qual estabelecimento a
- * pessoa é. Quem tem dois estabelecimentos usa um e-mail em cada.
+ * A pessoa em si — o e-mail, a senha, o nome — é a conta (`accounts`), uma só
+ * em todos os estabelecimentos em que trabalha. Cada estabelecimento tem um
+ * vínculo dela, e só um (`users_conta_por_tenant`).
  *
- * Por isso a tabela tem duas policies. `tenant_isolation` é a de todas as
- * tabelas. `login_por_email` deixa **ler** a linha do e-mail que está entrando,
- * e nenhuma outra — é o que permite achar o estabelecimento antes de existir
- * contexto de tenant. Ela não deixa alterar nem listar nada.
+ * O nome da tabela ficou de antes de existir a conta, e ficou de propósito: o
+ * que aponta para `users.id` — as sessões, a auditoria, quem fez o quê — aponta
+ * para a pessoa **neste** estabelecimento, que é o que o vínculo é.
  *
- * `passwordHash` guarda o resultado completo do argon2id, que já carrega o
- * algoritmo, os parâmetros e o salt na própria string. Não há coluna de salt
- * separada, e não deve haver: o formato é autodescritivo justamente para que
- * os parâmetros possam mudar sem migração de dados.
+ * Duas policies. `tenant_isolation` é a de todas as tabelas. `vinculos_da_conta`
+ * deixa **ler** os vínculos da conta de `app.account_id` em todos os
+ * estabelecimentos — o login e a troca de estabelecimento precisam deles antes
+ * de existir um estabelecimento no contexto —, e só vale **sem** tenant no
+ * contexto: dentro de um estabelecimento, definir a conta (para confirmar o
+ * e-mail dela, por exemplo) não mostra a equipe de outro.
  */
 export const users = pgTable(
   'users',
@@ -50,10 +50,9 @@ export const users = pgTable(
     tenantId: uuid()
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
-
-    name: varchar({ length: 120 }).notNull(),
-    email: varchar({ length: 254 }).notNull(),
-    passwordHash: varchar({ length: 255 }).notNull(),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'restrict' }),
 
     /**
      * O proprietário: quem criou o estabelecimento. Tem sempre todas as
@@ -65,16 +64,12 @@ export const users = pgTable(
     profileId: uuid(),
 
     isActive: boolean().notNull().default(true),
+    /** A última vez que a pessoa entrou **neste** estabelecimento — pelo login ou pela troca. */
     lastLoginAt: timestamp({ withTimezone: true }),
-    /** Quando a pessoa provou ser dona do e-mail, pelo link de confirmação. */
-    emailVerifiedAt: timestamp({ withTimezone: true }),
 
     ...timestamps,
   },
   (table) => [
-    unique('users_email').on(table.email),
-    // Sem isto, `Ze@exemplo.com` e `ze@exemplo.com` seriam duas contas.
-    check('users_email_minusculo', sql`${table.email} = lower(${table.email})`),
     // Alvo das chaves estrangeiras compostas: outras tabelas referenciam
     // (tenant_id, id), e não só id, para que o banco exija que a referência
     // fique dentro do mesmo estabelecimento. Ver `tests/rls-guard.test.ts`.
@@ -91,6 +86,10 @@ export const users = pgTable(
       .on(table.tenantId)
       .where(sql`${table.isOwner}`),
     index('users_tenant_idx').on(table.tenantId),
+    // A mesma pessoa não entra duas vezes na equipe do mesmo estabelecimento.
+    unique('users_conta_por_tenant').on(table.tenantId, table.accountId),
+    // Os vínculos de uma conta, em todos os estabelecimentos: o login e a troca.
+    index('users_account_idx').on(table.accountId),
     pgPolicy('tenant_isolation', {
       as: 'permissive',
       for: 'all',
@@ -98,11 +97,11 @@ export const users = pgTable(
       using: sql`${table.tenantId} = ${currentTenantId}`,
       withCheck: sql`${table.tenantId} = ${currentTenantId}`,
     }),
-    pgPolicy('login_por_email', {
+    pgPolicy('vinculos_da_conta', {
       as: 'permissive',
       for: 'select',
       to: 'public',
-      using: sql`${table.email} = ${emailEmLogin}`,
+      using: sql`${table.accountId} = ${currentAccountId} AND ${semTenantNoContexto}`,
     }),
   ],
 ).enableRLS()
