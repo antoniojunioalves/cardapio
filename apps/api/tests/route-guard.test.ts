@@ -38,7 +38,12 @@ const ROTAS_ABERTAS: Record<string, string> = {
 }
 
 /** Fora do prefixo do painel, mas protegidas: precisam responder 401 sem login. */
-const PROTEGIDAS_FORA_DO_ADMIN = new Set(['GET /api/v1/auth/me', 'GET /api/v1/auth/establishments'])
+const PROTEGIDAS_FORA_DO_ADMIN = new Set([
+  'GET /api/v1/auth/me',
+  'GET /api/v1/auth/establishments',
+  'PATCH /api/v1/auth/account',
+  'POST /api/v1/auth/account/password',
+])
 
 const protegida = (r: { metodo: string; url: string }) =>
   r.url.startsWith('/api/v1/admin') || PROTEGIDAS_FORA_DO_ADMIN.has(`${r.metodo} ${r.url}`)

@@ -1,9 +1,9 @@
 # Plano do projeto
 
-**Atualizado em:** 2026-10-14
-**Fase atual:** 25d — concluída, aguardando validação
-**Próxima:** 25b — "Minha conta": trocar a própria senha e o próprio nome. As fases 25 a 28
-fecham o MVP (ver "O que falta para o MVP")
+**Atualizado em:** 2026-10-20
+**Fase atual:** 25b — concluída, aguardando validação
+**Próxima:** 25c — "esqueci minha senha", por e-mail. As fases 25 a 28 fecham o MVP (ver "O que
+falta para o MVP")
 
 ---
 
@@ -123,9 +123,12 @@ um link no e-mail: com conta, aceita com a senha de sempre; sem conta, cria a de
 e-mail serve em quantos estabelecimentos a pessoa trabalhar — e quem já tem conta abre mais um
 estabelecimento com ela, pela página de cadastro.
 
-**Ainda não existe:** trocar a própria senha e o próprio nome (Fase 25b), o "esqueci minha senha"
-(Fase 25c) e a tela de clientes (Fase 26). As fases 25 a 28 fecham o MVP; ver "O que falta para
-o MVP".
+**E cada pessoa cuida da própria conta (Fase 25b).** "Minha conta", no menu de todo mundo, troca
+o nome e a senha — valendo em todos os estabelecimentos dela. Trocar a senha tira a pessoa do
+painel nos outros aparelhos na hora.
+
+**Ainda não existe:** o "esqueci minha senha" (Fase 25c) e a tela de clientes (Fase 26). As fases
+25 a 28 fecham o MVP; ver "O que falta para o MVP".
 
 ---
 
@@ -165,8 +168,8 @@ o MVP".
 | 24  | Grupos de opção, adicionais e combos                                                                                | ✅ Concluída |
 | 25a | Equipe e permissões: perfis do estabelecimento, permissões mais finas, as telas Pessoas e Perfis                    | ✅ Concluída |
 | 25d | Uma conta por pessoa, com um vínculo em cada estabelecimento, e o convite para a equipe — _antes da 25b_            | ✅ Concluída |
-| 25b | "Minha conta": trocar a própria senha e o próprio nome                                                              | ⬜ Próxima   |
-| 25c | "Esqueci minha senha", por e-mail                                                                                   | ⬜           |
+| 25b | "Minha conta": trocar a própria senha e o próprio nome                                                              | ✅ Concluída |
+| 25c | "Esqueci minha senha", por e-mail                                                                                   | ⬜ Próxima   |
 | 26  | Clientes e histórico de pedidos                                                                                     | ⬜           |
 | 27  | Acessibilidade e percurso completo, do zero                                                                         | ⬜           |
 | 28  | Colocar no ar — religa antes o CI guardado na Fase 16                                                               | ⬜           |
@@ -175,6 +178,127 @@ Três movimentos em relação à ordem sugerida originalmente, cada um porque al
 dependia do item movido: configurações do estabelecimento para a Fase 5 (o cardápio público
 precisa exibir aberto/fechado, taxa e pedido mínimo), storage para a Fase 6 (produto nasce com
 imagem) e auditoria para a Fase 4 (o requisito é registrar "desde o início").
+
+---
+
+## Fase 25b — concluída
+
+"Minha conta": a pessoa troca o próprio nome e a própria senha. Depois da 25d, a conta é da pessoa
+e vale em todos os estabelecimentos dela — e por isso a mudança também. Mudou a API (duas rotas, o
+token de acesso conferido contra a troca de senha), o `packages/shared` (a senha do cadastro) e o
+painel (o item no menu e a página). **Uma migration nova** (`0028`), só com uma coluna. A coleção
+do Postman mudou: importe de novo.
+
+### Decisões do Junio (2026-10-20)
+
+- **A senha de uma conta que já existe é conferida, e não validada.** A pendência da 25d: a página
+  de cadastro conferia as regras de senha nova, e uma conta com senha de antes delas (hoje, só as
+  do seed) não abria outro estabelecimento por ali. Agora as regras valem só para a conta nova, e
+  quem recusa a senha fraca é a API — a tela continua mostrando as regras, mas não sabe se o e-mail
+  já tem conta.
+- **O que a 25d já tinha mudado na 25b**, e que segue: o dono não redefine a senha de ninguém nem
+  obriga a troca no primeiro acesso — quem esqueceu usa a 25c.
+
+### Microtasks
+
+| #   | Tarefa                                                                                   | Status |
+| --- | ---------------------------------------------------------------------------------------- | ------ |
+| 1   | `accounts.password_changed_at` (migration 0028)                                          | ✅     |
+| 2   | O token de acesso conferido contra a troca de senha, no painel e na conexão ao vivo      | ✅     |
+| 3   | `PATCH /auth/account` (o nome) e `POST /auth/account/password` (a senha), com auditoria  | ✅     |
+| 4   | O cadastro só confere a senha de uma conta que existe; as regras ficam para a conta nova | ✅     |
+| 5   | "Minha conta" no menu de todo mundo, com a página do nome e da senha                     | ✅     |
+| 6   | A renovação de sessão pedida durante uma troca de senha espera pela troca                | ✅     |
+| 7   | Coleção do Postman (75 requisições)                                                      | ✅     |
+
+### O que foi decidido
+
+**"Minha conta" é de todo mundo** (`/{tenantSlug}/admin/minha-conta`), sem permissão nenhuma: a
+conta é da pessoa. Fica no rodapé do menu, depois de Equipe e Configurações. A página tem duas
+partes:
+
+- **Seus dados:** o nome, que a equipe vê em todos os estabelecimentos; o e-mail aparece, só de
+  leitura — mudá-lo continua no ROADMAP.
+- **Senha:** a atual e a nova, com as regras do cadastro marcadas enquanto se digita.
+
+**Trocar a senha encerra todas as sessões da conta** — em todos os estabelecimentos e aparelhos,
+inclusive esta —, e este aparelho recebe uma sessão nova, no mesmo estabelecimento; a pessoa
+continua onde estava. Trocar a senha é o que se faz quando se desconfia de que alguém a sabe, e uma
+sessão aberta noutro lugar é justamente o que a pessoa quer derrubar:
+
+- as sessões (refresh tokens) são **apagadas**, como ao desativar alguém: um token de antes que
+  reapareça é uma sessão que nós encerramos, não um roubo;
+- **o token de acesso emitido antes da troca deixa de valer na hora**, e não só quando expira, 15
+  minutos depois: `accounts.password_changed_at` é conferido contra o `iat` do token, a cada
+  requisição e na conexão ao vivo;
+- **as conexões ao vivo da conta fecham**, e não reabrem com o token de antes.
+
+A senha atual errada responde 400 `CURRENT_PASSWORD_INVALID`; a nova igual à atual, 400
+`SAME_PASSWORD` — quem troca quer que a de antes pare de servir; a nova fora das regras, 400. A
+troca tem o limite do login: 5 por minuto.
+
+**Uma corrida evitada no painel.** A troca fecha também a conexão ao vivo deste aparelho, e ela
+pede uma renovação de sessão. Se essa renovação saísse antes de a resposta da troca chegar, levaria
+o cookie de antes — já apagado — e encerraria a sessão: a pessoa cairia no login logo depois de
+trocar a senha. Uma renovação pedida durante a troca agora espera por ela e recebe o token da
+sessão nova; se a troca falhar, nada foi encerrado, e a renovação segue como sempre.
+
+**A auditoria fica no estabelecimento em que a pessoa estava** (`account.renamed`, com o nome de
+antes e o novo, e `account.password_changed`), e só nele: os outros estabelecimentos dela não ficam
+sabendo onde mais ela trabalha.
+
+**O cadastro só confere a senha de uma conta que existe.** O schema compartilhado
+(`cadastroSchema`) pede só que a senha venha; a API aplica as regras (`senhaSchema`) quando a conta
+é nova, e a recusa (400 `WEAK_PASSWORD`) vem no formato da validação, com o campo — o formulário a
+marca na senha, como antes.
+
+### A validar com o Junio
+
+1. **A troca de senha encerra também a sessão deste aparelho**, e devolve uma nova — em vez de
+   manter a de agora.
+2. **A nova igual à atual é recusada.**
+3. **"Minha conta" no rodapé do menu**, depois de Configurações, com o ícone de pessoa.
+4. **O e-mail aparece, só de leitura**, sem caminho para mudá-lo (ROADMAP).
+5. **A auditoria da troca só no estabelecimento em que a pessoa estava.**
+
+### Verificação executada
+
+| Verificação                                                                                                                                                                           | Resultado                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm verify`                                                                                                                                                                         | **1325 testes** (743 API + 516 web + 66 shared); formatação, typecheck, lint e build |
+| Clone limpo, `--frozen-lockfile`                                                                                                                                                      | os mesmos 1325 testes                                                                |
+| A migration numa cópia do banco de desenvolvimento                                                                                                                                    | 29 migrations; as 8 contas com `password_changed_at` vazia                           |
+| A troca de senha: token de antes valendo, troca sem marcar quando, sem conferir a atual, igual à atual, sem encerrar as sessões, só no estabelecimento de agora, sem fechar a conexão | 7 quebras, pegas em `account-routes`                                                 |
+| O nome sem auditoria                                                                                                                                                                  | 1 quebra, pega em `account-routes`                                                   |
+| O cadastro: conta nova com senha fraca; o schema validando a senha da conta que existe                                                                                                | 2 quebras, pegas em `signup-routes`                                                  |
+| O painel: a renovação sem esperar a troca, a sessão nova não guardada, o nome fora da sessão, "Minha conta" só com permissão, a senha atual errada fora do campo                      | 5 quebras, pegas em `AdminAccount` e `AdminPanel`                                    |
+| Ao todo                                                                                                                                                                               | 15 quebras propositais, todas pegas                                                  |
+| Navegador de verdade, em 390 e 1280 px                                                                                                                                                | 20 conferências; no console, só os 400 e 401 provocados; sem rolagem lateral         |
+| Validação do Junio                                                                                                                                                                    | a fazer                                                                              |
+
+**Visto num navegador de verdade**, contra uma cópia migrada do banco de desenvolvimento, com a API
+e o painel temporários (3334 e 5174):
+
+- "Minha conta" pelo menu, no celular e em tela grande; o nome novo aparece no menu na hora, e o
+  outro aparelho o vê;
+- a senha atual errada marca o campo; a nova fora das regras nem sai da tela;
+- trocada a senha, quem trocou continua no painel — com a conexão ao vivo caindo e voltando no
+  meio — e segue usando-o com a sessão nova;
+- o outro aparelho sai: **com a conexão ao vivo** (o Zé na lanchonete, onde vê os pedidos), cai no
+  login sozinho; **sem ela** (na pizzaria, como "Gerente do cardápio", que não vê pedidos), segue
+  na tela até a primeira ação, e aí cai no login — o token dele já não vale, ele só ainda não
+  tentou usá-lo;
+- a senha de antes não entra mais, e a nova entra;
+- no cadastro, a conta do seed abre outro estabelecimento com `cardapio123`, e a senha fraca de uma
+  conta nova volta da API marcada no campo.
+
+A cópia do banco foi apagada no fim, e a mensagem do Mailpit — uma, do percurso —, apagada pelo
+id. O banco de desenvolvimento não foi tocado: a migration fica para o `pnpm db:migrate` do Junio.
+
+**Uma interrupção, sem estrago.** O Docker Desktop estava desligado depois de um reinício da
+máquina, e o rascunho — com o roteiro das quebras propositais — tinha sido apagado. O lote ainda
+não tinha rodado, então nenhum fonte ficou com quebra aplicada; o roteiro foi refeito, e a
+conferência a seco passou antes e depois do lote.
 
 ---
 
@@ -1739,14 +1863,9 @@ primeira (2026-10-07) e feita antes da segunda (2026-10-14).
   as permissões ficaram mais finas no cardápio e no dia a dia. Ver "Fase 25a — concluída".
 - **25d (concluída, antes da 25b):** uma conta por pessoa, com um vínculo em cada estabelecimento,
   o convite por e-mail e a troca de estabelecimento pelo menu. Ver "Fase 25d — concluída".
-- **25b — "Minha conta":**
-  - A pessoa troca a própria senha, informando a atual, e o próprio nome. Vale em todos os
-    estabelecimentos dela: a conta é uma só.
-  - Trocar a senha encerra as outras sessões da conta, em todos os estabelecimentos.
-  - Saíram da 25b, com a 25d: o dono redefinir a senha de alguém e a troca obrigatória no
-    primeiro acesso — o dono não conhece mais a senha de ninguém. Quem esqueceu usa a 25c.
-  - A decidir no começo da fase: se a página de cadastro passa a aceitar, para uma conta que já
-    existe, a senha dela mesmo fora das regras de hoje (ver "Fase 25d", achado no navegador).
+- **25b (concluída):** "Minha conta" — a pessoa troca o próprio nome e a própria senha, valendo
+  em todos os estabelecimentos dela; trocar a senha encerra todas as sessões da conta. E o cadastro
+  passou a só conferir a senha de uma conta que já existe. Ver "Fase 25b — concluída".
 - **25c — "esqueci minha senha"**, por e-mail, com o envio da Fase 17 — e o mesmo desenho do link
   de confirmação: só o hash no banco, no fragmento do link. É por **conta**: um e-mail só, achado
   pelo contexto `app.account_email` (`accounts/context.ts`), e a resposta é a mesma exista o e-mail
@@ -1938,6 +2057,8 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 | Conta global protegida por variável da transação    | Sem `tenant_id` e sem listagem: só o e-mail ou a conta do contexto        |
 | A equipe entra por convite                          | O dono nunca conhece a senha de ninguém                                   |
 | Cliente separado da conta da equipe                 | O mesmo e-mail pode ser os dois, sem dividir unicidade                    |
+| Trocar a senha derruba todas as sessões da conta    | O token de acesso de antes deixa de valer na hora, pelo `iat`             |
+| Senha de conta que existe é conferida, não validada | Uma regra nova não tranca quem já tem conta                               |
 
 ---
 
@@ -1945,8 +2066,6 @@ O raciocínio completo está em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | Item                                                                                                                                                  | Quando resolve                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Trocar a própria senha e o próprio nome ("Minha conta") — hoje ninguém muda o nome pelo painel, nem o dono o dele                                     | Fase 25b                                 |
-| Conta com senha fora das regras de hoje (só as do seed) não abre outro estabelecimento pela página de cadastro                                        | A decidir no começo da 25b               |
 | "Esqueci minha senha", por e-mail — e, com ele, o e-mail "ocupado" por um cadastro nunca confirmado                                                   | Fase 25c                                 |
 | O convite depende de um servidor de e-mail de verdade em produção                                                                                     | Fase 28 (SMTP de produção)               |
 | `customers:read` e `audit:read` valem num perfil, mas a tela de perfis ainda não as oferece: não há tela que as use                                   | Fase 26 (clientes); ROADMAP (auditoria)  |

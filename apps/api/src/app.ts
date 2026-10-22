@@ -13,6 +13,7 @@ import { registerErrorHandler } from './plugins/error-handler.js'
 import { registerOpenApi } from './plugins/openapi.js'
 import { registerRateLimit } from './plugins/rate-limit.js'
 import { registerUploads } from './plugins/uploads.js'
+import { accountRoutes } from './routes/account.js'
 import { adminCatalogRoutes } from './routes/admin-catalog.js'
 import { adminCustomizationRoutes } from './routes/admin-customization.js'
 import { adminEmailConfirmationRoutes } from './routes/admin-email-confirmation.js'
@@ -108,6 +109,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // infraestrutura, não contrato público.
   await instance.register(authRoutes, { prefix: '/api/v1/auth' })
   await instance.register(invitationAcceptanceRoutes, { prefix: '/api/v1/auth' })
+  await instance.register(accountRoutes, { prefix: '/api/v1/auth' })
   await instance.register(adminSettingsRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminImageRoutes, { prefix: '/api/v1/admin' })
   await instance.register(adminCatalogRoutes, { prefix: '/api/v1/admin' })

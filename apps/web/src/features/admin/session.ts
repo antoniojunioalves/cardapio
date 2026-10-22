@@ -116,6 +116,11 @@ export async function trocarDeEstabelecimento(slug: string): Promise<string> {
   return resposta.establishment.slug
 }
 
+/** O nome novo da conta, no que o painel guarda da sessão: o menu o mostra na hora. */
+export function renomearNaSessao(nome: string): void {
+  useSessaoStore.setState((s) => (s.usuario ? { usuario: { ...s.usuario, name: nome } } : {}))
+}
+
 export async function sair(): Promise<void> {
   sessao().encerrar()
   // Revoga no servidor e apaga o cookie; se falhar, a sessão local já acabou.
@@ -125,6 +130,24 @@ export async function sair(): Promise<void> {
 }
 
 let renovacaoEmAndamento: Promise<string> | null = null
+/** A troca de senha em andamento: ela devolve a sessão nova (`trocarSenha`). */
+let trocaEmAndamento: Promise<RespostaDeSessao> | null = null
+
+/** A renovação em si: o cookie vai, a sessão nova volta. Sem a fila — quem chama é `renovarSessao`. */
+async function renovar(): Promise<string> {
+  if (!sessao().slug) throw new ApiError(401, 'Sessão encerrada.')
+  try {
+    const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/refresh', {
+      method: 'POST',
+      comCookie: true,
+    })
+    sessao().guardar(resposta)
+    return resposta.accessToken
+  } catch (erro) {
+    if (erro instanceof ApiError && erro.status === 401) sessao().encerrar()
+    throw erro
+  }
+}
 
 /**
  * Troca o refresh token por um token de acesso novo.
@@ -134,23 +157,59 @@ let renovacaoEmAndamento: Promise<string> | null = null
  * entenderia como roubo e revogaria todas as sessões.
  */
 export function renovarSessao(): Promise<string> {
-  renovacaoEmAndamento ??= (async () => {
-    if (!sessao().slug) throw new ApiError(401, 'Sessão encerrada.')
-    try {
-      const resposta = await requisitar<RespostaDeSessao>('/api/v1/auth/refresh', {
-        method: 'POST',
-        comCookie: true,
-      })
-      sessao().guardar(resposta)
-      return resposta.accessToken
-    } catch (erro) {
-      if (erro instanceof ApiError && erro.status === 401) sessao().encerrar()
-      throw erro
-    }
-  })().finally(() => {
+  // Durante uma troca de senha, a sessão nova vem dela: o cookie de agora já foi
+  // apagado. Se a troca falhar, nada foi encerrado, e a renovação segue como sempre.
+  if (trocaEmAndamento) {
+    return trocaEmAndamento.then(
+      (resposta) => resposta.accessToken,
+      () => renovarSessao(),
+    )
+  }
+  renovacaoEmAndamento ??= renovar().finally(() => {
     renovacaoEmAndamento = null
   })
   return renovacaoEmAndamento
+}
+
+/**
+ * Troca a senha da conta ("Minha conta"). A API encerra **todas** as sessões
+ * da conta — as deste aparelho também — e devolve uma sessão nova, com o
+ * cookie novo.
+ *
+ * A API fecha a conexão ao vivo deste aparelho, e ela pede uma renovação: se
+ * essa renovação saísse antes de a troca voltar, levaria o cookie de antes, já
+ * apagado, e encerraria a sessão — a pessoa cairia no login logo depois de
+ * trocar a senha. Por isso quem pede renovação durante a troca espera por ela
+ * e recebe o token da sessão nova (`renovarSessao`).
+ */
+export async function trocarSenha(senhaAtual: string, senhaNova: string): Promise<void> {
+  const pedir = (token: string) =>
+    requisitar<RespostaDeSessao>('/api/v1/auth/account/password', {
+      method: 'POST',
+      body: { currentPassword: senhaAtual, newPassword: senhaNova },
+      comCookie: true,
+      token,
+    })
+
+  const troca = (async () => {
+    try {
+      return await pedir(await tokenDeAcesso())
+    } catch (erro) {
+      // O token de acesso venceu enquanto a página estava aberta: renova e tenta de novo.
+      if (!(erro instanceof ApiError) || erro.status !== 401) throw erro
+      return pedir(await renovar())
+    }
+  })().then((resposta) => {
+    sessao().guardar(resposta)
+    return resposta
+  })
+
+  trocaEmAndamento = troca
+  try {
+    await troca
+  } finally {
+    trocaEmAndamento = null
+  }
 }
 
 /** Um token de acesso válido: o da memória, ou um renovado. */

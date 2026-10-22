@@ -360,12 +360,18 @@ describe('login do painel', () => {
 
 describe('menu do painel', () => {
   it('cada pessoa recebe só os itens que a permissão dela alcança', () => {
-    expect(itensDoMenu(['orders:read']).map((item) => item.rotulo)).toEqual(['Início', 'Pedidos'])
+    expect(itensDoMenu(['orders:read']).map((item) => item.rotulo)).toEqual([
+      'Início',
+      'Pedidos',
+      'Minha conta',
+    ])
     expect(itensDoMenu(['settings:read']).map((item) => item.rotulo)).toEqual([
       'Início',
       'Configurações',
+      'Minha conta',
     ])
-    expect(itensDoMenu([]).map((item) => item.rotulo)).toEqual(['Início'])
+    // "Minha conta" é de todo mundo: a conta é da pessoa.
+    expect(itensDoMenu([]).map((item) => item.rotulo)).toEqual(['Início', 'Minha conta'])
   })
 
   it('mostra o estabelecimento, os itens, o cardápio e quem está logado', async () => {

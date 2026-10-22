@@ -10,6 +10,16 @@ export interface AccessTokenPayload {
   tenantId: string
 }
 
+/**
+ * O token verificado: o que assinamos e quando foi emitido. `iat` vem em
+ * segundos, no padrão do JWT, e o `fast-jwt` o põe em todo token que assina.
+ * É com ele que a troca de senha derruba os tokens de antes
+ * (`loadAuthenticatedUser`).
+ */
+export interface AccessTokenVerificado extends AccessTokenPayload {
+  iat: number
+}
+
 const MINUTO_EM_MS = 60_000
 
 const assinar = createSigner({
@@ -33,11 +43,15 @@ export function signAccessToken(payload: AccessTokenPayload): string {
   return assinar(payload)
 }
 
-/** Devolve o payload, ou `null` se o token for inválido, expirado ou forjado. */
-export function verifyAccessToken(token: string): AccessTokenPayload | null {
+/** Devolve o payload, ou `null` se o token for inválido, expirado, forjado ou sem data de emissão. */
+export function verifyAccessToken(token: string): AccessTokenVerificado | null {
   try {
-    const payload = verificar(token) as AccessTokenPayload
-    return typeof payload.sub === 'string' && typeof payload.tenantId === 'string' ? payload : null
+    const payload = verificar(token) as Partial<AccessTokenVerificado>
+    return typeof payload.sub === 'string' &&
+      typeof payload.tenantId === 'string' &&
+      typeof payload.iat === 'number'
+      ? (payload as AccessTokenVerificado)
+      : null
   } catch {
     return null
   }

@@ -61,7 +61,12 @@ describe('token de acesso', () => {
   it('assina e verifica, preservando usuário e tenant', () => {
     const token = signAccessToken({ sub: 'usuario-1', tenantId: 'tenant-1' })
 
-    expect(verifyAccessToken(token)).toMatchObject({ sub: 'usuario-1', tenantId: 'tenant-1' })
+    // Com a data de emissão: é por ela que a troca de senha derruba os tokens de antes.
+    expect(verifyAccessToken(token)).toMatchObject({
+      sub: 'usuario-1',
+      tenantId: 'tenant-1',
+      iat: expect.any(Number) as number,
+    })
   })
 
   it('recusa token adulterado', () => {

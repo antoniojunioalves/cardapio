@@ -40,6 +40,12 @@ export const accounts = pgTable(
     passwordHash: varchar({ length: 255 }).notNull(),
     /** Quando a pessoa provou ser dona do e-mail: pelo link de confirmação ou pelo de um convite. */
     emailVerifiedAt: timestamp({ withTimezone: true }),
+    /**
+     * Quando a senha foi trocada pela última vez, em "Minha conta". O token de
+     * acesso emitido antes disso deixa de valer na hora — em qualquer aparelho,
+     * em qualquer estabelecimento —, e não só quando expirar.
+     */
+    passwordChangedAt: timestamp({ withTimezone: true }),
     ...timestamps,
   },
   (table) => [

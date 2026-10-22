@@ -8,6 +8,7 @@ import {
   IconeExterno,
   IconeInicio,
   IconePedidos,
+  IconePerfil,
   IconeSair,
   type IconeProps,
 } from '@/components/icons'
@@ -20,6 +21,7 @@ const ICONES: Record<IconeDoMenu, (props: IconeProps) => ReactNode> = {
   cardapio: IconeCardapio,
   equipe: IconeEquipe,
   configuracoes: IconeConfiguracoes,
+  conta: IconePerfil,
 }
 
 const linha =

@@ -1,4 +1,4 @@
-import { FUSO_PADRAO, slugReservado, type Cadastro } from '@repo/shared'
+import { FUSO_PADRAO, senhaSchema, slugReservado, type Cadastro } from '@repo/shared'
 import { sql } from 'drizzle-orm'
 
 import { definirContaPropria, definirEmailDaConta, withAccountEmail } from '../accounts/context.js'
@@ -202,6 +202,10 @@ export interface ResultadoDoCadastro {
  * A senha errada responde `EMAIL_TAKEN`, e isso revela que o e-mail tem conta —
  * o mesmo preço de antes, e o limite de cadastros por IP segura quem tentar
  * adivinhar a senha por aqui (`routes/public-signup.ts`).
+ *
+ * As regras de senha valem só para a conta nova (`exigirSenhaForte`): a de uma
+ * conta que existe é conferida, e não validada, como no login — mesmo que tenha
+ * nascido antes das regras de hoje.
  */
 export async function cadastrarEstabelecimento(
   dados: Cadastro,
@@ -217,6 +221,7 @@ export async function cadastrarEstabelecimento(
     }
     dono = { contaId: conta.id }
   } else {
+    exigirSenhaForte(dados.password)
     dono = { nome: dados.ownerName, email, senhaHash: await hashPassword(dados.password) }
   }
   const nomeDoDono = conta?.name ?? dados.ownerName
@@ -276,6 +281,20 @@ export async function cadastrarEstabelecimento(
   }
 
   return { sessao, emailDeConfirmacaoEnviado }
+}
+
+/**
+ * A senha de uma conta nova segue as regras do cadastro. A recusa vem no mesmo
+ * formato da validação da rota — o campo em `instancePath` —, para o
+ * formulário marcar o campo da senha.
+ */
+function exigirSenhaForte(senha: string): void {
+  const regras = senhaSchema.safeParse(senha)
+  if (regras.success) return
+  const mensagem = regras.error.issues[0]?.message ?? 'Senha inválida.'
+  throw new AppError(mensagem, 400, 'WEAK_PASSWORD', [
+    { instancePath: '/password', message: mensagem },
+  ])
 }
 
 /** Livre para um cadastro novo: nem reservado, nem de outro estabelecimento. */

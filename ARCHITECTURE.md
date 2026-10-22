@@ -507,6 +507,14 @@ O verificador do token de acesso **fixa a lista de algoritmos aceitos**. Sem iss
 declarando `alg: none` — ou trocando HMAC por RSA — seria aceito pela biblioteca. Há um teste
 que apresenta exatamente esse token e exige a recusa.
 
+**O token de acesso de antes de uma troca de senha não vale mais** (Fase 25b). "Sem ida ao banco"
+é a assinatura; o usuário é recarregado a cada requisição (6.5), e com ele vem
+`accounts.password_changed_at`. Um token cujo `iat` — a hora de emissão, em segundos, que o
+`fast-jwt` põe em todo token — seja anterior à troca não carrega ninguém, no painel e na conexão ao
+vivo. Sem isso, quem tivesse uma sessão roubada continuaria dentro por até 15 minutos depois de a
+pessoa trocar a senha. A comparação é em segundos: um token do mesmo segundo da troca passa — o da
+própria troca, que nasce logo depois dela.
+
 **O refresh token vai num cookie `httpOnly`** (`refresh_token`, `SameSite=Strict`, `Path=/api/v1/auth`,
 `Secure` em produção), nunca no corpo da resposta: o JavaScript da página não o vê, e um script
 injetado não tem como roubá-lo. A renovação e o logout leem o cookie; o corpo fica como
@@ -721,7 +729,11 @@ mesmo nível das páginas do produto (`/cadastro`, `/termos`), e a API pública 
 **O e-mail é o da conta do dono** (6.9). Sem conta, ela nasce com o nome e a senha do formulário.
 Com conta, a senha tem de ser a dela — é como quem já trabalha num estabelecimento, ou já é dono de
 um, abre mais um —, e o nome do formulário é ignorado; se a conta já tem o e-mail confirmado, o
-estabelecimento nasce `ACTIVE`, sem link. Senha errada responde 409 `EMAIL_TAKEN`, sem criar nada e
+estabelecimento nasce `ACTIVE`, sem link. **A senha de uma conta que existe é conferida, e não
+validada** (Fase 25b), como no login: mesmo de antes das regras de hoje, ela abre outro
+estabelecimento. As regras (`senhaSchema`) valem para a conta nova — o `cadastroSchema`
+compartilhado só pede que a senha venha, e a API recusa a fraca com 400 `WEAK_PASSWORD`, no formato
+da validação, com o campo. Senha errada responde 409 `EMAIL_TAKEN`, sem criar nada e
 sem e-mail; isso revela que o e-mail tem conta — como antes da 25d —, e o limite de cadastros por IP
 (10 por hora) segura quem tentar adivinhar a senha por ali. A confirmação marca a **conta**
 (`accounts.email_verified_at`) e publica o estabelecimento do link.
@@ -802,6 +814,23 @@ guarda até os envios de convites já cancelados.
 **O cliente não tem conta aqui** (8.9). Quando a conta de cliente existir, é outra tabela, do
 estabelecimento; o mesmo e-mail pode ser equipe e cliente, no mesmo estabelecimento ou em outro, e
 as duas nunca dividem unicidade.
+
+### 6.11 Minha conta
+
+Fase 25b. A pessoa logada troca o próprio nome e a própria senha — sem permissão nenhuma, porque a
+conta é dela —, e a mudança vale em todos os estabelecimentos em que ela trabalha
+(`accounts/service.ts`, rotas em `routes/account.ts`, sob `/auth` para gravar o cookie).
+
+- `PATCH /auth/account { name }` troca o nome da conta e devolve o usuário da sessão, já com ele.
+- `POST /auth/account/password { currentPassword, newPassword }` confere a atual (400
+  `CURRENT_PASSWORD_INVALID`), recusa a nova igual à atual (400 `SAME_PASSWORD`) e a fora das regras
+  (a validação da rota usa `senhaSchema`). Depois, **encerra todas as sessões da conta**: em cada
+  estabelecimento dela, apaga os refresh tokens do vínculo e avisa a conexão ao vivo
+  (`USUARIO_ALTERADO`, 11), e marca `password_changed_at` — o token de acesso de antes deixa de
+  valer (6.2). Devolve uma sessão nova para este aparelho, no mesmo estabelecimento.
+
+A auditoria fica no estabelecimento em que a pessoa estava (`account.renamed`,
+`account.password_changed`), e só nele: os outros não ficam sabendo onde mais ela trabalha.
 
 ### 6.7 Auditoria
 
@@ -1488,6 +1517,14 @@ uma pessoa só muda o perfil — o nome e o e-mail são da conta dela. As regras
 espelhadas em funções sem tela — `alcanca`, `alcancaAPessoa`, `marcarPermissao`,
 `desmarcarPermissao` —, para a tela não oferecer o que seria recusado.
 
+**Minha conta** (`AdminAccountPage`, em `/admin/minha-conta`, Fase 25b) é um item do rodapé do
+menu sem permissão: o nome — que vai para a sessão guardada, e o menu o mostra na hora — e a
+senha, com as regras marcadas enquanto se digita. **A troca de senha entra na fila das
+renovações** (`trocarSenha`, em `session.ts`): a API fecha a conexão ao vivo deste aparelho, que
+pede uma renovação, e uma renovação que saísse antes de a troca voltar levaria o cookie de antes —
+já apagado — e encerraria a sessão. Quem pede renovação durante a troca espera por ela e recebe o
+token novo; se a troca falhar, nada foi encerrado, e a renovação segue como sempre.
+
 **A página do convite** (`AcceptInvitationPage`, em `/convite`) segue a da confirmação: o token
 sai do fragmento e do endereço na hora, e vai à API no corpo de um POST. Mostra quem convidou, para
 onde e com que perfil; com conta, pede só a senha; sem conta, o nome e uma senha nas regras do
@@ -1528,7 +1565,9 @@ estabelecimento. Elas ficam no mesmo nível de `/:tenantSlug`: rota fixa ganha d
 parâmetro, e é por isso que esses endereços estão em `SLUGS_RESERVADOS` (6.8).
 
 **O cadastro** (`features/signup/`) valida com o schema da API (`cadastroSchema`), sem a versão dos
-termos e o fuso, que a tela preenche. O endereço do cardápio é sugerido pelo nome até a pessoa
+termos e o fuso, que a tela preenche. Desde a 25b, o schema não traz as regras da senha: a tela as
+mostra, mas quem recusa a senha fraca de uma conta nova é a API, que sabe se a conta é nova. O
+endereço do cardápio é sugerido pelo nome até a pessoa
 editá-lo, e conferido na API 400 ms depois da última tecla. A chamada leva `credentials`, como o
 login: o refresh token vem num cookie. Deu certo, a sessão já está aberta, e a pessoa cai no
 painel — com o recado de que o e-mail não saiu, se for o caso, no estado da navegação. Com o e-mail

@@ -45,8 +45,10 @@ function fusoDoAparelho(): string | null {
 
 /**
  * Os erros de validação da API vêm por campo (`instancePath: "/slug"`). O
- * formulário valida com as mesmas regras, então isto só acontece quando algo
- * mudou entre a tela e o servidor — os termos, por exemplo.
+ * formulário valida com as mesmas regras, então isto acontece quando algo
+ * mudou entre a tela e o servidor — os termos, por exemplo — e com a senha
+ * fraca de uma conta nova: a tela mostra as regras, mas não sabe se o e-mail
+ * já tem conta, e a senha de uma conta que existe só se confere (Fase 25b).
  */
 function errosPorCampo(detalhes: unknown): Partial<Record<Campo, string>> {
   if (!Array.isArray(detalhes)) return {}

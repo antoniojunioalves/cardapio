@@ -162,7 +162,13 @@ export const cadastroSchema = z.object({
   slug: slugSchema,
   ownerName: textoObrigatorio(120, 'Informe o seu nome.'),
   email: z.email('Informe um e-mail válido, como voce@exemplo.com.').max(254),
-  password: senhaSchema,
+  /**
+   * Sem as regras aqui, de propósito (Fase 25b): o e-mail pode ser de uma conta
+   * que já existe, e aí a senha é a dela — só se confere, como no login, mesmo
+   * que tenha nascido antes das regras de hoje. As regras (`senhaSchema`) valem
+   * para a conta nova, e quem as aplica é a API, que sabe qual das duas é.
+   */
+  password: z.string().min(1, 'Informe uma senha.').max(256, 'Use no máximo 256 caracteres.'),
   termsVersion: z
     .string()
     .refine(

@@ -432,7 +432,16 @@ export async function estabelecimentosDaConta(
 }
 
 /**
- * Carrega o usuário de um token de acesso já verificado.
+ * O token foi emitido antes da última troca de senha? Então não vale mais. Em
+ * segundos, como o `iat`: um token emitido no mesmo segundo da troca passa —
+ * o da própria troca, que nasce logo depois dela.
+ */
+const emitidoAntesDaTroca = (emitidoEm: number, senhaTrocadaEm: Date | null) =>
+  senhaTrocadaEm !== null && emitidoEm < Math.floor(senhaTrocadaEm.getTime() / 1000)
+
+/**
+ * Carrega o usuário de um token de acesso já verificado. `emitidoEm` é o `iat`
+ * do token, em segundos.
  *
  * Consulta o banco a cada requisição em vez de confiar apenas no conteúdo do
  * token. O custo é uma consulta indexada; o que se compra é que desativar um
@@ -442,11 +451,13 @@ export async function estabelecimentosDaConta(
  *
  * O mesmo vale para o estabelecimento: suspenso pela plataforma, nenhum usuário
  * dele é carregado — a suspensão corta quem já estava logado na requisição
- * seguinte, na mesma consulta.
+ * seguinte, na mesma consulta. E para a senha: trocada em "Minha conta", o
+ * token emitido antes dela não carrega mais ninguém.
  */
 export async function loadAuthenticatedUser(
   context: TenantContext,
   userId: string,
+  emitidoEm: number,
 ): Promise<AuthenticatedUser | null> {
   return withTenant(context, async (tx) => {
     const [usuario] = await tx
@@ -455,6 +466,7 @@ export async function loadAuthenticatedUser(
         accountId: users.accountId,
         name: accounts.name,
         email: accounts.email,
+        senhaTrocadaEm: accounts.passwordChangedAt,
         isActive: users.isActive,
         statusDoEstabelecimento: tenants.status,
       })
@@ -465,6 +477,8 @@ export async function loadAuthenticatedUser(
       .limit(1)
 
     if (!usuario?.isActive || usuario.statusDoEstabelecimento === 'SUSPENDED') return null
+    // A senha mudou depois que o token saiu: quem o tem não prova mais quem é.
+    if (emitidoAntesDaTroca(emitidoEm, usuario.senhaTrocadaEm)) return null
 
     return {
       id: usuario.id,

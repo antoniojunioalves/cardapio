@@ -572,10 +572,16 @@ README (`ze@exemplo.com` e os outros, senha `cardapio123`); o Zé também é da 
 para ver a troca de estabelecimento pelo menu.
 
 Para pôr alguém na equipe, convide pela tela Equipe: o link chega no Mailpit
-(http://localhost:8025), e abri-lo noutra janela anônima mostra o aceite como a pessoa vê. As
-contas do seed não abrem outro estabelecimento pela página de cadastro: a senha delas está fora das
-regras que o formulário confere (pendência registrada no PROJECT_PLAN). Para isso, use uma conta
-criada por um convite.
+(http://localhost:8025), e abri-lo noutra janela anônima mostra o aceite como a pessoa vê.
+
+**Cuidado ao testar "Minha conta" com uma conta do seed:** trocar a senha encerra as sessões dela
+em todos os estabelecimentos, e a senha nova tem de seguir as regras — `cardapio123` não volta pela
+tela. Para voltar a ela, só recriando o banco (`pnpm db:reset`, `pnpm db:migrate` e
+`pnpm db:seed`); prefira testar a troca com uma conta criada por um convite.
+
+**Num teste da API, o token de antes de uma troca de senha só cai se tiver saído num segundo
+anterior a ela** — o `iat` é em segundos. `tests/account-routes.test.ts` espera um pouco mais de
+um segundo antes de trocar.
 
 ### Acrescentando uma tela ao painel
 
