@@ -80,6 +80,41 @@ export async function marcarEmailConfirmado(
   return atualizadas.length > 0
 }
 
+/** A senha da conta, para conferir antes de trocá-la. Precisa de `app.account_id` (`conta_propria`). */
+export async function senhaDaConta(tx: TenantTransaction, id: string): Promise<string | null> {
+  const [conta] = await tx
+    .select({ passwordHash: accounts.passwordHash })
+    .from(accounts)
+    .where(eq(accounts.id, id))
+    .limit(1)
+  return conta?.passwordHash ?? null
+}
+
+/** Troca o nome da conta. Precisa de `app.account_id` (`conta_propria`). */
+export async function renomearConta(
+  tx: TenantTransaction,
+  id: string,
+  nome: string,
+): Promise<void> {
+  await tx.update(accounts).set({ name: nome, updatedAt: new Date() }).where(eq(accounts.id, id))
+}
+
+/**
+ * Troca a senha da conta e marca quando: o token de acesso emitido antes deixa
+ * de valer (`loadAuthenticatedUser`). Precisa de `app.account_id`.
+ */
+export async function trocarSenhaDaConta(
+  tx: TenantTransaction,
+  id: string,
+  passwordHash: string,
+): Promise<void> {
+  const agora = new Date()
+  await tx
+    .update(accounts)
+    .set({ passwordHash, passwordChangedAt: agora, updatedAt: agora })
+    .where(eq(accounts.id, id))
+}
+
 /** Um vínculo da conta, com o estabelecimento dele. */
 export interface VinculoDaConta {
   userId: string

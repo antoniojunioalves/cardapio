@@ -147,7 +147,7 @@ describe('cadastro', () => {
     expect(await screen.findByText('Informe o nome do estabelecimento.')).toBeVisible()
     expect(screen.getByText('Informe o seu nome.')).toBeVisible()
     expect(screen.getByText('Informe um e-mail válido, como voce@exemplo.com.')).toBeVisible()
-    expect(screen.getByText('A senha precisa de pelo menos 8 caracteres.')).toBeVisible()
+    expect(screen.getByText('Informe uma senha.')).toBeVisible()
     expect(
       screen.getByText('Para criar a conta, aceite os termos de uso e a política de privacidade.'),
     ).toBeVisible()
@@ -169,18 +169,48 @@ describe('cadastro', () => {
     expect(regras()).not.toHaveTextContent('falta')
   })
 
-  it('senha sem caractere especial é recusada antes de ir à API, dizendo o que falta', async () => {
-    const fetch = mockarApi()
+  it('senha fora das regras vai à API, que sabe se a conta é nova, e volta marcada no campo', async () => {
+    // A tela não sabe se o e-mail já tem conta: a senha de uma que existe só se
+    // confere, mesmo de antes das regras. Quem recusa a senha fraca é a API.
+    const mensagem = 'A senha precisa de um caractere especial, como ! @ # ou -.'
+    mockarApi({
+      cadastro: {
+        status: 400,
+        corpo: {
+          error: {
+            code: 'WEAK_PASSWORD',
+            message: mensagem,
+            details: [{ instancePath: '/password', message: mensagem }],
+          },
+        },
+      },
+    })
     abrir('/cadastro')
     preencher()
     escrever('Senha', 'SenhaForte123')
 
     enviar()
 
-    expect(
-      await screen.findByText('A senha precisa de um caractere especial, como ! @ # ou -.'),
-    ).toBeVisible()
-    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    expect(await screen.findByText(mensagem)).toBeVisible()
+    expect(screen.getByLabelText('Senha')).toHaveAttribute('aria-invalid', 'true')
+    expect(useSessaoStore.getState().slug).toBeNull()
+  })
+
+  it('a senha antiga de uma conta que existe vai à API sem a tela recusar', async () => {
+    const fetch = mockarApi()
+    abrir('/cadastro')
+    preencher()
+    escrever('Senha', 'cardapio123')
+
+    enviar()
+
+    await waitFor(() => {
+      expect(
+        fetch.mock.calls.some(
+          ([url, init]) => url.endsWith('/public/signup') && init?.method === 'POST',
+        ),
+      ).toBe(true)
+    })
   })
 
   it('endereço reservado é recusado com o motivo, antes de ir à API', async () => {

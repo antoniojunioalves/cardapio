@@ -35,7 +35,7 @@ const authenticate: onRequestAsyncHookHandler = async (request: FastifyRequest) 
   if (!payload) throw new UnauthorizedError('Sessão inválida ou expirada.')
 
   const context = tenantContextFromUser(payload.tenantId)
-  const usuario = await loadAuthenticatedUser(context, payload.sub)
+  const usuario = await loadAuthenticatedUser(context, payload.sub, payload.iat)
 
   if (!usuario) throw new UnauthorizedError('Sessão inválida ou expirada.')
 

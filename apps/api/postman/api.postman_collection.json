@@ -565,6 +565,97 @@
       ]
     },
     {
+      "name": "Minha conta",
+      "description": "O nome e a senha da pessoa logada, valendo em todos os estabelecimentos dela",
+      "item": [
+        {
+          "name": "Troca o próprio nome",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Zé Proprietário\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "account"
+              ]
+            },
+            "description": "O nome é da conta: muda em todos os estabelecimentos em que a pessoa trabalha. Devolve o usuário da sessão, já com o nome novo.\n\nO nome é da conta: muda em todos os estabelecimentos da pessoa."
+          }
+        },
+        {
+          "name": "Troca a própria senha",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sessao = pm.response.json();",
+                  "if (pm.response.code < 300 && sessao.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', sessao.accessToken);",
+                  "  pm.collectionVariables.set('tenantSlug', sessao.establishment.slug);",
+                  "}",
+                  "if (pm.response.code === 200) pm.collectionVariables.set('password', 'Senha-nova-123!');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"Senha-nova-123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/account/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "account",
+                "password"
+              ]
+            },
+            "description": "Confere a senha atual (400 `CURRENT_PASSWORD_INVALID`); a nova segue as regras do cadastro e não pode ser igual à atual (400 `SAME_PASSWORD`). Encerra todas as sessões da conta, em todos os estabelecimentos e aparelhos — o token de acesso emitido antes deixa de valer na hora — e devolve uma sessão nova para este aparelho, como o login.\n\nTroca a senha de verdade, e encerra as sessões da conta em todos os estabelecimentos — esta recebe uma nova. Guarda a senha nova em `password`. A do seed (`cardapio123`) não volta por aqui, porque está fora das regras: só recriando o banco (`pnpm db:reset`, `pnpm db:migrate` e `pnpm db:seed`)."
+          }
+        }
+      ]
+    },
+    {
       "name": "Cadastro",
       "description": "Cadastro aberto de estabelecimento e confirmação do e-mail do dono",
       "item": [
@@ -660,7 +751,7 @@
                 "signup"
               ]
             },
-            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). E-mail sem conta: a conta nasce com o nome e a senha do formulário, e o cardápio nasce `PENDING` — responde 404 até o dono confirmar o e-mail pelo link enviado. E-mail com conta: a senha tem de ser a dela (senão, 409 `EMAIL_TAKEN`), o nome do formulário é ignorado, e o cardápio nasce `ACTIVE` se a conta já tem o e-mail confirmado. Endereço em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
+            "description": "Sem autenticação. Cria o estabelecimento, a assinatura do plano gratuito e o dono, e já devolve a sessão (refresh token no cookie, como no login). E-mail sem conta: a conta nasce com o nome e a senha do formulário, e o cardápio nasce `PENDING` — responde 404 até o dono confirmar o e-mail pelo link enviado. E-mail com conta: a senha tem de ser a dela (senão, 409 `EMAIL_TAKEN`) — só conferida, sem as regras —, o nome do formulário é ignorado, e o cardápio nasce `ACTIVE` se a conta já tem o e-mail confirmado. A senha de uma conta nova segue as regras do cadastro (400 `WEAK_PASSWORD`). Endereço em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.\n\nTroca `tenantSlug`, `email`, `password` e `accessToken` para o estabelecimento criado — para voltar à Lanchonete do Zé, restaure os valores iniciais das variáveis da coleção. O e-mail de confirmação chega no Mailpit (http://localhost:8025)."
           }
         },
         {

@@ -20,7 +20,11 @@ import { listarPerfis } from '../src/profiles/repository.js'
 import { tenantContextFromUser } from '../src/tenant/context.js'
 import { withTenant } from '../src/tenant/with-tenant.js'
 import { aceitarConvite, tokenDoConvitePara } from './helpers/convites.js'
-import { removerContasSemVinculo } from './helpers/fixtures.js'
+import {
+  criarTenantComUsuario,
+  removerContasSemVinculo,
+  removerTenantDeTeste,
+} from './helpers/fixtures.js'
 
 let app: FastifyInstance
 const PREFIXO = `cad${Math.random().toString(36).slice(2, 8)}`
@@ -330,6 +334,32 @@ describe('cadastro pela página', () => {
     const armadilha = await cadastrar(cadastro({ website: 'x' }))
     expect(armadilha.json<{ error: { code: string } }>().error.code).toBe('SIGNUP_REJECTED')
     expect(caixaDeSaida().enviados).toEqual([])
+  })
+
+  it('a senha fraca de uma conta nova volta marcada no campo da senha', async () => {
+    const resposta = await cadastrar(cadastro({ password: 'senha-sem-maiuscula-1' }))
+
+    expect(resposta.statusCode).toBe(400)
+    expect(resposta.json<{ error: unknown }>().error).toMatchObject({
+      code: 'WEAK_PASSWORD',
+      message: 'A senha precisa de uma letra maiúscula.',
+      details: [{ instancePath: '/password', message: 'A senha precisa de uma letra maiúscula.' }],
+    })
+  })
+
+  it('a senha de uma conta que existe só se confere: a de antes das regras abre outro estabelecimento', async () => {
+    // Como as contas do seed: a senha nasceu antes das regras de hoje.
+    const antiga = await criarTenantComUsuario({ dono: true, senha: 'cardapio123' })
+    const corpo = cadastro({ email: antiga.email, password: 'cardapio123' })
+
+    try {
+      const resposta = await cadastrar(corpo)
+      expect(resposta.statusCode, resposta.body).toBe(201)
+      expect(resposta.json<RespostaDoCadastro>().establishment.slug).toBe(corpo.slug)
+    } finally {
+      await db.delete(tenants).where(eq(tenants.slug, corpo.slug))
+      await removerTenantDeTeste(antiga)
+    }
   })
 
   it('servidor de e-mail fora do ar não desfaz o cadastro: ele vale, e o painel oferece o reenvio', async () => {

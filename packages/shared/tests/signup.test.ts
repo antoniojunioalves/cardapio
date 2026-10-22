@@ -141,12 +141,18 @@ describe('cadastro', () => {
       slug: 'x',
       ownerName: '',
       email: 'nao-e-email',
-      password: '123',
+      password: '',
       termsVersion: '',
     })
     const campos = resultado.error?.issues.map((i) => i.path[0])
     expect(new Set(campos)).toEqual(
       new Set(['establishmentName', 'slug', 'ownerName', 'email', 'password', 'termsVersion']),
     )
+  })
+
+  it('a senha só precisa vir: as regras são da conta nova, e quem as confere é a API', () => {
+    // Com o e-mail de uma conta que existe, a senha é a dela — mesmo de antes das regras.
+    expect(cadastroSchema.safeParse({ ...valido, password: 'cardapio123' }).success).toBe(true)
+    expect(senhaSchema.safeParse('cardapio123').success).toBe(false)
   })
 })

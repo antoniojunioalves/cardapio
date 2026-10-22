@@ -1,6 +1,6 @@
 # Segurança e privacidade
 
-Estado atual: **Fase 25d**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
+Estado atual: **Fase 25b**. Estão em vigor o isolamento entre tenants (RLS forçado, roles de
 banco separadas, testes que o comprovam), autenticação com argon2id, JWT e refresh token em
 cookie `httpOnly` — com uma conta por pessoa, protegida por RLS próprio, e o convite por e-mail
 para entrar numa equipe —, autorização por permissão — com perfis montados por cada
@@ -166,6 +166,20 @@ minuto, como o login); sem conta, a conta nasce com o e-mail confirmado, porque 
 alguém cadastra um estabelecimento com o e-mail de outra pessoa, e a conta fica com a senha que ele
 escolheu. A pessoa dona do e-mail só a recupera com o "esqueci minha senha" (Fase 25c). Até lá, o cardápio
 desse estabelecimento não vai ao ar — a confirmação vai para o e-mail dela.
+
+**Trocar a senha derruba quem estiver com ela** (Fase 25b, "Minha conta"). A troca confere a senha
+atual e encerra **todas** as sessões da conta, em todos os estabelecimentos e aparelhos: os refresh
+tokens são apagados, as conexões ao vivo fecham, e o token de acesso emitido antes da troca deixa de
+valer na hora — `accounts.password_changed_at` é conferido contra o `iat` do token, a cada
+requisição e na conexão ao vivo. Sem isso, uma sessão roubada continuaria por até 15 minutos.
+Quem troca recebe uma sessão nova; a nova senha segue as regras do cadastro e não pode ser igual à
+atual; limite de 5 trocas por minuto, como o login. Só a própria pessoa troca a senha dela: nem o
+dono nem ninguém do estabelecimento tem como.
+
+**A senha de uma conta que existe é conferida, e não validada** (Fase 25b): no cadastro de mais um
+estabelecimento, como no login, a senha da conta vale mesmo que tenha nascido antes das regras de
+hoje. As regras são de senha **nova** — a da conta nova, a do convite, a da troca —, e é a API que
+as aplica. Uma regra que fique mais rígida um dia não tranca quem já tem conta.
 
 O que **não** está implementado: 2FA, bloqueio de conta após N falhas, histórico de senhas e entrar
 sem senha (link ou código). Estão no ROADMAP.
@@ -392,9 +406,11 @@ estabelecimento, um usuário, um e-mail saindo pelo nosso remetente —, e por i
   o limite de 10 cadastros por hora por IP segura quem tentar adivinhar a senha por aqui.
 - **Limites:** 10 cadastros por hora por IP, um campo-armadilha que só robô preenche, endereços
   reservados (`/cadastro`, `/termos`, `/signup`, nomes que imitariam a plataforma).
-- **Senha forte no cadastro:** pelo menos 8 caracteres, com letra maiúscula, minúscula e caractere
-  especial (`REGRAS_DA_SENHA`, a mesma lista na API e na tela). Guardada com argon2id, como
-  sempre. A senha de quem cria a conta pelo convite segue a mesma regra.
+- **Senha forte na conta nova:** pelo menos 8 caracteres, com letra maiúscula, minúscula e
+  caractere especial (`REGRAS_DA_SENHA`, a mesma lista na API e na tela). Guardada com argon2id,
+  como sempre. A senha de quem cria a conta pelo convite e a de quem a troca em "Minha conta"
+  seguem a mesma regra. Quem as aplica é a API: a tela do cadastro não sabe se o e-mail já tem
+  conta, e a senha de uma conta que existe só se confere.
 - **O aceite dos termos vai para a auditoria**, com a versão aceita e o IP. Versão diferente da
   atual é recusada: ninguém aceita um texto que não viu.
 - **Tudo numa transação**, e os e-mails só depois do commit. Sem o plano gratuito no banco, o

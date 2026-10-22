@@ -37,9 +37,10 @@ export function publicSignupRoutes(instance: FastifyInstance): void {
           'e já devolve a sessão (refresh token no cookie, como no login). E-mail sem conta: a ' +
           'conta nasce com o nome e a senha do formulário, e o cardápio nasce `PENDING` — ' +
           'responde 404 até o dono confirmar o e-mail pelo link enviado. E-mail com conta: a ' +
-          'senha tem de ser a dela (senão, 409 `EMAIL_TAKEN`), o nome do formulário é ignorado, e ' +
-          'o cardápio nasce `ACTIVE` se a conta já tem o e-mail confirmado. Endereço em uso ' +
-          'responde 409 `SLUG_TAKEN`. Limite próprio por IP.',
+          'senha tem de ser a dela (senão, 409 `EMAIL_TAKEN`) — só conferida, sem as regras —, o ' +
+          'nome do formulário é ignorado, e o cardápio nasce `ACTIVE` se a conta já tem o e-mail ' +
+          'confirmado. A senha de uma conta nova segue as regras do cadastro (400 ' +
+          '`WEAK_PASSWORD`). Endereço em uso responde 409 `SLUG_TAKEN`. Limite próprio por IP.',
         body: cadastroSchema,
         response: {
           201: sessaoSchema.extend({ confirmationEmailSent: z.boolean() }),

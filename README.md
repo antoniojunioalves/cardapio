@@ -9,11 +9,11 @@ pelo WhatsApp do estabelecimento.
 > [`packages/config/src/app.ts`](packages/config/src/app.ts). Para renomear o produto, veja o
 > checklist em [DEVELOPMENT.md](DEVELOPMENT.md#renomear-o-produto).
 
-**Status atual: Fase 25d concluída** — o estabelecimento se cadastra pela página inicial
+**Status atual: Fase 25b concluída** — o estabelecimento se cadastra pela página inicial
 ([localhost:5173](http://localhost:5173) → "Começar grátis"), no plano gratuito, e o cardápio é
 publicado quando o dono confirma o e-mail. Pelo painel ele já configura o estabelecimento, os
 horários, a entrega e as formas de pagamento, e monta o cardápio inteiro: as categorias e, num
-cadastro em dois passos, o produto com foto e os opcionais dele — e combos. E monta a equipe: convida as pessoas por e-mail e diz o que cada uma pode fazer, com perfis de permissões (Administrador, Gerente do cardápio, Atendente e Cozinha vêm prontos). Cada pessoa tem uma conta só — um e-mail, uma senha — e pode estar na equipe de mais de um estabelecimento, trocando de um para outro pelo menu. As fases 25b a 28 fecham o MVP — as senhas (trocar e recuperar), a tela de
+cadastro em dois passos, o produto com foto e os opcionais dele — e combos. E monta a equipe: convida as pessoas por e-mail e diz o que cada uma pode fazer, com perfis de permissões (Administrador, Gerente do cardápio, Atendente e Cozinha vêm prontos). Cada pessoa tem uma conta só — um e-mail, uma senha — e pode estar na equipe de mais de um estabelecimento, trocando de um para outro pelo menu; o nome e a senha ela troca em "Minha conta". As fases 25c a 28 fecham o MVP — o "esqueci minha senha", a tela de
 clientes, e o sistema no ar (ver
 [PROJECT_PLAN.md](PROJECT_PLAN.md#o-que-falta-para-o-mvp)). O cliente final já vê o cardápio, monta o carrinho, envia o
 pedido — recalculado no servidor — e o manda ao WhatsApp do estabelecimento: com `pnpm dev`, abra

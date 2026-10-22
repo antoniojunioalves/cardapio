@@ -7,6 +7,7 @@ import { CardapioTabs } from '@/features/admin/components/CardapioTabs'
 import { SettingsTabs } from '@/features/admin/components/SettingsTabs'
 import { TeamTabs } from '@/features/admin/components/TeamTabs'
 import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage'
+import { AdminAccountPage } from '@/pages/AdminAccountPage'
 import { AdminDeliveryPage } from '@/pages/AdminDeliveryPage'
 import { AdminHomePage } from '@/pages/AdminHomePage'
 import { AdminHoursPage } from '@/pages/AdminHoursPage'
@@ -61,6 +62,9 @@ import { SignupPage } from '@/pages/SignupPage'
  * `/admin/configuracoes` (`SettingsTabs`): a do estabelecimento no índice, e
  * `horarios`, `entrega` e `pagamento`.
  *
+ * "Minha conta", em `/admin/minha-conta`, é de todo mundo: o nome e a senha da
+ * própria pessoa, que valem em todos os estabelecimentos dela.
+ *
  * O login é um só, em `/entrar`, com e-mail e senha: a pessoa não precisa
  * saber o endereço do estabelecimento para entrar.
  */
@@ -96,6 +100,7 @@ export function AppRoutes() {
           <Route path="entrega" element={<AdminDeliveryPage />} />
           <Route path="pagamento" element={<AdminPaymentPage />} />
         </Route>
+        <Route path="minha-conta" element={<AdminAccountPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

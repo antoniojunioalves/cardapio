@@ -9,7 +9,7 @@
  * continua marcado em `configuracoes/horarios`.
  */
 
-export type IconeDoMenu = 'inicio' | 'pedidos' | 'cardapio' | 'equipe' | 'configuracoes'
+export type IconeDoMenu = 'inicio' | 'pedidos' | 'cardapio' | 'equipe' | 'configuracoes' | 'conta'
 
 export interface ItemDoMenu {
   rotulo: string
@@ -39,6 +39,8 @@ export const MENU: readonly ItemDoMenu[] = [
     permissao: 'settings:read',
     rodape: true,
   },
+  // O nome e a senha da própria pessoa: de todo mundo, sem permissão nenhuma.
+  { rotulo: 'Minha conta', caminho: 'minha-conta', icone: 'conta', rodape: true },
 ]
 
 /**

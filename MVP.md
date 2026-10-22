@@ -29,7 +29,8 @@ quanto a do que fica dentro, porque é ela que impede o escopo de crescer sem de
       de mudar preço, e cancelar pedido separado de mudar o status. O proprietário tem sempre tudo
 - [x] O mesmo e-mail na equipe de mais de um estabelecimento: uma conta por pessoa, com um vínculo
       em cada, e o convite por e-mail — _Fase 25d (achado do Junio na validação da 25a)_
-- [ ] "Minha conta": trocar a própria senha e o próprio nome — _Fase 25b_
+- [x] "Minha conta": trocar a própria senha e o próprio nome, valendo em todos os estabelecimentos
+      da pessoa; trocar a senha a tira do painel nos outros aparelhos — _Fase 25b_
 - [ ] "Esqueci minha senha" por e-mail — _Fase 25c_
 - [x] Painel com menu lateral e tela Início, com o resumo dos pedidos de hoje
 - [x] Lista do que falta para receber pedidos, no Início
@@ -151,10 +152,11 @@ Uma pessoa que nunca viu o sistema consegue, do zero:
 E os testes provam que o Tenant A não enxerga nada do Tenant B. Tudo isso no ar, com HTTPS, e
 não só na máquina de desenvolvimento.
 
-> **Situação ao fim da Fase 25d:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
+> **Situação ao fim da Fase 25b:** os passos 1 a 7 funcionam de ponta a ponta pela tela — do
 > cadastro ao pedido chegando ao painel, com o cardápio inteiro (categorias, produtos, opcionais e
 > combos) montado pelo painel, num cadastro guiado: o produto e os opcionais, um passo de cada
 > vez —, e os testes provam o isolamento. O dono monta a equipe por convite e diz o que cada um
-> pode fazer; a mesma pessoa trabalha em mais de um estabelecimento com uma conta só. Falta o
-> sistema estar no ar, além das senhas (trocar e recuperar) e da tela de clientes. As fases 25b a
-> 28 fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".
+> pode fazer; a mesma pessoa trabalha em mais de um estabelecimento com uma conta só, e troca o
+> próprio nome e a própria senha em "Minha conta". Falta o
+> sistema estar no ar, além do "esqueci minha senha" e da tela de clientes. As fases 25c a 28
+> fecham o MVP — ver PROJECT_PLAN.md, "O que falta para o MVP".

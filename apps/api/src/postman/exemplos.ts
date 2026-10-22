@@ -218,6 +218,22 @@ export const EXEMPLOS: Record<string, ExemploDeRota> = {
   'GET /api/v1/auth/establishments': {
     nota: 'Os estabelecimentos da conta logada, com o da sessão em `current`.',
   },
+  'PATCH /api/v1/auth/account': {
+    corpo: { name: 'Zé Proprietário' },
+    nota: 'O nome é da conta: muda em todos os estabelecimentos da pessoa.',
+  },
+  'POST /api/v1/auth/account/password': {
+    corpo: { currentPassword: '{{password}}', newPassword: 'Senha-nova-123!' },
+    depois: [
+      ...guardarSessao,
+      "if (pm.response.code === 200) pm.collectionVariables.set('password', 'Senha-nova-123!');",
+    ],
+    nota:
+      'Troca a senha de verdade, e encerra as sessões da conta em todos os estabelecimentos — ' +
+      'esta recebe uma nova. Guarda a senha nova em `password`. A do seed (`cardapio123`) não ' +
+      'volta por aqui, porque está fora das regras: só recriando o banco (`pnpm db:reset`, ' +
+      '`pnpm db:migrate` e `pnpm db:seed`).',
+  },
   'POST /api/v1/auth/invitation': {
     corpo: { token: '{{invitationToken}}' },
     antes: buscarConviteNoMailpit,

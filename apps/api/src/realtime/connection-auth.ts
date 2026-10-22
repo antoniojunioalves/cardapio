@@ -9,7 +9,8 @@ import { tenantContextFromUser } from '../tenant/context.js'
  * envia o cabeçalho `Authorization`. O token chega na **primeira mensagem**
  * da conexão — nunca na URL, que vai parar em log de acesso. A verificação é
  * a mesma do `requireAuth`: assinatura e validade do token, o usuário
- * recarregado do banco (desativado não entra) e a permissão.
+ * recarregado do banco (desativado não entra, nem o token de antes de uma troca
+ * de senha) e a permissão.
  *
  * Códigos de fechamento, para o painel decidir o que fazer:
  * - `4001` — sessão inválida ou expirada: renove a sessão e reconecte;
@@ -33,7 +34,11 @@ export async function autenticarConexao(
   const payload = verifyAccessToken(token)
   if (!payload) return invalida
 
-  const usuario = await loadAuthenticatedUser(tenantContextFromUser(payload.tenantId), payload.sub)
+  const usuario = await loadAuthenticatedUser(
+    tenantContextFromUser(payload.tenantId),
+    payload.sub,
+    payload.iat,
+  )
   if (!usuario) return invalida
   if (!usuario.permissions.includes(permissao)) {
     return { ok: false, codigo: SEM_PERMISSAO, motivo: 'sem permissão' }
